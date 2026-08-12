@@ -1,6 +1,10 @@
 import './style.css'
+import closeSound from '../sound-effects/close.mp3?url'
+import openSound from '../sound-effects/open.mp3?url'
+import pickSound from '../sound-effects/pick.mp3?url'
 import { SceneOrchestrator } from './sheets/application/SceneOrchestrator'
 import { composition } from './sheets/domain/composition'
+import { SoundBoard } from './sound/SoundBoard'
 
 const stage = document.querySelector<HTMLElement>('#sheets-stage')
 if (!stage) throw new Error('#sheets-stage container is missing')
@@ -10,11 +14,19 @@ if (!stage) throw new Error('#sheets-stage container is missing')
 const orchestrator = new SceneOrchestrator(stage, composition)
 orchestrator.start()
 
+// The pointer cue is the one that fires most, so it sits well under the two
+// transitions — it is punctuation, not an announcement.
+const sound = new SoundBoard(
+  { open: openSound, close: closeSound, pick: pickSound },
+  { open: 0.55, close: 0.55, pick: 0.3 },
+)
+
 if (import.meta.env.DEV) {
-  // Handle for the console and for automated checks — draw order and blend
-  // behaviour are only observable while the piece is moving, so they need a
-  // way in from outside. DEV-guarded, so it never reaches a build.
-  Object.assign(window, { __sheets: orchestrator })
+  // Handles for the console and for automated checks. Draw order, blend
+  // behaviour and which cue fired are only observable while the piece is
+  // running, so they need a way in from outside. DEV-guarded, so neither
+  // reaches a build.
+  Object.assign(window, { __sheets: orchestrator, __sound: sound })
 }
 
 // Captured before anything touches them, so restoring the preference puts the
@@ -48,6 +60,17 @@ const applyMotionPreference = (): void => {
 applyMotionPreference()
 reducedMotion.addEventListener('change', applyMotionPreference)
 
+// The two transitions run exactly as long as the cue that scores them, and the
+// cue is what says how long that is. Taking the length from the decoded buffer
+// rather than copying the number here keeps them from drifting apart the first
+// time somebody swaps an mp3 — the authored defaults on the timeline are the
+// fallback for when there is no audio at all, not a second source of truth.
+void sound.ready.then(() => {
+  motion.deploy = sound.duration('open') ?? motion.deploy
+  motion.collapse = sound.duration('close') ?? motion.collapse
+  applyMotionPreference()
+})
+
 // A hidden tab and a scrolled-away panel both cost a full frame budget for
 // pixels nobody sees. Stop on either, and only resume when both allow it.
 let tabVisible = !document.hidden
@@ -75,7 +98,8 @@ new IntersectionObserver(
 // artwork is what the user is aiming at and it moves.
 const hint = document.querySelector<HTMLElement>('#sheets-hint')
 
-const setDeployed = (deployed: boolean): void => {
+/** `silent` is for the initial state, which nobody asked to hear. */
+const setDeployed = (deployed: boolean, silent = false): void => {
   orchestrator.timeline.deployTarget = deployed ? 1 : 0
   stage.setAttribute('aria-expanded', String(deployed))
   stage.setAttribute(
@@ -83,7 +107,12 @@ const setDeployed = (deployed: boolean): void => {
     deployed ? 'Armar la tarjeta' : 'Ver las capas de la tarjeta',
   )
   if (hint) hint.textContent = deployed ? 'Toca para armarla' : 'Toca para ver sus capas'
+  if (!silent) sound.play(deployed ? 'open' : 'close')
 }
+
+// Ahead of the click, so the context is running by the time the cue is asked
+// for. `pointerdown` is a gesture as far as the autoplay policy is concerned.
+stage.addEventListener('pointerdown', () => sound.resume(), { passive: true })
 
 stage.addEventListener('click', () => setDeployed(!orchestrator.timeline.deployed))
 
@@ -93,10 +122,20 @@ stage.addEventListener('click', () => setDeployed(!orchestrator.timeline.deploye
 stage.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter' && event.key !== ' ') return
   event.preventDefault()
+  sound.resume()
   setDeployed(!orchestrator.timeline.deployed)
 })
 
-setDeployed(false)
+// Entering a layer is the event. Leaving one is not — a cue on the way out
+// doubles every crossing and turns a sweep across the stack into a stutter.
+// And only when the pointer put it there: the artwork floats, so a boundary
+// can wander across a still pointer on its own, and answering that with a
+// click in someone's ears is answering something they did not do.
+orchestrator.picker.onChange = (layer, fromPointer) => {
+  if (layer && fromPointer) sound.play('pick')
+}
+
+setDeployed(false, true)
 
 // The step only advances once a tax id is present; the button ships disabled,
 // exactly as the design shows it.

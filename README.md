@@ -216,6 +216,53 @@ lit with nothing on screen explaining why.
 Reduced motion keeps the rim highlight and drops the slide. The feedback is the
 point; the layer travelling to deliver it is not.
 
+## Sound
+
+Three cues in `sound-effects/`, imported as assets so they get hashed and
+cached like anything else: the stack opening, the stack closing, and crossing
+into a layer.
+
+`src/sound/SoundBoard.ts` is Web Audio rather than `<audio>` elements, because
+these are short cues that fire on the same frame as the thing they answer,
+retrigger before they have finished and cut each other off — none of which an
+`HTMLAudioElement` can do. Open and close share one voice, so an impatient
+double click reverses the sound the way it reverses the animation instead of
+layering two half-second cues into mud. The pointer cue keeps a 70 ms guard:
+one tick per layer boundary is the intent, one per frame is a rattle.
+
+The context is built suspended and the cues decoded immediately, which needs no
+gesture; only `resume()` does, and it runs on `pointerdown` — ahead of the click
+that will ask for a sound. The pointer cue is therefore silent until the first
+click, which is the autoplay policy working rather than a bug to route around.
+
+**The two transitions run exactly as long as the cue that scores them, and the
+cue is what says how long.** The page reads the length off the decoded buffer
+rather than copying a number, so swapping an mp3 moves the animation with it;
+the durations authored on the timeline are the fallback for a page with no
+audio. That length is 0.651s, not the 0.72s the container claims — the
+difference is encoder padding and it is not audible.
+
+The curves did not change, and the envelopes are why. The open cue attacks at
+0 ms, which is where `easeOutCubic` puts most of its travel. The close cue is
+nearly silent for its first 100 ms and swells to a peak at 300 ms, which is
+where `easeInOutCubic` is moving fastest. Giving the close a fast start would
+put its visual burst inside the quiet part of its own sound.
+
+**A cue answers the user, not the scene.** The pick can change under a
+perfectly still pointer, because the artwork floats and drifts a boundary
+across it — measured at one to two crossings every three seconds on the layers
+whose edge lands near the pointer. Following that with the highlight is right:
+the layer under the pointer really did change. Making a sound about it is not,
+so `onChange` reports whether the pointer caused the change and only a
+pointer-caused one is audible. Measured: eight cues from ten deliberate moves
+— two of the moves landed on the same layer and correctly said nothing — and
+zero from thirty seconds of holding still.
+
+There is no mute control. If the page ever gets one, `SoundBoard.muted` is
+already the switch.
+
+## Next
+
 `picker.selected` is the seam for a future click on a layer. Today the click
 belongs to the stage and toggles the deploy, so that will have to be settled
 when the time comes — a stage-wide toggle and a per-layer action want the same

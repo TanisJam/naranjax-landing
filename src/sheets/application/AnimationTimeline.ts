@@ -91,10 +91,16 @@ export class AnimationTimeline {
    * Reads faster than it sounds. The opening curve spends more than half its
    * travel in the first third of this, so the number is the moment it comes to
    * rest, not the moment it stops feeling fast.
+   *
+   * Both durations are the length of the cue that scores them, and the page
+   * overwrites them with the decoded lengths once the audio is in. These are
+   * the fallback for a page with no sound, not a second source of truth — and
+   * they are the DECODED length, 0.651s, not the 0.72s the mp3 container
+   * claims. The difference is encoder padding and it is not audible.
    */
-  deployDuration = 0.75
+  deployDuration = 0.651
   /** Seconds it takes to close again. */
-  collapseDuration = 0.62
+  collapseDuration = 0.651
   /**
    * Where the stack wants to be: 0 is a closed card, 1 is fully exploded.
    * Anything in between works too — drive it from scroll if that is ever
