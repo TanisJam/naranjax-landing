@@ -1,0 +1,4 @@
+# Anchors the workspace root here. Without it pnpm walks up and finds the one
+# in $HOME, and installing this project silently becomes a no-op.
+allowBuilds:
+  esbuild: false

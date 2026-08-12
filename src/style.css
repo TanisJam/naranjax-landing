@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Rubik', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+#sheets-stage {
+  touch-action: none;
+  cursor: pointer;
+}
+
+/* Inset, because the stage is flush with the panel edges and an outline drawn
+   outside them is clipped away by the layout. */
+#sheets-stage:focus-visible {
+  outline: 2px solid var(--color-cyan-400);
+  outline-offset: -4px;
+}
+
+#sheets-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

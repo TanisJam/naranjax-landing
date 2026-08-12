@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Facebank — Formulario W-8BEN</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body class="bg-slate-900 font-sans text-slate-100 antialiased">
+    <main class="flex min-h-screen flex-col lg:h-screen lg:flex-row lg:overflow-hidden">
+      <!-- Left panel: the layered sheets, rendered live instead of the flat export. -->
+      <section
+        class="relative shrink-0 bg-slate-800 h-[46vh] min-h-[320px] lg:h-auto lg:min-h-0 lg:w-[38%] lg:max-w-[545px]"
+        aria-label="Ilustración de tarjetas Facebank"
+      >
+        <!-- The stage is the control: the card opens into its eleven layers on
+             click, so the panel carries the button role and the state. -->
+        <div
+          id="sheets-stage"
+          class="absolute inset-0"
+          role="button"
+          tabindex="0"
+          aria-expanded="false"
+          aria-label="Ver las capas de la tarjeta"
+        ></div>
+        <!-- Stacked layout puts the form directly under the panel; fade the two
+             backgrounds into each other so the split reads as one surface. -->
+        <div
+          class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-slate-900 lg:hidden"
+        ></div>
+        <!-- After the fade, not before: on the stacked layout the gradient runs
+             over this corner of the panel and would swallow the label. -->
+        <p
+          id="sheets-hint"
+          class="pointer-events-none absolute inset-x-0 bottom-5 text-center text-xs tracking-wide text-slate-300/70"
+        >
+          Toca para ver sus capas
+        </p>
+      </section>
+
+      <section class="flex min-w-0 flex-1 flex-col lg:overflow-y-auto">
+        <header class="shrink-0 pt-7">
+          <div class="flex flex-wrap items-center justify-between gap-4 px-6 pb-6 lg:px-12">
+            <a href="#" class="flex items-center gap-2" aria-label="Facebank — inicio">
+              <span class="grid size-5 grid-cols-2 grid-rows-2 gap-px" aria-hidden="true">
+                <span class="bg-cyan-400"></span>
+                <span class="bg-white"></span>
+                <span class="bg-white"></span>
+                <span class="bg-cyan-400"></span>
+              </span>
+              <span class="text-xl font-semibold tracking-tight">
+                <span class="text-cyan-400">FACE</span><span class="text-white">BANK</span>
+              </span>
+            </a>
+            <nav class="flex items-center gap-4 text-xs leading-5 tracking-tight text-slate-500">
+              <p><span>Documentación / </span><span class="font-medium text-slate-400">Información W-8BEN</span></p>
+              <p class="text-right">Paso 8/9</p>
+            </nav>
+          </div>
+
+          <ol class="flex gap-1 px-1" aria-label="Progreso: paso 8 de 9">
+            <li class="h-[3px] flex-1 bg-cyan-500"></li>
+            <li class="h-[3px] flex-1 bg-cyan-500"></li>
+            <li class="h-[3px] flex-1 bg-cyan-500"></li>
+            <li class="h-[3px] flex-1 bg-cyan-500"></li>
+            <li class="h-[3px] flex-1 bg-cyan-500"></li>
+            <li class="h-[3px] flex-1 bg-cyan-500"></li>
+            <li class="h-[3px] flex-1 bg-cyan-500"></li>
+            <li class="h-[3px] flex-1 bg-cyan-500" aria-current="step"></li>
+            <li class="h-[3px] flex-1 bg-slate-600"></li>
+          </ol>
+        </header>
+
+        <div class="mx-auto w-full max-w-[26rem] px-6 pt-14 pb-16 lg:px-0">
+          <div class="flex flex-col gap-10">
+            <div class="flex flex-col gap-2">
+              <div class="flex items-start justify-between gap-4">
+                <h1 class="text-3xl leading-tight font-semibold text-neutral-50 sm:text-4xl sm:leading-[3rem]">
+                  Formulario W-8BEN
+                </h1>
+                <button
+                  type="button"
+                  class="mt-2 flex size-5 shrink-0 items-center justify-center rounded-sm text-blue-400 outline outline-blue-400 transition hover:bg-blue-400/10 focus-visible:outline-2"
+                  aria-label="Más información sobre el formulario W-8BEN"
+                >
+                  <span aria-hidden="true" class="text-xs leading-none font-semibold">i</span>
+                </button>
+              </div>
+              <p class="text-base leading-6 text-slate-300">
+                Verifica que los siguientes datos sean correctos e ingresa el número de identificación
+                fiscal tributario de tu país. Una vez que confirmes, mostraremos tu formulario de
+                W-8BEN completado.
+              </p>
+            </div>
+
+            <form id="w8ben-form" class="flex flex-col gap-10" novalidate>
+              <div class="flex flex-col gap-4">
+                <dl class="flex flex-col divide-y divide-slate-600">
+                  <div class="flex flex-col p-2">
+                    <dt class="text-xs leading-5 tracking-tight text-slate-300">Nombre</dt>
+                    <dd class="text-base leading-6 text-neutral-50">Juan Carlos Andrada</dd>
+                  </div>
+                  <div class="flex flex-col p-2">
+                    <dt class="text-xs leading-5 tracking-tight text-slate-300">País de residencia</dt>
+                    <dd class="text-base leading-6 text-neutral-50">Argentina</dd>
+                  </div>
+                  <div class="flex flex-col p-2">
+                    <dt class="text-xs leading-5 tracking-tight text-slate-300">País de ciudadanía</dt>
+                    <dd class="text-base leading-6 text-neutral-50">Argentina</dd>
+                  </div>
+                  <div class="flex flex-col p-2">
+                    <dt class="text-xs leading-5 tracking-tight text-slate-300">Dirección</dt>
+                    <dd class="text-base leading-6 text-neutral-50">Manuel Rodriguez 9873</dd>
+                  </div>
+                  <div class="flex flex-col p-2">
+                    <dt class="text-xs leading-5 tracking-tight text-slate-300">Ciudad</dt>
+                    <dd class="text-base leading-6 text-neutral-50">Ciudad de Buenos Aires</dd>
+                  </div>
+                  <div class="flex flex-col p-2">
+                    <dt class="text-xs leading-5 tracking-tight text-slate-300">Estado</dt>
+                    <dd class="text-base leading-6 text-neutral-50">Buenos Aires</dd>
+                  </div>
+                  <div class="flex flex-col p-2">
+                    <dt class="text-xs leading-5 tracking-tight text-slate-300">Código postal</dt>
+                    <dd class="text-base leading-6 text-neutral-50">8372</dd>
+                  </div>
+                </dl>
+
+                <p class="text-xs leading-5 tracking-tight text-slate-500">
+                  ¿Hay algún dato equivocado? Te puedes comunicar con el banco al
+                  <a href="tel:123456789" class="font-medium text-slate-400 hover:text-slate-300">123456789</a>
+                </p>
+
+                <div class="flex flex-col gap-2">
+                  <label for="tax-id" class="text-sm leading-5 font-medium tracking-tight text-neutral-50">
+                    Número de identificación fiscal
+                  </label>
+                  <input
+                    id="tax-id"
+                    name="taxId"
+                    type="text"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    placeholder="Número de identificación fiscal"
+                    class="w-full rounded-lg bg-slate-800 p-4 text-base leading-6 text-neutral-50 outline outline-slate-600 transition placeholder:text-slate-400 focus:outline-2 focus:outline-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                id="submit-step"
+                type="submit"
+                disabled
+                class="w-full rounded-lg bg-slate-600 py-4 text-center text-base leading-6 font-medium text-slate-400 transition enabled:bg-cyan-500 enabled:text-slate-900 enabled:hover:bg-cyan-400 disabled:cursor-not-allowed"
+              >
+                Siguiente
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
