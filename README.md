@@ -186,12 +186,24 @@ would be a lie about what the user is looking at.
 buffer of zeros and the whole shape is built in the vertex shader, so the CPU
 does not know where a single vertex ends up — three would raycast against a
 plate collapsed to a point at the origin. Each layer therefore carries a flat
-`hitArea` plane, parented to the mesh so the deploy, the hover slide and the fan
-twist all reach it for free. A plane is a fair stand-in because these layers
-*are* plates, and what curl is left at the tail is a fraction of the gap between
-them. Its material is `visible: false` rather than the object, which is the
-whole trick: three skips an invisible object while raycasting, but an object
-with an invisible material still tests.
+`hitArea` plane. A plane is a fair stand-in because these layers *are* plates,
+and what curl is left at the tail is a fraction of the gap between them. Its
+material is `visible: false` rather than the object, which is the whole trick:
+three skips an invisible object while raycasting, but an object with an
+invisible material still tests.
+
+**The hit area takes the deploy and stops there.** It sits beside the mesh under
+the carrier, not under the mesh, so it never receives the hover offset — and
+that is load-bearing rather than tidy. A target that moved with the hover would
+slide out from under the pointer that triggered it: hover on, layer leaves,
+hover off, layer returns, at frame rate. It buzzed. A response cannot be allowed
+to move its own trigger, and parking the target at rest makes the pick
+independent of the hover entirely, so there is no loop left to close. It does
+mean the overhang — the sliver a hovered layer sticks out past its resting
+silhouette — is not itself hoverable, which is invisible in use and is the whole
+price. Measured across a layer edge to edge, the displaced target changed the
+pick at two of fifteen sample points; the parked one flips zero times in two
+seconds of frames at every one of them.
 
 `LayerPicker` resolves the pick per frame rather than per pointer event, and
 that is not a detail — the artwork floats, tilts under the parallax and slides

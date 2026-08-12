@@ -93,9 +93,11 @@ export class SheetObject {
    *
    * A plane is a fair stand-in because these layers ARE plates — they lie in
    * their own XZ, the spine runs along X and the arc across Z, and what curl is
-   * left at the tail is a fraction of the gap between layers. It is parented to
-   * the mesh, so the deploy, the hover slide and the fan twist all reach it for
-   * free.
+   * left at the tail is a fraction of the gap between layers.
+   *
+   * It sits BESIDE the mesh under the carrier rather than under the mesh, which
+   * is what keeps the hover from moving its own target. `setPose` has the whole
+   * reasoning.
    */
   readonly hitArea: Mesh
 
@@ -157,13 +159,15 @@ export class SheetObject {
     hitArea.name = `${layer.id}-hit`
     // Into the plate's own plane: the loft lies in XZ with the spine on X.
     hitArea.rotation.x = -Math.PI / 2
+    hitArea.position.copy(this.assembledPosition)
+    hitArea.scale.setScalar(placement.scale)
     hitArea.userData.layerId = layer.id
-    mesh.add(hitArea)
     this.hitArea = hitArea
 
     const carrier = new Group()
     carrier.position.set(-placement.pivot[0], -placement.pivot[1], -placement.pivot[2])
-    carrier.add(mesh)
+    // Beside the mesh, NOT under it. See `setPose`.
+    carrier.add(mesh, hitArea)
 
     const pivot = new Group()
     pivot.name = `${layer.id}-pivot`
@@ -192,7 +196,19 @@ export class SheetObject {
    * the edge is where a highlight is legible.
    */
   setPose(deploy: number, hover: number, slide: number): void {
-    this.mesh.position.lerpVectors(this.assembledPosition, this.explodedPosition, deploy)
+    // The hit area takes the deploy and stops there, and this is load-bearing:
+    // it is the pointer target, and a target that moved with the hover would be
+    // sliding out from under the pointer that triggered it — hover on, layer
+    // leaves, hover off, layer returns, at frame rate. A response cannot be
+    // allowed to move its own trigger. Parked at rest it makes the pick
+    // independent of the hover entirely, so there is no loop left to close.
+    const rest = this.hitArea.position.lerpVectors(
+      this.assembledPosition,
+      this.explodedPosition,
+      deploy,
+    )
+
+    this.mesh.position.copy(rest)
     this.mesh.position.x += hover * slide
     this.mesh.position.y += hover * slide * HOVER_LIFT_RATIO
     this.uniforms.uThickness.value = lerp(
