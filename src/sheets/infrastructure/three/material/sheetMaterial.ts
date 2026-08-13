@@ -17,10 +17,14 @@ import {
 } from 'three'
 import type { SheetShape, SheetSurface } from '../../../domain/types'
 import {
+  DEPTH_SHARED_PRELUDE,
   FRAGMENT_AO_CHUNK,
   FRAGMENT_BACKDROP_CHUNK,
   FRAGMENT_COLOR_CHUNK,
+  FRAGMENT_DEPTH_ALPHA_CHUNK,
   FRAGMENT_EMISSIVE_CHUNK,
+  FRAGMENT_GRAIN_CHUNK,
+  FRAGMENT_HASH_PRELUDE,
   FRAGMENT_NORMAL_CHUNK,
   FRAGMENT_PRELUDE,
   FRAGMENT_ROUGHNESS_CHUNK,
@@ -57,6 +61,21 @@ export interface StackOcclusionUniforms {
 }
 
 /**
+ * The camera's film, shared by every layer that is exposed onto it.
+ *
+ * By reference for the same reason the occlusion field is, and with a stronger
+ * claim on it: the grain has to be the SAME value at the same pixel in all
+ * eleven programs, or a stack of translucent plates would each roll their own
+ * noise and the sum would be neither grain nor anything else. See `FilmGrain`.
+ */
+export interface FilmGrainUniforms {
+  /** Peak-to-peak amplitude at mid density, in output units. 0 switches it off. */
+  uGrain: IUniform<number>
+  /** Reseeds the field; changes at the shutter rate, not at the frame rate. */
+  uGrainSeed: IUniform<Vector2>
+}
+
+/**
  * How wide the frost scatters at full strength, as a fraction of the drawing
  * buffer height.
  *
@@ -71,7 +90,7 @@ export interface StackOcclusionUniforms {
 const FROST_MAX_SPREAD = 0.013
 
 /** Every knob the shader exposes. Animation writes straight into these. */
-export interface SheetUniforms extends StackOcclusionUniforms, BackdropUniforms {
+export interface SheetUniforms extends StackOcclusionUniforms, BackdropUniforms, FilmGrainUniforms {
   /**
    * Mesh space to the ARTWORK's space, where the stack is genuinely stacked
    * along +Y. Rewritten each frame by `StackOcclusion`, which is also the only
@@ -177,8 +196,22 @@ function applySheetDepthShader(
   Object.assign(shader.uniforms, sheetUniforms)
 
   shader.vertexShader = shader.vertexShader
-    .replace('void main() {', `${VERTEX_PRELUDE}\nvoid main() {`)
+    .replace('void main() {', `${DEPTH_SHARED_PRELUDE}\n${VERTEX_PRELUDE}\nvoid main() {`)
     .replace('#include <begin_vertex>', VERTEX_DEPTH_POSITION_CHUNK)
+
+  // `<alphahash_fragment>` is the hook because it is the one place in three's
+  // depth shader that runs after `diffuseColor.a` has been set from the
+  // material's opacity and before the depth is written — and because nothing
+  // here sets `alphaHash`, so the include it replaces is empty.
+  //
+  // The hash itself is lifted from the lit fragment prelude, which this shader
+  // does not receive: the two are injected into different programs.
+  shader.fragmentShader = shader.fragmentShader
+    .replace(
+      'void main() {',
+      `${DEPTH_SHARED_PRELUDE}\n${FRAGMENT_HASH_PRELUDE}\nvoid main() {`,
+    )
+    .replace('#include <alphahash_fragment>', FRAGMENT_DEPTH_ALPHA_CHUNK)
 }
 
 /**
@@ -192,8 +225,19 @@ function applySheetDepthShader(
  * whatever packing the renderer's own depth material uses, and a custom
  * material that disagrees decodes to garbage rather than to a shadow.
  */
-export function createSheetDepthMaterial(uniforms: SheetUniforms): MeshDepthMaterial {
+export function createSheetDepthMaterial(
+  uniforms: SheetUniforms,
+  /**
+   * How much of the light this plate actually stops. Reaches the shader as
+   * `diffuseColor.a` — three's depth fragment assigns it from the material's
+   * own opacity, but only under `BasicDepthPacking`, which is the default this
+   * material is deliberately left at. Switch the packing and the stochastic
+   * discard silently stops discarding.
+   */
+  opacity: number,
+): MeshDepthMaterial {
   const material = new MeshDepthMaterial()
+  material.opacity = opacity
   // The prelude is shared whole, so the occluder arrays are declared here too
   // even though a depth pass never evaluates them — an array with no length
   // does not compile. MeshDepthMaterial carries no defines of its own, unlike
@@ -222,7 +266,7 @@ function applySheetShader(
     .replace('#include <begin_vertex>', VERTEX_POSITION_CHUNK)
 
   shader.fragmentShader = shader.fragmentShader
-    .replace('void main() {', `${FRAGMENT_PRELUDE}\nvoid main() {`)
+    .replace('void main() {', `${FRAGMENT_HASH_PRELUDE}\n${FRAGMENT_PRELUDE}\nvoid main() {`)
     .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAGMENT_COLOR_CHUNK}`)
     .replace(
       '#include <roughnessmap_fragment>',
@@ -237,9 +281,11 @@ function applySheetShader(
       `#include <emissivemap_fragment>\n${FRAGMENT_EMISSIVE_CHUNK}`,
     )
     .replace('#include <aomap_fragment>', `#include <aomap_fragment>\n${FRAGMENT_AO_CHUNK}`)
+    // Grain first, then the frost composite: the capture the frost scatters is
+    // already grained, so the two orders differ. See FRAGMENT_GRAIN_CHUNK.
     .replace(
       '#include <colorspace_fragment>',
-      `#include <colorspace_fragment>\n${FRAGMENT_BACKDROP_CHUNK}`,
+      `#include <colorspace_fragment>\n${FRAGMENT_GRAIN_CHUNK}\n${FRAGMENT_BACKDROP_CHUNK}`,
     )
 }
 
@@ -249,12 +295,14 @@ export function createSheetMaterial(
   decalMap: Texture | null,
   occlusion: StackOcclusionUniforms,
   backdrop: BackdropUniforms,
+  grain: FilmGrainUniforms,
   layerIndex: number,
 ): { material: MeshPhysicalMaterial; uniforms: SheetUniforms } {
   const uniforms: SheetUniforms = {
     // Spread, so every layer holds the SAME uniform objects the owner writes.
     ...occlusion,
     ...backdrop,
+    ...grain,
     uStackMatrix: { value: new Matrix4() },
     uLayerIndex: { value: layerIndex },
     uLength: { value: shape.length },

@@ -5,6 +5,7 @@ import { SheetObject } from '../infrastructure/three/SheetObject'
 import { createStage, type Stage } from '../infrastructure/three/stage'
 import { AnimationTimeline } from './AnimationTimeline'
 import { CameraInspector } from './CameraInspector'
+import { FilmGrain } from './FilmGrain'
 import { LayerPicker } from './LayerPicker'
 import { PointerParallax } from './PointerParallax'
 import { StackOcclusion } from './StackOcclusion'
@@ -45,6 +46,7 @@ export class SceneOrchestrator {
   private readonly stackOrder: StackOrder
   private readonly stackOcclusion: StackOcclusion
   private readonly backdrop: BackdropCapture
+  private readonly film: FilmGrain
 
   private readonly parallaxGroup = new Group()
   private readonly floatGroup = new Group()
@@ -54,6 +56,7 @@ export class SceneOrchestrator {
   readonly inspector: CameraInspector | null
   /** Which layer the pointer is on. Public: a click handler will want it. */
   readonly picker: LayerPicker
+
   private readonly clock = new Clock()
   private readonly resizeObserver: ResizeObserver
   private frameHandle = 0
@@ -82,9 +85,16 @@ export class SceneOrchestrator {
     // own program as it is built, so the field has to exist first.
     this.stackOcclusion = new StackOcclusion(composition.sheets)
     this.backdrop = new BackdropCapture()
+    this.film = new FilmGrain()
 
     this.sheets = composition.sheets.map((layer, index) => {
-      const sheet = new SheetObject(layer, this.stackOcclusion.uniforms, this.backdrop, index)
+      const sheet = new SheetObject(
+        layer,
+        this.stackOcclusion.uniforms,
+        this.backdrop,
+        this.film.uniforms,
+        index,
+      )
       this.artwork.add(sheet.pivot)
       return sheet
     })
@@ -173,6 +183,9 @@ export class SceneOrchestrator {
     // After every source of motion and before the draw: what a layer is under
     // has to be answered for the frame being rendered, not the one before it.
     this.stackOcclusion.update(this.artwork, this.sheets, this.stage.keyLight)
+    // Advanced on elapsed time rather than per frame — the grain is an exposure,
+    // not a redraw. See `SHUTTER_HZ`.
+    this.film.update(delta)
     this.stage.renderer.render(this.stage.scene, this.stage.camera)
   }
 }

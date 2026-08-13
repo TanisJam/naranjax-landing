@@ -322,7 +322,7 @@ const layers: SheetDraft[] = [
       pivot: PIVOT,
       fanRotation: [0, layerTwist(1), 0],
       offset: layerOffset(1),
-      scale: 0.995,      castsShadow: false,
+      scale: 0.995,      castsShadow: true,
     },
   },
   {
@@ -360,7 +360,7 @@ const layers: SheetDraft[] = [
       pivot: PIVOT,
       fanRotation: [0, layerTwist(2), 0],
       offset: layerOffset(2),
-      scale: 0.99,      castsShadow: false,
+      scale: 0.99,      castsShadow: true,
     },
   },
   {
@@ -401,7 +401,7 @@ const layers: SheetDraft[] = [
       pivot: PIVOT,
       fanRotation: [0, layerTwist(3), 0],
       offset: layerOffset(3),
-      scale: 0.985,      castsShadow: false,
+      scale: 0.985,      castsShadow: true,
     },
   },
   {
@@ -450,7 +450,7 @@ const layers: SheetDraft[] = [
       pivot: PIVOT,
       fanRotation: [0, layerTwist(4), 0],
       offset: layerOffset(4),
-      scale: 0.98,      castsShadow: false,
+      scale: 0.98,      castsShadow: true,
     },
   },
   {
@@ -478,7 +478,7 @@ const layers: SheetDraft[] = [
       pivot: PIVOT,
       fanRotation: [0, layerTwist(5), 0],
       offset: layerOffset(5),
-      scale: 0.99,      castsShadow: false,
+      scale: 0.99,      castsShadow: true,
     },
   },
   {
@@ -511,7 +511,7 @@ const layers: SheetDraft[] = [
       pivot: PIVOT,
       fanRotation: [0, layerTwist(6), 0],
       offset: layerOffset(6),
-      scale: 0.985,      castsShadow: false,
+      scale: 0.985,      castsShadow: true,
     },
   },
   {
@@ -545,7 +545,7 @@ const layers: SheetDraft[] = [
       pivot: PIVOT,
       fanRotation: [0, layerTwist(7), 0],
       offset: layerOffset(7),
-      scale: 0.98,      castsShadow: false,
+      scale: 0.98,      castsShadow: true,
     },
   },
   {
@@ -573,7 +573,7 @@ const layers: SheetDraft[] = [
       pivot: PIVOT,
       fanRotation: [0, layerTwist(8), 0],
       offset: layerOffset(8),
-      scale: 0.99,      castsShadow: false,
+      scale: 0.99,      castsShadow: true,
     },
   },
   {
@@ -599,7 +599,7 @@ const layers: SheetDraft[] = [
       pivot: PIVOT,
       fanRotation: [0, layerTwist(9), 0],
       offset: layerOffset(9),
-      scale: 0.995,      castsShadow: false,
+      scale: 0.995,      castsShadow: true,
     },
   },
   {
@@ -617,7 +617,7 @@ const layers: SheetDraft[] = [
       pivot: PIVOT,
       fanRotation: [0, layerTwist(10), 0],
       offset: layerOffset(10),
-      scale: 1,      castsShadow: false,
+      scale: 1,      castsShadow: true,
     },
   },
 ]

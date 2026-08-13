@@ -17,6 +17,7 @@ import type { BackdropCapture } from './BackdropCapture'
 import {
   createSheetDepthMaterial,
   createSheetMaterial,
+  type FilmGrainUniforms,
   type SheetUniforms,
   type StackOcclusionUniforms,
 } from './material/sheetMaterial'
@@ -183,6 +184,11 @@ export class SheetObject {
      * ever touch it — see the `onBeforeRender` below.
      */
     backdrop: BackdropCapture,
+    /**
+     * The camera's film. Shared by every layer and written by nobody here —
+     * grain belongs to the frame, not to a sheet. See `FilmGrain`.
+     */
+    grain: FilmGrainUniforms,
     layerIndex: number,
   ) {
     this.layer = layer
@@ -210,6 +216,7 @@ export class SheetObject {
       this.decalMap,
       occlusion,
       backdrop.uniforms,
+      grain,
       layerIndex,
     )
     this.material = material
@@ -232,7 +239,9 @@ export class SheetObject {
     mesh.receiveShadow = true
     // Without this the shadow pass draws a point at the origin — the geometry
     // holds no positions and three's own depth material cannot build them.
-    this.depthMaterial = placement.castsShadow ? createSheetDepthMaterial(uniforms) : null
+    this.depthMaterial = placement.castsShadow
+      ? createSheetDepthMaterial(uniforms, layer.surface.opacity)
+      : null
     if (this.depthMaterial) mesh.customDepthMaterial = this.depthMaterial
     // `position` is a zero buffer; nothing on the CPU knows where this ends up.
     mesh.frustumCulled = false

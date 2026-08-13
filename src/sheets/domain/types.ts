@@ -310,10 +310,33 @@ export interface SheetPlacement {
   /**
    * Whether this layer is rendered into the shadow map.
    *
-   * Only the topmost sheet has anything below it to darken, and every caster
-   * re-runs the full vertex shader in the shadow pass. Letting all four cast
-   * measured 27 ms/frame for a 4.5% change in the image; restricting it to the
-   * top sheet keeps nearly all of that change at a quarter of the cost.
+   * True on every layer now, and this is the expensive flag in the file — read
+   * the measurement before turning any of them back on or off.
+   *
+   * It stood on the top sheet alone for a long time, on the grounds that only
+   * it had anything below to darken and that every caster re-runs the whole
+   * vertex shader in the shadow pass: back when the piece was four sheets,
+   * letting all four cast measured 27 ms/frame for a 4.5% change in the image.
+   * The first half of that reasoning was wrong — the artwork turns under the
+   * pointer, so which end of the stack faces the light is not fixed and every
+   * plate throws its shadow onto its neighbours at some angle. The second half
+   * was right and still is.
+   *
+   * What changed is that the alternative stopped being "solid shadow or none".
+   * Seven of the eleven layers are films, a shadow map has no channel for
+   * partial coverage, and a plain depth pass would have every one of them
+   * throwing the black shadow of a piece of card. The stochastic discard in
+   * `FRAGMENT_DEPTH_ALPHA_CHUNK` is what makes an honest translucent caster
+   * possible at all; the analytic stand-in in `stackVisibility` is what stood
+   * in for it until now.
+   *
+   * If the shadow pass turns out to cost too much, the first thing to try is
+   * NOT this flag. It is the depth vertex shader: it calls `surfaceAt`, which
+   * spends five evaluations of `basePosition` on finite-difference tangents in
+   * order to use exactly one of them — the shell offset direction — and the
+   * loft already knows that direction analytically. That is a fivefold cut in
+   * the dominant cost, and it is available before any layer has to stop
+   * casting.
    */
   castsShadow: boolean
 }

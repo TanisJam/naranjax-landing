@@ -281,7 +281,7 @@ vec2 roundedRectParam(vec2 p) {
 // silhouette shows but the shading does not reads as a bug, and differencing a
 // displacement that is already in the position is exact where a hand-derived
 // normal for it would be one more thing to keep in sync.
-vec3 basePosition(vec2 raw) {
+vec3 loftAt(vec2 raw, out vec3 surfaceNormal) {
   vec2 p = roundedRectParam(raw);
 
   vec3 origin, binormal, normalAxis;
@@ -292,12 +292,22 @@ vec3 basePosition(vec2 raw) {
 
   vec3 pos = origin + binormal * offset.x + normalAxis * offset.y;
 
+  // The section's own normal, carried out of the function now that the shadow
+  // pass has a use for it. Free where it stands: the frame and the in-plane
+  // normal are both already here, and this is two scaled adds.
+  //
+  // It is the exact normal of the swept surface along v and only approximately
+  // so along u — the crown, the arc angle and the tip scale all change as the
+  // section travels, and a section normal knows nothing about that. It is also
+  // blind to the two displacements below. surfaceAt differences the surface
+  // for that reason and this is not a replacement for it; see depthPositionAt
+  // for the one caller that can afford the difference.
+  surfaceNormal = binormal * inPlaneNormal.x + normalAxis * inPlaneNormal.y;
+
   // Both displacements ride the surface normal, so it is worth computing once.
   // Ten of the eleven layers take neither branch on any given frame — these are
   // uniform conditions, coherent across the whole draw call.
   if (uRibAmplitude > 0.0 || uBendAmount != 0.0) {
-    vec3 surfaceNormal = binormal * inPlaneNormal.x + normalAxis * inPlaneNormal.y;
-
     if (uRibAmplitude > 0.0) {
       float fade = smoothstep(0.0, 0.06, p.x) * smoothstep(0.0, 0.06, 1.0 - p.x);
       pos += surfaceNormal * sin(p.y * uRibFrequency * SHEET_TWO_PI + uRibPhase)
@@ -336,6 +346,12 @@ vec3 basePosition(vec2 raw) {
   }
 
   return pos;
+}
+
+/** The loft alone, for the four callers that difference it and want no normal. */
+vec3 basePosition(vec2 raw) {
+  vec3 unused;
+  return loftAt(raw, unused);
 }
 
 // Bullnose edge. Instead of extruding a flat slab and chamfering it, the
@@ -460,6 +476,44 @@ void stackVisibility(vec3 stackPos, float side, out float ambient, out float sha
   }
 }
 
+/**
+ * The same point, for the shadow map alone, at a fifth of the price.
+ *
+ * surfaceAt below evaluates the loft FIVE times per vertex: once for the
+ * point and four more to difference the tangents. It needs exactly one thing
+ * out of those four extra evaluations — the direction to push the shell along —
+ * and the loft already knows that direction analytically.
+ *
+ * Which makes this the whole shadow pass at a fifth of its vertex cost. At
+ * 72x48 plus the bevel, eleven casters carry about a hundred thousand vertices
+ * through here every frame, and each evaluation of the loft costs a handful of
+ * trig calls in spineAt, spineTangentAt and sectionAt. Four fifths of
+ * that was being spent on a normal that is thrown away.
+ *
+ * What it gives up is real and it is invisible. The analytic normal is not
+ * exactly the surface normal — it is blind to the ribs, to the drag bend, and
+ * to the section changing shape along the sweep — so it can be off by a few
+ * degrees. All it does here is aim an offset of at most half a plate's
+ * thickness, which on a film is 0.0047 units. Ten degrees of error moves the
+ * recorded depth by seven hundred-thousandths of a unit, against a shadow texel
+ * of 0.00625. The map cannot represent the difference.
+ *
+ * That argument holds for the shadow map and NOWHERE else. The lit pass shades
+ * with this normal, where a few degrees is the difference between a highlight
+ * and no highlight, and it keeps the finite differences.
+ */
+vec3 depthPositionAt(vec2 p, float shell) {
+  vec2 remapped;
+  float height;
+  float angle;
+  vec2 outward;
+  bevelAt(p, remapped, height, angle, outward);
+
+  vec3 surfaceNormal;
+  vec3 center = loftAt(remapped, surfaceNormal);
+  return center + surfaceNormal * (shell * height);
+}
+
 void surfaceAt(
   vec2 p,
   float shell,
@@ -546,6 +600,80 @@ vImperfection = sheetNoise(aParam * 5.0) - 0.5;
 `
 
 /**
+ * Injected into the shadow depth material alone, both stages.
+ *
+ * The position has to reach the fragment stage because a translucent plate can
+ * only cast an honest shadow by discarding a share of its own texels, and the
+ * pattern it discards by must be anchored to the PLATE. Anchored to the shadow
+ * map instead — which is where `gl_FragCoord` would put it — the piece drifts
+ * through a stationary field of holes as it floats, and the shadow boils.
+ *
+ * Object space rather than the artwork's, because a plate does not deform
+ * relative to itself. The stack matrix, the float, the parallax and the resting
+ * tilt all move a sheet as a whole, and none of them may be allowed to reach
+ * the pattern.
+ */
+export const DEPTH_SHARED_PRELUDE = /* glsl */ `
+varying vec3 vShadowPos;
+`
+
+/**
+ * How finely the discard pattern is diced, in inverse world units.
+ *
+ * One cell per shadow texel, and that is the whole of the choice: the shadow is
+ * read back through a five-tap Vogel disk that is itself bilinear, so roughly
+ * twenty texels are averaged per lookup. A pattern at texel frequency gives
+ * those twenty taps twenty nearly independent votes and the average lands on
+ * the plate's real opacity. Diced any coarser and neighbouring taps agree with
+ * each other, the votes stop being independent, and what should be a uniform
+ * grey shadow comes back blotched.
+ *
+ * The frustum is 6.4 units across 1024 texels, so a texel is 0.00625 and this
+ * is its reciprocal. It is tied to those two numbers and has to move if either
+ * does.
+ */
+const SHEET_SHADOW_DICE = 160.0
+
+/**
+ * Replaces `<alphahash_fragment>` in the depth material, which is a no-op there
+ * — nothing sets `alphaHash` on it.
+ *
+ * Stochastic transparency, and it is the only way a rasterised shadow map can
+ * carry a translucent caster. The map stores one depth per texel and has no
+ * channel to say "half blocked"; seven of the eleven layers here are films
+ * between 0.56 and 0.93 opaque, and given a plain shadow pass every one of them
+ * would throw the solid black shadow of a piece of card.
+ *
+ * So the coverage is moved out of the value and into the SAMPLE COUNT. A plate
+ * at 0.56 discards forty-four texels in every hundred, the filter above averages
+ * what survives, and the shadow comes back at 0.56 — the noise turns into
+ * density. This is Enderton's stochastic transparency in the small.
+ *
+ * Deliberately NOT three's own `alphaHash`, which does the same job better: it
+ * picks its noise scale from the screen-space derivatives, so its cells hold
+ * their size no matter how a surface is raked. It also costs eight sines per
+ * fragment, and this file already carries a measurement of what that pattern
+ * costs here — a full vsync step, which is why every hash in it is a
+ * multiply-and-fold instead. The scale adaptation is worth the least on this
+ * geometry of any it could be applied to: eleven plates of nearly one size, all
+ * about as far from the light, all facing it within a few degrees. One fixed
+ * dice is very close to what the adaptive version would have chosen anyway.
+ *
+ * Guarded on opacity so the four solid layers pay nothing at all.
+ */
+export const FRAGMENT_DEPTH_ALPHA_CHUNK = /* glsl */ `
+if (diffuseColor.a < 1.0) {
+  vec3 cell = floor(vShadowPos * ${SHEET_SHADOW_DICE.toFixed(1)});
+  // Folded to two dimensions rather than hashed in three. The plates are thin —
+  // four thousandths of their own length — so at this dice the whole thickness
+  // of a sheet is a cell or two and the third axis contributes almost nothing
+  // to begin with. The odd multiplier keeps the fold from aliasing the two
+  // in-plane axes onto each other.
+  if (sheetGrainHash(vec2(cell.x + cell.z * 37.0, cell.y)) >= diffuseColor.a) discard;
+}
+`
+
+/**
  * Replaces `<begin_vertex>` in the shadow depth material.
  *
  * The shadow pass normally renders with three's plain MeshDepthMaterial, which
@@ -558,17 +686,17 @@ vImperfection = sheetNoise(aParam * 5.0) - 0.5;
  * evaluation runs inline instead of reusing VERTEX_NORMAL_CHUNK. The varyings
  * from the prelude are assigned flat values so the program always links, even
  * though the depth fragment shader never reads them.
+ *
+ * Through `depthPositionAt` rather than `surfaceAt`, which is where four fifths
+ * of this pass went until it was noticed. A shadow map records where a plate
+ * is; it has no use for the tangent frame that call spends its time building.
  */
 export const VERTEX_DEPTH_POSITION_CHUNK = /* glsl */ `
-vec3 gDepthPosition;
-vec3 gDepthNormal;
-vec3 gDepthTangentU;
-vec3 gDepthTangentV;
-float gDepthBevel;
-surfaceAt(aParam, aShell, gDepthPosition, gDepthNormal, gDepthTangentU, gDepthTangentV, gDepthBevel);
-vec3 transformed = gDepthPosition;
+vec3 transformed = depthPositionAt(aParam, aShell);
+// What the stochastic discard dices. See DEPTH_SHARED_PRELUDE.
+vShadowPos = transformed;
 vParam = aParam;
-vBevel = gDepthBevel;
+vBevel = 0.0;
 vWorldPos = vec3(0.0);
 vTangentU = vec3(0.0);
 vTangentV = vec3(0.0);
@@ -576,6 +704,23 @@ vTangentV = vec3(0.0);
 vOcclusion = 1.0;
 vStackShadow = 1.0;
 vImperfection = 0.0;
+`
+
+/**
+ * Injected into BOTH fragment programs — the lit material and the shadow depth
+ * material — because the grain and the stochastic shadow discard are the same
+ * question asked twice: give me a stable pseudo-random number for this cell.
+ *
+ * The vertex prelude carries an identical function and they cannot be shared:
+ * the two are injected into different programs. See `sheetHash` there for why
+ * neither of them contains a transcendental.
+ */
+export const FRAGMENT_HASH_PRELUDE = /* glsl */ `
+float sheetGrainHash(vec2 cell) {
+  vec3 p = fract(vec3(cell.xyx) * 0.1031);
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
+}
 `
 
 export const FRAGMENT_PRELUDE = /* glsl */ `
@@ -609,6 +754,10 @@ uniform float uDecalRelief;
 uniform float uStackShadow;
 uniform float uCastShare;
 
+uniform float uGrain;
+/** Reseeds the grain field at the shutter rate. See FilmGrain. */
+uniform vec2 uGrainSeed;
+
 varying vec2 vParam;
 varying vec3 vTangentU;
 varying vec3 vTangentV;
@@ -619,6 +768,18 @@ varying float vStackShadow;
 varying float vImperfection;
 
 const float SHEET_TWO_PI = 6.283185307179586;
+
+/**
+ * How many grain cells span the height of the frame.
+ *
+ * Measured against the HEIGHT and not against the pixel, which is the same
+ * convention the frost radius uses and for the same reason: a grain one device
+ * pixel across is invisible dust on a 2x display and coarse sand on a 1x one,
+ * so a size fixed in pixels is a different effect on every machine. This one
+ * holds its apparent size and lands near a pixel and a half at the ratios this
+ * renderer clamps to.
+ */
+const float SHEET_GRAIN_DENSITY = 900.0;
 
 /**
  * Where the decal is read.
@@ -843,6 +1004,55 @@ totalEmissiveRadiance += uRimColor * (1.0 - smoothstep(0.0, 0.35, vBevel)) * uBe
 `
 
 /**
+ * Appended to `<colorspace_fragment>`, and BEFORE the backdrop composite below.
+ *
+ * Film grain, and it belongs to the camera rather than to any sheet — which is
+ * why every layer reads the same two uniform objects and arrives at the same
+ * value for the same pixel. That shared value is what makes this correct across
+ * a stack of eleven translucent plates rather than merely cheap: each layer adds
+ * the grain to its own colour, the blend weights that colour by the layer's
+ * alpha, and the weights of an `over` composite sum to the coverage of the
+ * stack. So the grain lands once at full strength on the solid card and fades
+ * out with the object at its edges, instead of being counted eleven times.
+ *
+ * A post-process pass would be the textbook home for this and would cost a
+ * full-screen render target plus a copy for an effect that is four instructions
+ * here. It would also have to be taught to leave the transparent canvas alone,
+ * since the page owns the backdrop behind it — a thing this gets for free by
+ * riding the same alpha as everything else.
+ *
+ * Ordered before the frost composite deliberately. The frosted layers scatter a
+ * capture of the framebuffer, which already carries the grain of everything
+ * drawn under them; graining after the composite would apply it a second time to
+ * whatever shows through. What is left is a grain that gets blurred along with
+ * the backdrop it sits in, which is the right answer anyway — the defocused
+ * thing behind the glass is defocused, grain included.
+ */
+export const FRAGMENT_GRAIN_CHUNK = /* glsl */ `
+if (uGrain > 0.0) {
+  // Cells locked to the drawing buffer, never to the surface. Grain lives in
+  // the film plane: it does not travel with the object, does not stretch at
+  // grazing angles, and does not get finer as a plate turns away. Anchored to
+  // the geometry it would be a texture, and a texture is what this is not.
+  vec2 cell = floor(gl_FragCoord.xy * uBackdropTexel.y * SHEET_GRAIN_DENSITY);
+  // The seed offsets the HASH INPUT rather than the grid, so the cells stay
+  // pixel-aligned and only their values change. Offsetting the grid instead
+  // slides the whole field a fraction of a cell every shutter, which reads as
+  // dirt crawling across the lens rather than as grain.
+  float g = sheetGrainHash(cell + uGrainSeed) - 0.5;
+
+  // Strongest through the midtones and gone at both ends. Grain is a property
+  // of the image's DENSITY rather than of its brightness — nothing is developed
+  // in the blacks and everything is in a blown highlight, so both ends of the
+  // range come out smooth and the middle is where the silver actually is. Flat
+  // noise added everywhere instead puts sparkle in the deep shadows, which is
+  // the one place a photograph never has any.
+  float density = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  gl_FragColor.rgb += g * uGrain * 4.0 * density * (1.0 - density);
+}
+`
+
+/**
  * Appended to `<colorspace_fragment>`: the frosted layers composite what is
  * behind them by hand, instead of letting the blend do it.
  *
@@ -930,6 +1140,20 @@ reflectedLight.indirectSpecular *= computeSpecularOcclusion(
 // stack, and that is a correct result for the wrong question: a plate five gaps
 // up genuinely throws its shadow clear of everything, but it has not stopped
 // blocking the panels.
+//
+// What that blend MEANS has changed, and the code did not have to. Every layer
+// is rendered into the real shadow map now, so every plate arrives here with a
+// negative occluder weight and vStackShadow comes back as 1 everywhere — the
+// analytic shadow half has retired, on purpose, because the renderer is drawing
+// that shadow for real and counting it twice is exactly what the sign is there
+// to prevent. uCastShare therefore no longer divides one analytic term from
+// another. It divides the share of direct light the SHADOW MAP is responsible
+// for from the share the coverage term still has to stand in for, which is what
+// it always meant and now finally describes.
+//
+// The dead half is left computing. It costs a box test per layer per vertex and
+// it is what any layer dropped back out of the shadow map falls back on, which
+// is a live possibility while the cost of eleven casters is unmeasured.
 float stackDirect = mix(1.0, mix(vOcclusion, vStackShadow, uCastShare), uStackShadow);
 reflectedLight.directDiffuse *= stackDirect;
 reflectedLight.directSpecular *= computeSpecularOcclusion(
