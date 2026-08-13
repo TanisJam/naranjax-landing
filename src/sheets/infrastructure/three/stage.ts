@@ -17,6 +17,15 @@ export interface Stage {
   renderer: WebGLRenderer
   scene: Scene
   camera: PerspectiveCamera
+  /**
+   * The light the stack's own shadowing is derived from.
+   *
+   * Exposed because the analytic occlusion has to know which way shadows fall,
+   * and there is exactly one honest answer to that: the only light in the scene
+   * that casts. The three area lights cannot, so pointing the term at any of
+   * them would be inventing a shadow direction rather than reading one.
+   */
+  keyLight: DirectionalLight
   resize: (width: number, height: number) => void
   dispose: () => void
 }
@@ -32,7 +41,7 @@ export interface Stage {
  * worst offender: it lifts every surface uniformly and there is no way to earn
  * the darks back afterwards.
  */
-function createLighting(scene: Scene): void {
+function createLighting(scene: Scene): DirectionalLight {
   RectAreaLightUniformsLib.init()
 
   // Big and soft, not small and hard. The bright areas in the reference are
@@ -120,6 +129,7 @@ function createLighting(scene: Scene): void {
   bounce.lookAt(0, 0.4, 0)
 
   scene.add(key, rim, spec, bounce)
+  return spec
 }
 
 /**
@@ -189,7 +199,7 @@ export function createStage(container: HTMLElement): Stage {
   room.dispose()
   pmrem.dispose()
 
-  createLighting(scene)
+  const keyLight = createLighting(scene)
 
   // Long lens. The reference has almost no perspective divergence between the
   // near and far sheets, which a wide fov would destroy.
@@ -212,5 +222,5 @@ export function createStage(container: HTMLElement): Stage {
     renderer.domElement.remove()
   }
 
-  return { renderer, scene, camera, resize, dispose }
+  return { renderer, scene, camera, keyLight, resize, dispose }
 }

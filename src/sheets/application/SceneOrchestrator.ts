@@ -172,7 +172,7 @@ export class SceneOrchestrator {
     this.stackOrder.update(this.stage.camera)
     // After every source of motion and before the draw: what a layer is under
     // has to be answered for the frame being rendered, not the one before it.
-    this.stackOcclusion.update(this.artwork, this.sheets)
+    this.stackOcclusion.update(this.artwork, this.sheets, this.stage.keyLight)
     this.stage.renderer.render(this.stage.scene, this.stage.camera)
   }
 }

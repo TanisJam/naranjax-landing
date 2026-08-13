@@ -38,6 +38,16 @@ uniform vec4 uOccluder[SHEET_LAYERS];
 uniform vec4 uOccluderExtent[SHEET_LAYERS];
 uniform float uOcclusionStrength;
 
+/**
+ * How far a shadow slides sideways per unit of height, in the artwork's frame.
+ *
+ * This is the key light's own direction, divided through by its vertical
+ * component and rewritten every frame — the lights are fixed in the world while
+ * the artwork turns under the pointer and floats, so the direction shadows fall
+ * in is only constant in world space, and the stack is not.
+ */
+uniform vec2 uShadowDrift;
+
 uniform float uLength;
 uniform float uWidth;
 uniform float uTipScale;
@@ -66,6 +76,7 @@ varying vec3 vTangentV;
 varying vec3 vWorldPos;
 varying float vBevel;
 varying float vOcclusion;
+varying float vStackShadow;
 varying float vImperfection;
 
 const float SHEET_PI = 3.141592653589793;
@@ -382,8 +393,9 @@ void bevelAt(vec2 p, out vec2 remapped, out float height, out float angle, out v
  * eleven overlapping translucent layers — roughly two hundred times the work
  * for a term that interpolates cleanly.
  */
-float stackVisibility(vec3 stackPos, float side) {
-  float visibility = 1.0;
+void stackVisibility(vec3 stackPos, float side, out float ambient, out float shadow) {
+  ambient = 1.0;
+  shadow = 1.0;
 
   for (int j = 0; j < SHEET_LAYERS; j++) {
     // A plate does not shade itself. At rest the gap between two layers is
@@ -401,20 +413,12 @@ float stackVisibility(vec3 stackPos, float side) {
     float rise = (extent.z - stackPos.y) * side;
     if (rise <= 0.0) continue;
 
-    // Into the occluder's own frame: one dot with its +X axis, one with the
-    // +Z that a pure Y rotation makes its perpendicular.
-    vec2 d = stackPos.xz - plate.xy;
-    vec2 local = vec2(d.x * plate.z + d.y * plate.w, -d.x * plate.w + d.y * plate.z);
-
     // The penumbra widens with distance, which is contact hardening and it
     // falls out of the geometry rather than costing a second control: the same
     // edge is crisp against the plate it nearly touches and diffuse against one
     // across the stack. A fixed feather would give every layer the same rubbery
     // halo and lose the thing that says how far apart they are.
     vec2 feather = vec2(rise);
-    vec2 inside = vec2(1.0) - smoothstep(extent.xy - feather, extent.xy + feather, abs(local));
-    float cover = inside.x * inside.y;
-    if (cover <= 0.0) continue;
 
     // Solid angle of a coaxial disc of the occluder's own area, cosine
     // weighted: r^2 / (r^2 + d^2). Exact for a disc on its axis and the right
@@ -422,13 +426,38 @@ float stackVisibility(vec3 stackPos, float side) {
     // and falls off as the inverse square once they are well apart.
     float radiusSq = 4.0 * extent.x * extent.y / SHEET_PI;
     float form = radiusSq / (radiusSq + rise * rise);
+    float weight = form * abs(extent.w) * uOcclusionStrength;
 
-    // Multiplicative, because occluders compound rather than add: light already
-    // stopped by the plate above cannot be stopped twice by the one above that.
-    visibility *= 1.0 - cover * form * extent.w * uOcclusionStrength;
+    // AMBIENT. Sampled straight up the stack axis, and that is not a shortcut
+    // to be improved later — ambient occlusion asks how much SKY a point has
+    // left, and sky arrives from the whole hemisphere at once. A term that
+    // leaned toward one light would not be occlusion, it would be a second
+    // shadow of it.
+    vec2 axial = stackPos.xz - plate.xy;
+    vec2 la = vec2(axial.x * plate.z + axial.y * plate.w, -axial.x * plate.w + axial.y * plate.z);
+    vec2 ia = vec2(1.0) - smoothstep(extent.xy - feather, extent.xy + feather, abs(la));
+    ambient *= 1.0 - ia.x * ia.y * weight;
+
+    // SHADOW. The same coverage, sampled where the light actually comes from:
+    // walk from this point toward the key until the walk reaches the occluder's
+    // height, and ask whether the plate is over THAT spot. Which is a shadow —
+    // the offset grows with the gap, so a distant plate throws its darkness
+    // further to the side, exactly as it should.
+    //
+    // Splitting the two is the whole of this function's honesty. Run as one
+    // term they were a shadow cast straight down from a light that is nowhere
+    // near straight up, and every layer was dimmed under its own footprint
+    // instead of off to the side of it.
+    vec2 thrown = axial + uShadowDrift * rise * side;
+    vec2 ls = vec2(thrown.x * plate.z + thrown.y * plate.w, -thrown.x * plate.w + thrown.y * plate.z);
+    vec2 is = vec2(1.0) - smoothstep(extent.xy - feather, extent.xy + feather, abs(ls));
+
+    // A negative weight marks a plate whose shadow the renderer is already
+    // drawing into a real shadow map. It still blocks sky, so it stays in the
+    // ambient term — but counting it here as well would darken everything under
+    // it twice, once analytically and once for real.
+    shadow *= 1.0 - is.x * is.y * weight * step(0.0, extent.w);
   }
-
-  return visibility;
 }
 
 void surfaceAt(
@@ -502,7 +531,12 @@ vTangentV = normalize(normalMatrix * gTangentV);
 // branches meet at 1.
 vec3 gStackPos = (uStackMatrix * vec4(gPosition, 1.0)).xyz;
 float gSide = (uStackMatrix * vec4(gNormal, 0.0)).y;
-vOcclusion = mix(1.0, stackVisibility(gStackPos, sign(gSide)), clamp(abs(gSide), 0.0, 1.0));
+float gAmbient;
+float gShadow;
+stackVisibility(gStackPos, sign(gSide), gAmbient, gShadow);
+float gFacing = clamp(abs(gSide), 0.0, 1.0);
+vOcclusion = mix(1.0, gAmbient, gFacing);
+vStackShadow = mix(1.0, gShadow, gFacing);
 
 // Where this point sits in the sheet's own unevenness of finish. A handful of
 // patches across the plate, which is the scale a moulded or laminated surface
@@ -540,6 +574,7 @@ vTangentU = vec3(0.0);
 vTangentV = vec3(0.0);
 // A shadow map records where the plate IS, not how lit it is.
 vOcclusion = 1.0;
+vStackShadow = 1.0;
 vImperfection = 0.0;
 `
 
@@ -572,6 +607,7 @@ uniform float uDecalInk;
 uniform float uDecalRelief;
 
 uniform float uStackShadow;
+uniform float uCastShare;
 
 varying vec2 vParam;
 varying vec3 vTangentU;
@@ -579,6 +615,7 @@ varying vec3 vTangentV;
 varying vec3 vWorldPos;
 varying float vBevel;
 varying float vOcclusion;
+varying float vStackShadow;
 varying float vImperfection;
 
 const float SHEET_TWO_PI = 6.283185307179586;
@@ -880,7 +917,20 @@ reflectedLight.indirectSpecular *= computeSpecularOcclusion(
   material.roughness
 );
 
-float stackDirect = mix(1.0, vOcclusion, uStackShadow);
+// The direct light is not one thing, and its occlusion is not either. Three of
+// the four sources are large panels a few units off: from under a plate they
+// are blocked across most of their solid angle at once, which is occlusion in
+// the ambient sense and has no direction to it. The fourth is directional, and
+// a directional source is the only one here that throws an edge — offset, to
+// the side, growing with the gap.
+//
+// So the two terms are blended by how much of the direct light comes from a
+// source small enough to cast. Running the offset term alone was measured
+// brightening the frame by 12 luminance points and flattening the middle of the
+// stack, and that is a correct result for the wrong question: a plate five gaps
+// up genuinely throws its shadow clear of everything, but it has not stopped
+// blocking the panels.
+float stackDirect = mix(1.0, mix(vOcclusion, vStackShadow, uCastShare), uStackShadow);
 reflectedLight.directDiffuse *= stackDirect;
 reflectedLight.directSpecular *= computeSpecularOcclusion(
   stackDotNV,

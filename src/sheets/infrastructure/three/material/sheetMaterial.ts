@@ -50,6 +50,10 @@ export interface StackOcclusionUniforms {
   uOccluderExtent: IUniform<Vector4[]>
   uOcclusionStrength: IUniform<number>
   uStackShadow: IUniform<number>
+  /** Lateral shadow travel per unit of height, in the artwork's frame. */
+  uShadowDrift: IUniform<Vector2>
+  /** Share of the direct light coming from a source small enough to cast. */
+  uCastShare: IUniform<number>
 }
 
 /**

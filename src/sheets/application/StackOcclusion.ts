@@ -1,5 +1,5 @@
-import { Matrix4, Vector4 } from 'three'
-import type { Object3D } from 'three'
+import { Matrix4, Vector2, Vector3, Vector4 } from 'three'
+import type { DirectionalLight, Object3D } from 'three'
 import type { SheetLayer } from '../domain/types'
 import type { StackOcclusionUniforms } from '../infrastructure/three/material/sheetMaterial'
 import type { SheetObject } from '../infrastructure/three/SheetObject'
@@ -32,14 +32,51 @@ const STACK_SHADOW = 0.7
  * layers are translucent — light arrives from the sides and through the film,
  * neither of which a coaxial form factor knows about.
  *
- * So this is the one fitted number in the whole term. Everything else — the
- * coverage, the falloff, the contact hardening, the per-layer weight — is
- * derived from the composition.
+ * So this is a fitted number, alongside `CAST_SHARE` below. Everything else —
+ * the coverage, the falloff, the contact hardening, the per-layer weight, the
+ * direction shadows fall in — is derived.
+ *
+ * Raised from 0.55 when the shadow half learned where the light is. An offset
+ * shadow does not accumulate the way the symmetric one did: a plate five gaps
+ * up throws its darkness clear of the stack instead of stacking onto it, which
+ * is correct and cost the frame 7.4 luminance points. This is that level put
+ * back, and it lands where the change reads as direction rather than as
+ * exposure — 237k pixels darker against 237k brighter.
  */
-const OCCLUSION_STRENGTH = 0.55
+const OCCLUSION_STRENGTH = 0.72
 
 const stackMatrix = new Matrix4()
 const artworkInverse = new Matrix4()
+const lightDirection = new Vector3()
+
+/**
+ * Floor on how vertical the key has to stay before its shadows stop being
+ * projected at all.
+ *
+ * The drift is the light's lateral direction divided by its vertical one, so a
+ * light sinking toward the horizon sends it to infinity and every plate would
+ * shadow the whole stack sideways. Clamping the denominator caps the throw
+ * instead, which is the same thing a real grazing light does once its shadow
+ * runs off the end of what it can land on.
+ */
+const MIN_LIGHT_ELEVATION = 0.35
+
+/**
+ * How much of the direct light comes from a source small enough to throw an
+ * edge, as opposed to a panel that is blocked the way sky is.
+ *
+ * From the knockout measurements in `stage.ts`, taken at the intensities the
+ * rig had then: key 40.76, rim 10.53, bounce 4.04 against the directional's
+ * 7.37. The directional has since roughly tripled while the key came down by
+ * two fifths, which lands it near two fifths of the direct total.
+ *
+ * It matters which way this leans. At 1 the whole stack is shadowed by one
+ * distant source, every plate throws its darkness clear of its neighbours, and
+ * the middle of the stack goes flat — measured at 12 luminance points brighter
+ * than the symmetric term it replaced. At 0 the shadow has no direction at all,
+ * which is where this started.
+ */
+const CAST_SHARE = 0.42
 
 /**
  * Writes the occlusion field the sheets shade themselves with.
@@ -67,24 +104,57 @@ export class StackOcclusion {
       uOccluderExtent: { value: layers.map(() => new Vector4()) },
       uOcclusionStrength: { value: OCCLUSION_STRENGTH },
       uStackShadow: { value: STACK_SHADOW },
+      uShadowDrift: { value: new Vector2() },
+      uCastShare: { value: CAST_SHARE },
     }
 
-    this.extents = layers.map(({ shape, placement, surface }) => [
-      shape.length * 0.5 * placement.scale,
-      shape.width * 0.5 * placement.scale,
-      // What the plate stops. Opacity is the honest proxy: a foil at 0.16
-      // passes most of the light through and has no business darkening the
-      // layer under it the way a printed card does.
-      surface.opacity,
-    ])
+    this.extents = layers.map(({ shape, placement, surface }) => {
+      // What the plate stops. Opacity is the honest proxy: a foil at 0.42
+      // passes light through and has no business darkening the layer under it
+      // the way a printed card does.
+      //
+      // Signed, and the sign is the message: NEGATIVE means the renderer is
+      // already drawing this plate's shadow into a real shadow map. Such a
+      // plate still blocks sky, so it keeps its place in the ambient half —
+      // but the shadow half has to skip it, or everything beneath it is
+      // darkened twice, once analytically and once for real.
+      const stops = placement.castsShadow ? -surface.opacity : surface.opacity
+      return [
+        shape.length * 0.5 * placement.scale,
+        shape.width * 0.5 * placement.scale,
+        stops,
+      ] as const
+    })
   }
 
-  update(artwork: Object3D, sheets: readonly SheetObject[]): void {
+  update(artwork: Object3D, sheets: readonly SheetObject[], key: DirectionalLight): void {
     // Descendants included: the poses being read were written to the meshes
     // this frame and have not been flushed. The renderer would do it later,
     // which is a frame too late for a term the same frame consumes.
     artwork.updateWorldMatrix(true, true)
     artworkInverse.copy(artwork.matrixWorld).invert()
+
+    // Which way the key lies, in the artwork's own frame.
+    //
+    // Rewritten every frame and not once at build: the lights are bolted to the
+    // world while the artwork turns under the pointer, floats, and sits at its
+    // resting tilt. A shadow direction fixed in the stack's frame would swing
+    // with the piece, which is precisely the thing a light does not do.
+    //
+    // Direction TO the light, since a DirectionalLight is aimed from its
+    // position at its target and the target here is the origin. The transform
+    // drops translation by construction — only the rotation of the artwork can
+    // reach a direction.
+    lightDirection
+      .copy(key.position)
+      .normalize()
+      .transformDirection(artworkInverse)
+
+    const elevation = Math.max(Math.abs(lightDirection.y), MIN_LIGHT_ELEVATION)
+    this.uniforms.uShadowDrift.value.set(
+      lightDirection.x / elevation,
+      lightDirection.z / elevation,
+    )
 
     const occluders = this.uniforms.uOccluder.value
     const extents = this.uniforms.uOccluderExtent.value
