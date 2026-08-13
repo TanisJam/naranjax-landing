@@ -18,8 +18,20 @@ import type { SheetObject } from '../infrastructure/three/SheetObject'
  * plate under another loses its sky, not its light. Taken to 1 the middle of
  * the stack goes near-black, which is what an enclosed volume would do and not
  * what an open fan of plates does.
+ *
+ * Raised from 0.7 because that escape route was narrowed. The whole reason this
+ * is not 1 is the width of the panels, and the fill panels have since lost a
+ * third of their strength apiece — the share of direct light arriving from a
+ * source wide enough to reach in sideways fell from 0.63 to 0.54. Less light
+ * getting under a plate means more of the shadow is real, so more of it is the
+ * term's to carry.
+ *
+ * The chain behind this number is softer than the one behind `CAST_SHARE`
+ * below, and it is worth saying so: that one is a ratio of measured
+ * contributions and this one is a fitted level moved in proportion to them. It
+ * is the more likely of the two to want adjusting by eye.
  */
-const STACK_SHADOW = 0.7
+const STACK_SHADOW = 0.78
 
 /**
  * Global scale on every occluder's contribution.
@@ -65,10 +77,26 @@ const MIN_LIGHT_ELEVATION = 0.35
  * How much of the direct light comes from a source small enough to throw an
  * edge, as opposed to a panel that is blocked the way sky is.
  *
- * From the knockout measurements in `stage.ts`, taken at the intensities the
- * rig had then: key 40.76, rim 10.53, bounce 4.04 against the directional's
- * 7.37. The directional has since roughly tripled while the key came down by
- * two fifths, which lands it near two fifths of the direct total.
+ * DERIVED, not chosen, and it has to be recomputed every time an intensity in
+ * `stage.ts` moves — which is exactly what went wrong once already: the rig was
+ * rebalanced and this was left behind, so the frame spent a pass claiming less
+ * of its shadow came from a directional source than actually did.
+ *
+ * A light's contribution is linear in its intensity, so the knockout
+ * measurements in `stage.ts` — key 40.76 at 9, rim 10.53 at 5.5, bounce 4.04 at
+ * 3.2, directional 7.37 at 1.3 — carry straight to any later rig. At the
+ * current one:
+ *
+ *   key   5.8 -> 26.3      rim  3.4 -> 6.5
+ *   spec  5.2 -> 29.5      bounce 1.6 -> 2.0
+ *
+ * which puts the only source that can throw an edge at 29.5 of a direct total
+ * of 64.3. The panels lost a third each and the directional gained, so this
+ * came up from the 0.42 the previous rig justified.
+ *
+ * The extrapolation is not exact — the knockouts were read off a tone-mapped
+ * frame, which is not quite linear in the light that produced it — but the
+ * error is far under the width of what this controls.
  *
  * It matters which way this leans. At 1 the whole stack is shadowed by one
  * distant source, every plate throws its darkness clear of its neighbours, and
@@ -76,7 +104,7 @@ const MIN_LIGHT_ELEVATION = 0.35
  * than the symmetric term it replaced. At 0 the shadow has no direction at all,
  * which is where this started.
  */
-const CAST_SHARE = 0.42
+const CAST_SHARE = 0.46
 
 /**
  * Writes the occlusion field the sheets shade themselves with.

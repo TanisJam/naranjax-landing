@@ -51,7 +51,8 @@ function createLighting(scene: Scene): DirectionalLight {
   // measured 143 against the reference's 177, and enlarging the lights closed
   // that gap while raising intensity only blew out the midtones.
   //
-  // Pulled down from 9, and that number is where the piece's flatness was
+  // Pulled down from 9 to 6.6 and now to here, and that number is where the
+  // piece's flatness was
   // actually stored. Knocking each contributor out in turn and measuring what
   // the frame lost put this at a mean of 40.76 luminance points, against 10.53
   // for the rim and 7.37 for the only light in the scene that can cast a
@@ -59,19 +60,32 @@ function createLighting(scene: Scene): DirectionalLight {
   // nothing to model against: every plate takes its light from the same
   // direction at nearly the same strength, and the stack reads as a set of flat
   // colours rather than as eleven surfaces turned different ways.
-  const key = new RectAreaLight(0xffffff, 6.6, 9, 3)
+  const key = new RectAreaLight(0xffffff, 5.8, 9, 3)
   key.name = 'key'
   key.position.set(-3.2, 4, 3.8)
   key.lookAt(0, 0, 0)
 
-  const rim = new RectAreaLight(0xdae8ff, 5.5, 8, 2.2)
+  // Down from 5.5, and this is the light the last rebalance never looked at.
+  // That pass moved the key, the directional and the environment and left the
+  // two panels below untouched — 5.5 and 3.2 of pure fill, measured together at
+  // 14.6 luminance points, which is the whole environment over again arriving
+  // through a door nobody was watching. A backlight that casts nothing, falls
+  // off over nothing and reaches every plate at the same strength is the
+  // definition of the complaint: it raises the floor of the frame and gives the
+  // eye no direction in exchange.
+  //
+  // Not off. It is the only source behind the piece, and it is what separates
+  // the far edge of a plate from whatever is behind it. Cut to where it draws
+  // that edge and stops filling the body.
+  const rim = new RectAreaLight(0xdae8ff, 3.4, 8, 2.2)
   rim.name = 'rim'
   rim.position.set(3, 2.6, -3)
   rim.lookAt(0, 0, 0)
 
   // The only shadow caster in the scene — RectAreaLight cannot cast at all.
-  // Restricting shadows to the top sheet keeps the layered depth for a quarter
-  // of the cost; see `castsShadow` in the domain types.
+  // Every one of the eleven sheets is now rendered into its map, translucent
+  // ones included; see `castsShadow` in the domain types for what that costs
+  // and what makes a film able to cast an honest shadow at all.
   //
   // Promoted from 1.3 to a co-key, which is the whole of what this rig needed.
   // At the old value it contributed 7.37 luminance points against the area
@@ -96,7 +110,14 @@ function createLighting(scene: Scene): DirectionalLight {
   // lights every plate in the stack at nearly the same strength; a directional
   // source raking across them is what makes one end of a sheet brighter than
   // the other, and that gradient is most of what reads as form.
-  const spec = new DirectionalLight(0xffffff, 4.5)
+  //
+  // Raised again, to 5.2, while everything around it came down. The rig is not
+  // being dimmed uniformly — that would only trade a washed-out frame for a
+  // muddy one. What is being changed is the RATIO: the two panels that fill and
+  // the environment that fills lose about a third each, and the one source with
+  // a direction takes some of it back. Same light on the lit side, far less on
+  // the unlit one, which is the only thing that makes a surface read as turned.
+  const spec = new DirectionalLight(0xffffff, 5.2)
   spec.name = 'spec'
   spec.position.set(-2, 3, 5)
   spec.castShadow = true
@@ -123,7 +144,12 @@ function createLighting(scene: Scene): DirectionalLight {
   // Aimed up into the tunnels from below-left. The reference's concave faces
   // are clearly lit — without this every trough renders near-black because both
   // main lights sit above the piece.
-  const bounce = new RectAreaLight(0xcfe0f8, 3.2, 7, 4)
+  // Halved from 3.2. This one fires up into every downward-facing surface in
+  // the piece at once, so it is the single largest reason the frame has no
+  // blacks in it — a trough is dark because nothing reaches it, and this reached
+  // all of them. Half of it still keeps the concave faces off pure black, which
+  // is the whole job it was added for; the other half was the wash.
+  const bounce = new RectAreaLight(0xcfe0f8, 1.6, 7, 4)
   bounce.name = 'bounce'
   bounce.position.set(-2.6, -3.2, 2.8)
   bounce.lookAt(0, 0.4, 0)
@@ -174,7 +200,18 @@ export function createStage(container: HTMLElement): Stage {
   // Neutral, not ACES. ACES lifts the shadow toe and desaturates saturated
   // blues hard — the two things this piece cannot afford.
   renderer.toneMapping = NeutralToneMapping
-  renderer.toneMappingExposure = 0.85
+  // Down from 0.85, which stood untouched through every pass at the lighting
+  // and is the most direct control over the one complaint none of them fixed.
+  // Every light in the scene was rebalanced against every other light, and a
+  // rebalance cannot change an overall level by construction — it only decides
+  // where the same total goes. This is the level.
+  //
+  // It is also the one control that reaches the darks. Neutral tone mapping
+  // holds its toe rather than lifting it, so lowering exposure genuinely pushes
+  // the bottom of the frame down instead of just pulling the highlights in —
+  // which is what the flat-plastic reading needs and what dimming a light,
+  // spread across the whole surface it lights, does not give.
+  renderer.toneMappingExposure = 0.72
   container.appendChild(renderer.domElement)
 
   const scene = new Scene()
@@ -195,7 +232,13 @@ export function createStage(container: HTMLElement): Stage {
   // Not to zero. What is left is the reflection that makes a surface read as
   // material rather than as paint, and killing it outright only trades
   // flat-because-lifted for flat-because-dead.
-  scene.environmentIntensity = 0.28
+  //
+  // And down again to 0.20, with the two fill panels, for the reason the
+  // paragraph above already gives and the last pass only half-acted on. A room
+  // environment is ambient light with a picture on it: the reflection is worth
+  // keeping and the lift is not, and 0.28 was still buying more of the second
+  // than of the first on plates this close to flat.
+  scene.environmentIntensity = 0.2
   room.dispose()
   pmrem.dispose()
 
