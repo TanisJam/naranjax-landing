@@ -2,6 +2,7 @@ import {
   Color,
   DataTexture,
   FrontSide,
+  MeshDepthMaterial,
   MeshPhysicalMaterial,
   SRGBColorSpace,
   Vector4,
@@ -16,6 +17,7 @@ import {
   FRAGMENT_NORMAL_CHUNK,
   FRAGMENT_PRELUDE,
   FRAGMENT_ROUGHNESS_CHUNK,
+  VERTEX_DEPTH_POSITION_CHUNK,
   VERTEX_NORMAL_CHUNK,
   VERTEX_POSITION_CHUNK,
   VERTEX_PRELUDE,
@@ -86,6 +88,53 @@ BLANK_DECAL.needsUpdate = true
 
 interface SheetMaterialUserData {
   sheetUniforms: SheetUniforms
+}
+
+/**
+ * The same shape, evaluated for the shadow pass.
+ *
+ * Three renders shadows with its own shared `MeshDepthMaterial`, which never
+ * sees `onBeforeCompile` — that hook belongs to one material and the depth
+ * material is a different one. Since every vertex of this geometry is built in
+ * the vertex shader and the `position` attribute is a buffer of zeros, an
+ * unpatched depth pass writes the whole plate as a point at the origin: a
+ * caster that casts nothing, for the full price of the shadow map.
+ *
+ * Module scope for the same reason `applySheetShader` is: three derives the
+ * program cache key from `onBeforeCompile.toString()`.
+ */
+function applySheetDepthShader(
+  this: MeshDepthMaterial,
+  shader: WebGLProgramParametersWithUniforms,
+): void {
+  const { sheetUniforms } = this.userData as SheetMaterialUserData
+  // The same uniform OBJECTS the lit material holds, not copies of their
+  // values. Animation writes straight into them, so the plate the shadow is
+  // cast from stays the plate that is drawn — including mid-deploy, where the
+  // thickness and the pose change every frame.
+  Object.assign(shader.uniforms, sheetUniforms)
+
+  shader.vertexShader = shader.vertexShader
+    .replace('void main() {', `${VERTEX_PRELUDE}\nvoid main() {`)
+    .replace('#include <begin_vertex>', VERTEX_DEPTH_POSITION_CHUNK)
+}
+
+/**
+ * Depth material for a layer that casts, sharing that layer's uniforms.
+ *
+ * Built here rather than inside `createSheetMaterial` because whether a layer
+ * casts is a property of its PLACEMENT, not of its surface — and only one layer
+ * in the stack does. See `castsShadow` in the domain types.
+ *
+ * Left at three's default `BasicDepthPacking`: the shadow map is read back with
+ * whatever packing the renderer's own depth material uses, and a custom
+ * material that disagrees decodes to garbage rather than to a shadow.
+ */
+export function createSheetDepthMaterial(uniforms: SheetUniforms): MeshDepthMaterial {
+  const material = new MeshDepthMaterial()
+  material.userData = { sheetUniforms: uniforms } satisfies SheetMaterialUserData
+  material.onBeforeCompile = applySheetDepthShader
+  return material
 }
 
 /**

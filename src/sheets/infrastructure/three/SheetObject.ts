@@ -4,6 +4,7 @@ import {
   MeshBasicMaterial,
   PlaneGeometry,
   Vector3,
+  type MeshDepthMaterial,
   type MeshPhysicalMaterial,
   type Texture,
 } from 'three'
@@ -12,7 +13,11 @@ import type { SheetDecal, SheetLayer } from '../../domain/types'
 import { createShellGeometry } from './geometry/shellGeometry'
 import { createCardFaceTexture } from './material/cardFaceTexture'
 import { createLayerMotifTexture } from './material/layerMotifTexture'
-import { createSheetMaterial, type SheetUniforms } from './material/sheetMaterial'
+import {
+  createSheetDepthMaterial,
+  createSheetMaterial,
+  type SheetUniforms,
+} from './material/sheetMaterial'
 
 /**
  * The domain names the artwork; this is the only place that knows which
@@ -132,6 +137,12 @@ export class SheetObject {
 
   private readonly decalMap: Texture | null
 
+  /**
+   * Only the caster carries one; see `createSheetDepthMaterial`. Held so it can
+   * be disposed, which is the only reason a non-caster's `null` matters.
+   */
+  private readonly depthMaterial: MeshDepthMaterial | null
+
   /** The two poses the deploy interpolates between. */
   private readonly assembledPosition: Vector3
   private readonly explodedPosition: Vector3
@@ -187,6 +198,10 @@ export class SheetObject {
     mesh.scale.setScalar(placement.scale)
     mesh.castShadow = placement.castsShadow
     mesh.receiveShadow = true
+    // Without this the shadow pass draws a point at the origin — the geometry
+    // holds no positions and three's own depth material cannot build them.
+    this.depthMaterial = placement.castsShadow ? createSheetDepthMaterial(uniforms) : null
+    if (this.depthMaterial) mesh.customDepthMaterial = this.depthMaterial
     // `position` is a zero buffer; nothing on the CPU knows where this ends up.
     mesh.frustumCulled = false
     this.mesh = mesh
@@ -332,6 +347,7 @@ export class SheetObject {
     this.mesh.geometry.dispose()
     this.hitArea.geometry.dispose()
     this.material.dispose()
+    this.depthMaterial?.dispose()
     this.decalMap?.dispose()
   }
 }
