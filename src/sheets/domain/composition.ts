@@ -132,6 +132,11 @@ const baseSurface: SheetSurface = {
   clearcoatRoughness: 0.06,
   iridescence: 0,
   opacity: 1,
+  // Off by default: the two covers are finished card and scatter nothing. Every
+  // layer between them turns it on — that is what they are made of.
+  frost: 0,
+  frostsBackdrop: false,
+  frostColor: '#eef6ff',
   dotScale: 0,
   dotDepth: 0,
   dotContrast: 0,
@@ -204,10 +209,10 @@ const printedCard: SheetSurface = {
  * alpha spread over a soft shoulder, so the raw gradient is tiny. What matters
  * is the tilt it ends up producing, not that the number look like a 0..1 weight.
  */
-const embossed = { decalInk: 0.05, decalRelief: 4 }
+const embossed = { decalInk: 0.05, decalRelief: 11 }
 
 /** Security print is the opposite trade: it is ink, with the barest impression. */
-const printed = { decalInk: 0.55, decalRelief: 1.2 }
+const printed = { decalInk: 0.55, decalRelief: 3 }
 
 /**
  * Flat-plate defaults for the shape.
@@ -298,8 +303,9 @@ const layers: SheetDraft[] = [
       colorA: '#2f9ad8',
       colorB: '#4fb8ee',
       coreColor: '#1d70a8',
-      roughness: 0.14,
-      opacity: 0.86,
+      roughness: 0.2,
+      opacity: 0.92,
+      frost: 0.5,
     },
     placement: {
       pivot: PIVOT,
@@ -327,9 +333,11 @@ const layers: SheetDraft[] = [
       colorB: '#86d6f4',
       coreColor: '#3492c4',
       // The glossiest layer of the stack. Nothing is pressed into it, so the
-      // only thing it has to show is the light sweeping across it.
-      roughness: 0.05,
-      opacity: 0.88,
+      // only thing it has to show is the light sweeping across it — which is
+      // also why it takes the least frost: scattering is what kills a mirror.
+      roughness: 0.07,
+      opacity: 0.9,
+      frost: 0.28,
     },
     placement: {
       pivot: PIVOT,
@@ -392,19 +400,29 @@ const layers: SheetDraft[] = [
       // Tinted, not white. A near-white body is what made this layer read as a
       // grey slab where nothing sits behind it and as a white wash where two of
       // them overlap — the fix is a colour, not more alpha.
-      colorA: '#a8dcea',
-      colorB: '#cdeef4',
-      coreColor: '#8fcfe0',
+      //
+      // Saturated further once the foil stopped being a ghost. The old values
+      // were pale because at 0.16 alpha almost nothing of the body reached the
+      // frame and the colour was carrying the layer on its own; a sheet with a
+      // real body has to hold a real dye or the frost turns it into fog.
+      colorA: '#5cc3dd',
+      colorB: '#8fdcea',
+      coreColor: '#3f9fbb',
       absorption: 0.14,
       roughness: 0.18,
       // The one place iridescence earns its cost: on a holographic foil it is
       // the subject rather than a garnish.
       iridescence: 0.7,
-      // A clear foil, and it has to actually be clear. Its identity comes from
-      // the engraving printed on it and from its lit edge, not from its body;
-      // every point of alpha here is paid for by everything behind it. The
-      // engraving stays legible regardless — ink carries its own opacity.
-      opacity: 0.16,
+      // A frosted foil, not a clear one. At 0.16 this layer had no body at all
+      // — it read as the engraving floating in the gap where a sheet should be,
+      // which is the one thing the reference never does: its foils are present,
+      // milky, and you can see them turn. Most of what closes the sheet now
+      // comes from `frost` rather than from the alpha, so it stays open in the
+      // middle where you are looking through the least material and shuts
+      // toward the edges where you are looking through the most.
+      opacity: 0.56,
+      frost: 0.8,
+      frostsBackdrop: true,
       rimColor: '#eafaff',
       rimStrength: 0.3,
     },
@@ -431,8 +449,9 @@ const layers: SheetDraft[] = [
       colorA: '#79d2dd',
       colorB: '#a6e6ea',
       coreColor: '#4fb0bc',
-      roughness: 0.16,
-      opacity: 0.62,
+      roughness: 0.22,
+      opacity: 0.74,
+      frost: 0.62,
     },
     placement: {
       pivot: PIVOT,
@@ -456,8 +475,9 @@ const layers: SheetDraft[] = [
       colorA: '#2fa6e6',
       colorB: '#4fc0f2',
       coreColor: '#1d7ab0',
-      roughness: 0.12,
-      opacity: 0.9,
+      roughness: 0.18,
+      opacity: 0.93,
+      frost: 0.48,
     },
     placement: {
       pivot: PIVOT,
@@ -478,13 +498,16 @@ const layers: SheetDraft[] = [
     surface: {
       ...baseSurface,
       ...printed,
-      colorA: '#b0e0ec',
-      colorB: '#d4f1f6',
-      coreColor: '#96d4e2',
+      colorA: '#63c8e0',
+      colorB: '#95dfec',
+      coreColor: '#4aa8c2',
       absorption: 0.14,
-      roughness: 0.2,
+      roughness: 0.26,
       iridescence: 0.7,
-      opacity: 0.17,
+      // The same frosted foil as `holo-currency`, folded into a wave.
+      opacity: 0.56,
+      frost: 0.8,
+      frostsBackdrop: true,
       rimColor: '#eafaff',
       rimStrength: 0.3,
     },
@@ -511,8 +534,9 @@ const layers: SheetDraft[] = [
       colorA: '#40bde6',
       colorB: '#6ed4ee',
       coreColor: '#2892b8',
-      roughness: 0.15,
-      opacity: 0.72,
+      roughness: 0.21,
+      opacity: 0.82,
+      frost: 0.66,
     },
     placement: {
       pivot: PIVOT,

@@ -1,11 +1,13 @@
 import { Clock, Group } from 'three'
 import type { Composition } from '../domain/types'
+import { BackdropCapture } from '../infrastructure/three/BackdropCapture'
 import { SheetObject } from '../infrastructure/three/SheetObject'
 import { createStage, type Stage } from '../infrastructure/three/stage'
 import { AnimationTimeline } from './AnimationTimeline'
 import { CameraInspector } from './CameraInspector'
 import { LayerPicker } from './LayerPicker'
 import { PointerParallax } from './PointerParallax'
+import { StackOcclusion } from './StackOcclusion'
 import { StackOrder } from './StackOrder'
 
 /**
@@ -41,6 +43,8 @@ export class SceneOrchestrator {
   readonly timeline: AnimationTimeline
   readonly artwork: Group
   private readonly stackOrder: StackOrder
+  private readonly stackOcclusion: StackOcclusion
+  private readonly backdrop: BackdropCapture
 
   private readonly parallaxGroup = new Group()
   private readonly floatGroup = new Group()
@@ -74,8 +78,13 @@ export class SceneOrchestrator {
     // ones swing right, and the nudge back buys equal margins in the panel.
     this.artwork.position.set(0.14, 0, 0)
 
-    this.sheets = composition.sheets.map((layer) => {
-      const sheet = new SheetObject(layer)
+    // Before the sheets: every material merges the occlusion uniforms into its
+    // own program as it is built, so the field has to exist first.
+    this.stackOcclusion = new StackOcclusion(composition.sheets)
+    this.backdrop = new BackdropCapture()
+
+    this.sheets = composition.sheets.map((layer, index) => {
+      const sheet = new SheetObject(layer, this.stackOcclusion.uniforms, this.backdrop, index)
       this.artwork.add(sheet.pivot)
       return sheet
     })
@@ -131,6 +140,7 @@ export class SceneOrchestrator {
     this.parallax?.dispose()
     this.inspector?.dispose()
     for (const sheet of this.sheets) sheet.dispose()
+    this.backdrop.dispose()
     this.stage.dispose()
   }
 
@@ -138,6 +148,9 @@ export class SceneOrchestrator {
     const { clientWidth, clientHeight } = this.container
     if (clientWidth === 0 || clientHeight === 0) return
     this.stage.resize(clientWidth, clientHeight)
+    // After the stage, which is what sets the drawing buffer the capture has to
+    // match texel for texel.
+    this.backdrop.resize(this.stage.renderer)
   }
 
   private readonly loop = (): void => {
@@ -157,6 +170,9 @@ export class SceneOrchestrator {
     this.parallax?.update(delta)
     this.inspector?.update()
     this.stackOrder.update(this.stage.camera)
+    // After every source of motion and before the draw: what a layer is under
+    // has to be answered for the frame being rendered, not the one before it.
+    this.stackOcclusion.update(this.artwork, this.sheets)
     this.stage.renderer.render(this.stage.scene, this.stage.camera)
   }
 }

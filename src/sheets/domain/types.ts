@@ -160,6 +160,46 @@ export interface SheetSurface {
    * that carries an emboss, and the half a flat print leaves at zero.
    */
   decalRelief: number
+  /**
+   * How much the body scatters light instead of passing it through, 0..1.
+   *
+   * The difference between a tinted window and frosted acrylic, and it is not a
+   * matter of how much alpha the layer has. A clear sheet shows what is behind
+   * it; a frosted one shows its own body, lit from within, and what is behind
+   * arrives only as a diffuse glow. Alpha alone cannot express that — turned
+   * down it makes a window, turned up it makes paint.
+   *
+   * Real transmission would model this exactly and cannot be afforded here:
+   * three renders only OPAQUE objects into the transmission target, so a
+   * transmissive sheet can never see another one, and this stack is seven deep
+   * in film. See `transmission`. What this does instead is take the two effects
+   * that actually read — the body going milky and the sheet closing up — and
+   * drive both off the viewing angle, which is where a scattering medium gets
+   * its whole character.
+   */
+  frost: number
+  /**
+   * Whether this layer scatters what is BEHIND it as well as its own body.
+   *
+   * Split from `frost` because the two cost wildly different amounts. The milky
+   * body is a handful of instructions. Diffusing the backdrop means freezing the
+   * frame immediately before the layer draws, and a mid-frame copy out of the
+   * framebuffer makes the GPU finish everything queued before it — measured at
+   * roughly half the frame budget for seven of them, against a tap count that
+   * barely moved the needle between six and ten. The stalls are the cost, not
+   * the blur.
+   *
+   * So it is spent where it is legible: on the layers with enough frost that the
+   * detail behind them visibly dissolves. A film at 0.28 diffuses a colour field
+   * that was already smooth, and nobody can see the difference.
+   */
+  frostsBackdrop: boolean
+  /**
+   * What the scattered light looks like. Near-white and slightly cool: it is
+   * light that has bounced inside the material rather than the material's own
+   * colour, so it carries the light's tint far more than the body's.
+   */
+  frostColor: string
   /** Fresnel rim glow, across the whole surface at grazing angles. */
   rimColor: string
   rimStrength: number

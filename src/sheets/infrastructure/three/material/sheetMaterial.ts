@@ -1,17 +1,24 @@
 import {
   Color,
+  CustomBlending,
   DataTexture,
   FrontSide,
+  Matrix4,
   MeshDepthMaterial,
   MeshPhysicalMaterial,
+  OneFactor,
   SRGBColorSpace,
+  Vector2,
   Vector4,
+  ZeroFactor,
   type IUniform,
   type Texture,
   type WebGLProgramParametersWithUniforms,
 } from 'three'
 import type { SheetShape, SheetSurface } from '../../../domain/types'
 import {
+  FRAGMENT_AO_CHUNK,
+  FRAGMENT_BACKDROP_CHUNK,
   FRAGMENT_COLOR_CHUNK,
   FRAGMENT_EMISSIVE_CHUNK,
   FRAGMENT_NORMAL_CHUNK,
@@ -23,8 +30,52 @@ import {
   VERTEX_PRELUDE,
 } from './sheetShader'
 
+/** The captured frame every frosted layer scatters. See `BackdropCapture`. */
+export interface BackdropUniforms {
+  uBackdrop: IUniform<Texture>
+  uBackdropTexel: IUniform<Vector2>
+}
+
+/**
+ * The stack's occlusion field, held by one owner and read by every layer.
+ *
+ * Shared by REFERENCE rather than copied: `applySheetShader` merges a layer's
+ * uniforms straight into its program, so writing these once per frame reaches
+ * all eleven materials with no per-layer bookkeeping. See `StackOcclusion`.
+ */
+export interface StackOcclusionUniforms {
+  /** Per layer: centre.x, centre.z, and the plate's own +X axis in xz. */
+  uOccluder: IUniform<Vector4[]>
+  /** Per layer: half length, half width, centre.y, how much light it stops. */
+  uOccluderExtent: IUniform<Vector4[]>
+  uOcclusionStrength: IUniform<number>
+  uStackShadow: IUniform<number>
+}
+
+/**
+ * How wide the frost scatters at full strength, as a fraction of the drawing
+ * buffer height.
+ *
+ * Small in absolute terms and it has to be. What frosting destroys is DETAIL,
+ * and the detail in this stack — the print on the far card, the engraving, the
+ * weave — is only a few pixels across at this camera distance. A radius wide
+ * enough to be obvious as an effect drags whole layers into each other and the
+ * stack turns to soup; this one is set where the text behind stops being
+ * readable and the colour fields behind barely move at all, which is exactly
+ * what a sheet of etched glass does to a page held behind it.
+ */
+const FROST_MAX_SPREAD = 0.013
+
 /** Every knob the shader exposes. Animation writes straight into these. */
-export interface SheetUniforms {
+export interface SheetUniforms extends StackOcclusionUniforms, BackdropUniforms {
+  /**
+   * Mesh space to the ARTWORK's space, where the stack is genuinely stacked
+   * along +Y. Rewritten each frame by `StackOcclusion`, which is also the only
+   * thing that reads it.
+   */
+  uStackMatrix: IUniform<Matrix4>
+  /** This layer's index, so it can exclude itself from its own occluders. */
+  uLayerIndex: IUniform<number>
   uLength: IUniform<number>
   uWidth: IUniform<number>
   uTipScale: IUniform<number>
@@ -67,6 +118,11 @@ export interface SheetUniforms {
   uBevelGlow: IUniform<number>
   uCoreColor: IUniform<Color>
   uAbsorption: IUniform<number>
+  uFrost: IUniform<number>
+  uFrostColor: IUniform<Color>
+  /** Blur radius, as a fraction of the drawing buffer HEIGHT so it is
+   * resolution independent — the same frost at 1x and at 2x. */
+  uFrostSpread: IUniform<number>
   uDecalMap: IUniform<Texture>
   /** 0 leaves the computed albedo alone, 1 replaces it with the decal's ink. */
   uDecalInk: IUniform<number>
@@ -132,6 +188,11 @@ function applySheetDepthShader(
  */
 export function createSheetDepthMaterial(uniforms: SheetUniforms): MeshDepthMaterial {
   const material = new MeshDepthMaterial()
+  // The prelude is shared whole, so the occluder arrays are declared here too
+  // even though a depth pass never evaluates them — an array with no length
+  // does not compile. MeshDepthMaterial carries no defines of its own, unlike
+  // the physical material this is the shadow half of.
+  material.defines = { SHEET_LAYERS: uniforms.uOccluder.value.length, FROST_TAPS: 10 }
   material.userData = { sheetUniforms: uniforms } satisfies SheetMaterialUserData
   material.onBeforeCompile = applySheetDepthShader
   return material
@@ -169,14 +230,27 @@ function applySheetShader(
       '#include <emissivemap_fragment>',
       `#include <emissivemap_fragment>\n${FRAGMENT_EMISSIVE_CHUNK}`,
     )
+    .replace('#include <aomap_fragment>', `#include <aomap_fragment>\n${FRAGMENT_AO_CHUNK}`)
+    .replace(
+      '#include <colorspace_fragment>',
+      `#include <colorspace_fragment>\n${FRAGMENT_BACKDROP_CHUNK}`,
+    )
 }
 
 export function createSheetMaterial(
   shape: SheetShape,
   surface: SheetSurface,
   decalMap: Texture | null,
+  occlusion: StackOcclusionUniforms,
+  backdrop: BackdropUniforms,
+  layerIndex: number,
 ): { material: MeshPhysicalMaterial; uniforms: SheetUniforms } {
   const uniforms: SheetUniforms = {
+    // Spread, so every layer holds the SAME uniform objects the owner writes.
+    ...occlusion,
+    ...backdrop,
+    uStackMatrix: { value: new Matrix4() },
+    uLayerIndex: { value: layerIndex },
     uLength: { value: shape.length },
     uWidth: { value: shape.width },
     uTipScale: { value: shape.tipScale },
@@ -219,6 +293,11 @@ export function createSheetMaterial(
     uBevelGlow: { value: surface.bevelGlow },
     uCoreColor: { value: new Color(surface.coreColor) },
     uAbsorption: { value: surface.absorption },
+    uFrost: { value: surface.frost },
+    uFrostColor: { value: new Color(surface.frostColor) },
+    // Zero on a layer that does not frost its backdrop, which is also what
+    // switches the composite off — see the branch in FRAGMENT_BACKDROP_CHUNK.
+    uFrostSpread: { value: surface.frostsBackdrop ? surface.frost * FROST_MAX_SPREAD : 0 },
     uDecalMap: { value: decalMap ?? BLANK_DECAL },
     uDecalInk: { value: decalMap ? surface.decalInk : 0 },
     uDecalRelief: { value: decalMap ? surface.decalRelief : 0 },
@@ -251,6 +330,24 @@ export function createSheetMaterial(
     depthWrite: surface.opacity >= 1,
   })
 
+  // A frosted layer has already done the blend itself, in the shader, against a
+  // scattered copy of the frame — so the hardware must not do it a second time.
+  // `One / Zero` writes the composite straight through. Left on the default and
+  // the sharp destination comes back underneath the diffused one, which reads as
+  // a ghost of the layer behind rather than as glass.
+  if (surface.frostsBackdrop) {
+    material.blending = CustomBlending
+    material.blendSrc = OneFactor
+    material.blendDst = ZeroFactor
+    material.blendSrcAlpha = OneFactor
+    material.blendDstAlpha = ZeroFactor
+    // Still in the transparent queue: that is what honours the back-to-front
+    // `renderOrder` the capture depends on, and what keeps these off the
+    // early-z sort that would run them nearest-first.
+    material.transparent = true
+    material.depthWrite = false
+  }
+
   // What replaces those depth writes is back-face culling, which is already on.
   //
   // A sheet still has to occlude ITSELF — you never see a sheet's far wall
@@ -261,6 +358,24 @@ export function createSheetMaterial(
   // from the camera and `FrontSide` discards them outright, which is exact
   // rather than order-dependent, and costs a pass that was happening anyway.
 
+  // The occluder arrays need a compile-time length. Identical across every
+  // layer, so all eleven still share one compiled program — three folds the
+  // defines into the cache key alongside `onBeforeCompile.toString()`.
+  //
+  // ADDED to what the material already carries, never assigned over it.
+  // MeshPhysicalMaterial ships with STANDARD and PHYSICAL defined, and those
+  // two gate most of what makes it physical — replacing the object drops them
+  // and quietly compiles a different lighting model. It cost real measurement
+  // to find, because the result still renders and merely comes out a few
+  // luminance points brighter.
+  material.defines = {
+    ...material.defines,
+    SHEET_LAYERS: occlusion.uOccluder.value.length,
+    // Enough taps that the spiral reads as a blur rather than as a ring of
+    // ghosts, and no more: this runs on seven overlapping full-screen layers,
+    // so every tap is paid for seven times over.
+    FROST_TAPS: 10,
+  }
   material.userData = { sheetUniforms: uniforms } satisfies SheetMaterialUserData
   material.onBeforeCompile = applySheetShader
 

@@ -10,6 +10,34 @@ export const VERTEX_PRELUDE = /* glsl */ `
 attribute vec2 aParam;
 attribute float aShell;
 
+/**
+ * This layer's place in the stack, and the stack's own frame.
+ *
+ * uStackMatrix carries a vertex from mesh space into the artwork's space,
+ * which is where the layers are genuinely stacked along +Y. It is NOT world
+ * space, and that is the point: the idle float, the pointer parallax and the
+ * resting pose all sit ABOVE the artwork and move every layer together, so
+ * occlusion computed in the artwork's frame is invariant under all three. In
+ * world space the same answer would have to be recomputed against a stack axis
+ * that swings every frame.
+ */
+uniform mat4 uStackMatrix;
+uniform float uLayerIndex;
+
+/**
+ * Every layer's footprint, shared by all of them and rewritten each frame.
+ *
+ *   uOccluder       — centre.x, centre.z, and the plate's own +X axis in xz
+ *   uOccluderExtent — half length, half width, centre.y, how much light it stops
+ *
+ * An axis rather than an angle because the test wants a dot product and not a
+ * trig call, and because the plates only ever rotate about Y — their fan
+ * rotation is [0, twist, 0] — so two components describe the frame completely.
+ */
+uniform vec4 uOccluder[SHEET_LAYERS];
+uniform vec4 uOccluderExtent[SHEET_LAYERS];
+uniform float uOcclusionStrength;
+
 uniform float uLength;
 uniform float uWidth;
 uniform float uTipScale;
@@ -36,6 +64,7 @@ varying vec3 vTangentU;
 varying vec3 vTangentV;
 varying vec3 vWorldPos;
 varying float vBevel;
+varying float vOcclusion;
 
 const float SHEET_PI = 3.141592653589793;
 const float SHEET_HALF_PI = 1.5707963267948966;
@@ -240,6 +269,81 @@ void bevelAt(vec2 p, out vec2 remapped, out float height, out float angle, out v
     : vec2(0.0, p.y < 0.5 ? -1.0 : 1.0);
 }
 
+/**
+ * How much of this point's own sky survives the rest of the stack.
+ *
+ * 1 is open to the light, 0 is buried. This is the term the piece was missing
+ * outright: eleven plates a third of a unit apart, and not one of them was
+ * taking any light from its neighbours, which is why the stack read as eleven
+ * separate flat colours rather than as one object taken apart.
+ *
+ * Screen-space AO cannot do this job here at any quality setting. Seven of the
+ * eleven layers are translucent and therefore write no depth — see depthWrite
+ * in the material — so a depth-buffer pass is blind to most of the stack, and
+ * the occluders it would miss are exactly the ones doing the occluding.
+ *
+ * What makes the analytic form cheap is a property of the composition rather
+ * than an approximation of it: the fan rotation is [0, twist, 0], so in the
+ * artwork's frame every plate is a rectangle in xz rotated about Y and nothing
+ * else. Coverage is then two dot products and a box test, and it is exact for
+ * the silhouette — only the curl at the tail is idealised flat, and that is a
+ * fraction of the gap between layers.
+ *
+ * Evaluated per VERTEX, not per fragment. Occlusion here is a smooth coverage
+ * function with no high-frequency content, the plates carry 72x48 interior
+ * samples, and the alternative is eleven box tests against every fragment of
+ * eleven overlapping translucent layers — roughly two hundred times the work
+ * for a term that interpolates cleanly.
+ */
+float stackVisibility(vec3 stackPos, float side) {
+  float visibility = 1.0;
+
+  for (int j = 0; j < SHEET_LAYERS; j++) {
+    // A plate does not shade itself. At rest the gap between two layers is
+    // 0.31, but inside the closed card it is nearer 0.002 — no distance
+    // threshold can separate self from neighbour across that range, so the
+    // identity has to be what excludes it.
+    if (float(j) == uLayerIndex) continue;
+
+    vec4 plate = uOccluder[j];
+    vec4 extent = uOccluderExtent[j];
+
+    // Toward the face being lit. The side flips with the shell, so the underside
+    // of a plate is darkened by what lies BELOW it — which is what makes the
+    // bottom card catch light while its neighbours above do not.
+    float rise = (extent.z - stackPos.y) * side;
+    if (rise <= 0.0) continue;
+
+    // Into the occluder's own frame: one dot with its +X axis, one with the
+    // +Z that a pure Y rotation makes its perpendicular.
+    vec2 d = stackPos.xz - plate.xy;
+    vec2 local = vec2(d.x * plate.z + d.y * plate.w, -d.x * plate.w + d.y * plate.z);
+
+    // The penumbra widens with distance, which is contact hardening and it
+    // falls out of the geometry rather than costing a second control: the same
+    // edge is crisp against the plate it nearly touches and diffuse against one
+    // across the stack. A fixed feather would give every layer the same rubbery
+    // halo and lose the thing that says how far apart they are.
+    vec2 feather = vec2(rise);
+    vec2 inside = vec2(1.0) - smoothstep(extent.xy - feather, extent.xy + feather, abs(local));
+    float cover = inside.x * inside.y;
+    if (cover <= 0.0) continue;
+
+    // Solid angle of a coaxial disc of the occluder's own area, cosine
+    // weighted: r^2 / (r^2 + d^2). Exact for a disc on its axis and the right
+    // shape everywhere else — it goes to 1 as two plates close on each other
+    // and falls off as the inverse square once they are well apart.
+    float radiusSq = 4.0 * extent.x * extent.y / SHEET_PI;
+    float form = radiusSq / (radiusSq + rise * rise);
+
+    // Multiplicative, because occluders compound rather than add: light already
+    // stopped by the plate above cannot be stopped twice by the one above that.
+    visibility *= 1.0 - cover * form * extent.w * uOcclusionStrength;
+  }
+
+  return visibility;
+}
+
 void surfaceAt(
   vec2 p,
   float shell,
@@ -297,6 +401,21 @@ vBevel = gBevel;
 vWorldPos = (modelMatrix * vec4(gPosition, 1.0)).xyz;
 vTangentU = normalize(normalMatrix * gTangentU);
 vTangentV = normalize(normalMatrix * gTangentV);
+
+// Which way this point faces along the stack axis. Read off the transformed
+// normal rather than off aShell, because the bullnose turns through a quarter
+// circle and the rim of a plate genuinely faces sideways — taking the shell
+// would hand the rim the full occlusion of whichever face it belongs to and
+// leave a dark ring around every layer.
+// Faded out by how squarely the point faces along the stack, which is what
+// keeps sign() from tearing: a normal crossing the horizontal flips the side it
+// is shaded from, and without this fade that flip would draw a hard ring around
+// every plate. A face pointing along the plane of the stack sees the horizon
+// rather than its neighbours, so it takes no occlusion from them and both
+// branches meet at 1.
+vec3 gStackPos = (uStackMatrix * vec4(gPosition, 1.0)).xyz;
+float gSide = (uStackMatrix * vec4(gNormal, 0.0)).y;
+vOcclusion = mix(1.0, stackVisibility(gStackPos, sign(gSide)), clamp(abs(gSide), 0.0, 1.0));
 `
 
 /**
@@ -326,6 +445,8 @@ vBevel = gDepthBevel;
 vWorldPos = vec3(0.0);
 vTangentU = vec3(0.0);
 vTangentV = vec3(0.0);
+// A shadow map records where the plate IS, not how lit it is.
+vOcclusion = 1.0;
 `
 
 export const FRAGMENT_PRELUDE = /* glsl */ `
@@ -346,15 +467,23 @@ uniform float uRimPower;
 uniform float uBevelGlow;
 uniform vec3 uCoreColor;
 uniform float uAbsorption;
+uniform float uFrost;
+uniform vec3 uFrostColor;
+uniform sampler2D uBackdrop;
+uniform vec2 uBackdropTexel;
+uniform float uFrostSpread;
 uniform sampler2D uDecalMap;
 uniform float uDecalInk;
 uniform float uDecalRelief;
+
+uniform float uStackShadow;
 
 varying vec2 vParam;
 varying vec3 vTangentU;
 varying vec3 vTangentV;
 varying vec3 vWorldPos;
 varying float vBevel;
+varying float vOcclusion;
 
 const float SHEET_TWO_PI = 6.283185307179586;
 
@@ -386,6 +515,31 @@ void dotField(out float mask, out vec2 slope, out float fade) {
   float dist = length(local);
   mask = smoothstep(0.36, 0.14, dist);
   slope = dist > 1e-4 ? (local / dist) * mask * (1.0 - mask) * 4.0 : vec2(0.0);
+}
+
+/**
+ * What is behind this fragment, scattered.
+ *
+ * Golden-angle spiral rather than a grid or a box: the samples never line up on
+ * an axis, so a kernel this sparse dissolves detail instead of printing its own
+ * shape over it. sqrt(t) on the radius is what spreads the taps evenly across
+ * the DISC — without it they crowd the centre and the edge of the blur goes
+ * ragged, since area grows with the square of the radius.
+ */
+vec3 frostedBackdrop(vec2 uv, float radius, out float coverage) {
+  vec4 sum = texture2D(uBackdrop, uv);
+
+  const float GOLDEN_ANGLE = 2.399963229728653;
+  for (int i = 1; i <= FROST_TAPS; i++) {
+    float t = float(i) / float(FROST_TAPS);
+    float angle = float(i) * GOLDEN_ANGLE;
+    vec2 offset = vec2(cos(angle), sin(angle)) * sqrt(t) * radius;
+    sum += texture2D(uBackdrop, uv + offset * uBackdropTexel);
+  }
+
+  sum /= float(FROST_TAPS + 1);
+  coverage = sum.a;
+  return sum.rgb;
 }
 
 float ribField(out float fade) {
@@ -509,6 +663,40 @@ export const FRAGMENT_EMISSIVE_CHUNK = /* glsl */ `
 float facing = clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
 diffuseColor.rgb *= mix(vec3(1.0), uCoreColor, facing * uAbsorption);
 
+// Frost. The body scatters what a clear sheet would have transmitted.
+//
+// Both halves ride the same angle and in the same direction, because both come
+// from one cause: the path through the material is shortest looking straight
+// at it and grows without bound toward the edge. More material in the way means
+// more scattering, so the sheet turns milkier AND stops more of what is behind
+// it — a frosted edge is nearly solid while its middle still glows.
+//
+// That is also what separates this from simply raising the opacity. A flat
+// alpha closes the sheet evenly and reads as paint thinned down; this closes it
+// where the geometry says it should be closed, which is what the eye reads as
+// depth in the material rather than as a weaker colour.
+//
+// The albedo mix stays far under the alpha's, and the gap between them is the
+// whole calibration. A frosted sheet is MILKY, not white: it scatters the light
+// but it keeps its own dye, and the two are independent — a blue frosted film
+// is as closed as a clear one of the same thickness and still blue.
+//
+// Measured the hard way. At parity the foils came out as pale grey slabs with
+// no colour left in them at all, which is the exact failure the layer's own
+// notes had already recorded once from the other direction: a near-white body
+// reads as grey where anything sits behind it. Alpha is what closes a sheet.
+// Albedo is what colours it. Driving both off one number confuses them.
+// The albedo term is deliberately the weaker of the two now that the frost has
+// a real backdrop to scatter. Milkiness that used to have to be PAINTED into
+// the body is produced by the diffused capture instead, and running both at the
+// old weight whitened the foils twice over — once as albedo and once again as
+// the pale blur composited under them.
+if (uFrost > 0.0) {
+  float depthAlongView = mix(0.45, 1.0, 1.0 - facing) * uFrost;
+  diffuseColor.rgb = mix(diffuseColor.rgb, uFrostColor, depthAlongView * 0.1);
+  diffuseColor.a = mix(diffuseColor.a, 1.0, depthAlongView);
+}
+
 float rimFresnel = pow(
   1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0),
   uRimPower
@@ -519,6 +707,90 @@ totalEmissiveRadiance += uRimColor * rimFresnel * uRimStrength;
 // whole surface at grazing angles; this one is anchored to the bevel itself,
 // which is where the reference actually puts it.
 totalEmissiveRadiance += uRimColor * (1.0 - smoothstep(0.0, 0.35, vBevel)) * uBevelGlow;
+`
+
+/**
+ * Appended to `<colorspace_fragment>`: the frosted layers composite what is
+ * behind them by hand, instead of letting the blend do it.
+ *
+ * AFTER the colour conversion and not before, which is not a detail. The
+ * capture is a copy of the framebuffer, so it is already tone mapped and
+ * already encoded; mixing it into linear light would put two different curves
+ * in the same average and the result goes muddy in the midtones every time.
+ *
+ * The layer then has to REPLACE what it covers rather than blend into it —
+ * `blendDst: ZeroFactor` on the material — because the whole point is that the
+ * blend's own `dst` is the sharp version this is here to get rid of. Compositing
+ * manually and blending on top would show both.
+ *
+ * Weighted by the capture's own alpha, so a sheet with nothing behind it shows
+ * its body and stays see-through to the page rather than frosting empty space
+ * into a grey plate. That is also the physical answer: nothing behind means
+ * nothing to transmit.
+ */
+export const FRAGMENT_BACKDROP_CHUNK = /* glsl */ `
+if (uFrostSpread > 0.0) {
+  float behindAlpha;
+  vec3 behind = frostedBackdrop(
+    gl_FragCoord.xy * uBackdropTexel,
+    uFrostSpread / uBackdropTexel.y,
+    behindAlpha
+  );
+
+  // Straight "over", with the diffused capture standing in for the destination.
+  // Both sides are premultiplied — the framebuffer holds premultiplied colour
+  // after any blend, and this writes premultiplied colour back — so the two
+  // stay in the same representation across every layer of the stack.
+  float bodyAlpha = gl_FragColor.a;
+  gl_FragColor = vec4(
+    gl_FragColor.rgb * bodyAlpha + behind * (1.0 - bodyAlpha),
+    bodyAlpha + behindAlpha * (1.0 - bodyAlpha)
+  );
+}
+`
+
+/**
+ * Appended to `<aomap_fragment>`, which three emits after the lights have been
+ * accumulated and before the totals are composed — so both the indirect and the
+ * direct terms are still separable here, which is the whole reason this is the
+ * hook rather than the albedo.
+ *
+ * The indirect half is ambient occlusion in the ordinary sense and takes the
+ * term at full strength.
+ *
+ * The direct half is the part that needs stating. Physically a plate lying
+ * under another is not merely missing sky — it is in that plate's shadow, and
+ * three cannot compute that shadow at any price: the key, the rim and the
+ * bounce are all `RectAreaLight`, which supports no shadow at all, and killing
+ * the one directional light in the scene changes the frame by about four
+ * luminance points. So the only lights capable of casting the stack's own
+ * shadow are the ones that cannot. `uStackShadow` is how much of that missing
+ * shadow this term stands in for, and it is deliberately partial: the area
+ * lights are large and reach well in from the sides, so a plate under another
+ * is dimmed rather than blacked out.
+ *
+ * Specular takes less of it than diffuse, and through three's own occlusion
+ * curve rather than raw. A grazing reflection comes off the horizon, which the
+ * stack does not block; applying diffuse occlusion to it strips the highlight
+ * off exactly the edges the piece is built around.
+ */
+export const FRAGMENT_AO_CHUNK = /* glsl */ `
+reflectedLight.indirectDiffuse *= vOcclusion;
+
+float stackDotNV = saturate(dot(geometryNormal, geometryViewDir));
+reflectedLight.indirectSpecular *= computeSpecularOcclusion(
+  stackDotNV,
+  vOcclusion,
+  material.roughness
+);
+
+float stackDirect = mix(1.0, vOcclusion, uStackShadow);
+reflectedLight.directDiffuse *= stackDirect;
+reflectedLight.directSpecular *= computeSpecularOcclusion(
+  stackDotNV,
+  stackDirect,
+  material.roughness
+);
 `
 
 /**

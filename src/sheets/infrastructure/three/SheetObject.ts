@@ -13,10 +13,12 @@ import type { SheetDecal, SheetLayer } from '../../domain/types'
 import { createShellGeometry } from './geometry/shellGeometry'
 import { createCardFaceTexture } from './material/cardFaceTexture'
 import { createLayerMotifTexture } from './material/layerMotifTexture'
+import type { BackdropCapture } from './BackdropCapture'
 import {
   createSheetDepthMaterial,
   createSheetMaterial,
   type SheetUniforms,
+  type StackOcclusionUniforms,
 } from './material/sheetMaterial'
 
 /**
@@ -159,7 +161,22 @@ export class SheetObject {
    */
   private readonly flex: number
 
-  constructor(layer: SheetLayer) {
+  constructor(
+    layer: SheetLayer,
+    /**
+     * The stack's shared occlusion field, and this layer's place in it. A sheet
+     * cannot shade itself against its neighbours without knowing them, so this
+     * is where the one dependency on the rest of the stack enters — by
+     * reference, written once a frame by `StackOcclusion`.
+     */
+    occlusion: StackOcclusionUniforms,
+    /**
+     * The shared frame capture a frosted layer scatters. Only layers with frost
+     * ever touch it — see the `onBeforeRender` below.
+     */
+    backdrop: BackdropCapture,
+    layerIndex: number,
+  ) {
     this.layer = layer
 
     const { shape, placement } = layer
@@ -179,7 +196,14 @@ export class SheetObject {
 
     this.decalMap = createDecalTexture(layer.decal)
 
-    const { material, uniforms } = createSheetMaterial(shape, layer.surface, this.decalMap)
+    const { material, uniforms } = createSheetMaterial(
+      shape,
+      layer.surface,
+      this.decalMap,
+      occlusion,
+      backdrop.uniforms,
+      layerIndex,
+    )
     this.material = material
     this.uniforms = uniforms
 
@@ -204,6 +228,18 @@ export class SheetObject {
     if (this.depthMaterial) mesh.customDepthMaterial = this.depthMaterial
     // `position` is a zero buffer; nothing on the CPU knows where this ends up.
     mesh.frustumCulled = false
+
+    // Freeze the frame the instant before this layer draws over it. The layers
+    // go back to front, so what is in the framebuffer at this moment is exactly
+    // what lies behind this sheet — no more, no less. Not registered on layers
+    // without frost, so the four opaque ones cost nothing.
+    //
+    // Safe from the shadow pass: that path calls `onBeforeShadow` and renders
+    // through `renderBufferDirect`, never through the hook used here.
+    if (layer.surface.frostsBackdrop) {
+      mesh.onBeforeRender = (renderer) => backdrop.capture(renderer)
+    }
+
     this.mesh = mesh
 
     const hitArea = new Mesh(
