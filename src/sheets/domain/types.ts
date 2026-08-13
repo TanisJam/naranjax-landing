@@ -229,9 +229,16 @@ export interface SheetSurface {
    * barely moved the needle between six and ten. The stalls are the cost, not
    * the blur.
    *
-   * So it is spent where it is legible: on the layers with enough frost that the
-   * detail behind them visibly dissolves. A film at 0.28 diffuses a colour field
-   * that was already smooth, and nobody can see the difference.
+   * So it is spent by OPACITY, which is what decides how much there is to
+   * diffuse in the first place. The two foils and the two most see-through
+   * films carry it; the three films sitting at 0.90 and above do not, because
+   * almost nothing reaches through them for a blur to work on and the milky
+   * body already does everything visible at that alpha.
+   *
+   * Four capturing layers measured a vsync step above two on a machine already
+   * degraded by a long measuring session, so treat that as a direction rather
+   * than a figure. This flag is the knob: it is per layer precisely so the line
+   * can be moved without touching anything else.
    */
   frostsBackdrop: boolean
   /**

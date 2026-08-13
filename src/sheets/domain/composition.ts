@@ -305,7 +305,7 @@ const layers: SheetDraft[] = [
       // gesture, and the roll is the one that says which way the sheet came
       // off; running both just spends the gap to the layer above twice.
       lift: 0,
-      peel: 0.8,
+      peel: 0.55,
       thickness: FILM_THICKNESS,
     },
     surface: {
@@ -472,6 +472,7 @@ const layers: SheetDraft[] = [
       roughness: 0.22,
       opacity: 0.74,
       frost: 0.62,
+      frostsBackdrop: true,
     },
     placement: {
       pivot: PIVOT,
@@ -489,7 +490,11 @@ const layers: SheetDraft[] = [
       ...waveFold,
       // Overrides the fold's own lift, for the reason the film above gives.
       lift: 0,
-      peel: 0.85,
+      // Held well under the film above, which peels from flat. This sheet is
+      // already folded — `waveFold` opens its arc to 0.66 — and a turn sized for
+      // a flat plate lands on top of that, so the wave and the lift stop reading
+      // as two things happening to one sheet and start reading as a crumple.
+      peel: 0.42,
       thickness: FILM_THICKNESS,
     },
     surface: {
@@ -517,7 +522,7 @@ const layers: SheetDraft[] = [
       ...flatPlate,
       ...waveFold,
       lift: 0,
-      peel: 0.6,
+      peel: 0.34,
       thickness: FOIL_THICKNESS,
     },
     surface: {
@@ -562,6 +567,7 @@ const layers: SheetDraft[] = [
       roughness: 0.21,
       opacity: 0.82,
       frost: 0.66,
+      frostsBackdrop: true,
     },
     placement: {
       pivot: PIVOT,
