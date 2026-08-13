@@ -432,14 +432,12 @@ export class AnimationTimeline {
       // Position, twist and shape all ride the same number, which is what keeps
       // the layer from arriving somewhere before it has finished unbending. The
       // highlight is the one thing that does not wait for them.
-      sheet.setPose(
-        local,
-        hover * reveal,
-        glow * reveal,
-        this.hoverSlide,
-        this.hoverCenters[i]!,
-        bend,
-      )
+      // Scaled by the deploy for the same reason the slide is: inside a closed
+      // card every layer is already flat, so there is nothing to unfold and
+      // nothing that may move.
+      const flatten = hover * reveal
+
+      sheet.setPose(local, flatten, glow * reveal, this.hoverSlide, this.hoverCenters[i]!, bend)
       sheet.setFanOpenness(local * breathe)
       // These two are what make a closed stack believable. `uCurl` scales the
       // lift and the roll and `uOpen` scales the arc, so at 0 every crest,
@@ -453,8 +451,28 @@ export class AnimationTimeline {
       // eight times the gap it has to stay inside. That is a printed face with
       // a blue film showing through the middle of it. The shader floors the
       // angle at 1e-3 anyway, which bows a layer by 0.0002 and stays put.
-      sheet.uniforms.uCurl.value = local
-      sheet.uniforms.uOpen.value = local * breathe
+      // The hovered layer also RELAXES. Drawing a sheet out of the stack is
+      // only half of picking one up; the other half is that it stops holding
+      // the shape the stack pressed into it and lies flat in the hand, which is
+      // the moment you can actually read what is on it.
+      //
+      // It costs nothing new to express, because the closed stack already
+      // needed a way to flatten every fold at once and these two uniforms are
+      // it. `uCurl` takes the lift, the roll and the peel; `uOpen` takes the
+      // arc. Nothing here has to know which layers are folded or how — a sheet
+      // with a wave, a sheet with a peel and a sheet with neither all go flat
+      // through the same number.
+      //
+      // On the same damping as the slide rather than its own, because they are
+      // one gesture. A layer that finished travelling and then unfolded would
+      // read as two things happening to it in sequence, and the piece already
+      // ties position, twist and shape to a single number for that reason.
+      //
+      // Multiplying rather than replacing keeps the closed-stack floor below
+      // intact: this can only ever make the arc smaller, never larger.
+      const folded = 1 - flatten
+      sheet.uniforms.uCurl.value = local * folded
+      sheet.uniforms.uOpen.value = local * breathe * folded
       sheet.uniforms.uRibPhase.value = this.time * this.ribDrift + phase * TWO_PI
 
       // Wind flexion: deltas around the rest pose. The card (`windHold`) owns
