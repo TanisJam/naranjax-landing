@@ -8,6 +8,7 @@ import { CameraInspector } from './CameraInspector'
 import { FilmGrain } from './FilmGrain'
 import { LayerPicker } from './LayerPicker'
 import { PointerParallax } from './PointerParallax'
+import { ResolutionGovernor } from './ResolutionGovernor'
 import { StackOcclusion } from './StackOcclusion'
 import { StackOrder } from './StackOrder'
 
@@ -57,6 +58,27 @@ export class SceneOrchestrator {
   /** Which layer the pointer is on. Public: a click handler will want it. */
   readonly picker: LayerPicker
 
+  /**
+   * Called after every rendered frame with how long that frame's own work took,
+   * in milliseconds. Null unless something is measuring.
+   *
+   * The measurement is deliberately taken from INSIDE the loop rather than left
+   * to a caller timing its own `requestAnimationFrame`: this is the only place
+   * that can separate the frame's work from the wait before it. What it cannot
+   * see is the GPU, which finishes long after `render` returns — see
+   * `FrameCounter` for why that gap is the useful part.
+   */
+  onFrame: ((cpuMs: number) => void) | null = null
+
+  /**
+   * Spends resolution to hold the frame rate. Public so a measurement can take
+   * the ratio away from it — a governor and a knockout fighting over the same
+   * number produce a reading of neither.
+   */
+  readonly resolution: ResolutionGovernor
+
+  /** Wall clock of the previous frame, for the governor's interval. */
+  private lastFrameAt = 0
   private readonly clock = new Clock()
   private readonly resizeObserver: ResizeObserver
   private frameHandle = 0
@@ -125,6 +147,11 @@ export class SceneOrchestrator {
       this.parallax = new PointerParallax(container, this.parallaxGroup)
     }
 
+    // After the inspector branch, which sets its own lower ratio: the ceiling
+    // is whatever the piece was authored to ask for on this path, not a
+    // constant.
+    this.resolution = new ResolutionGovernor(this.stage.renderer.getPixelRatio())
+
     this.resizeObserver = new ResizeObserver(() => this.handleResize())
     this.resizeObserver.observe(container)
     this.handleResize()
@@ -154,6 +181,18 @@ export class SceneOrchestrator {
     this.stage.dispose()
   }
 
+  /**
+   * Re-reads the container and the renderer's pixel ratio.
+   *
+   * Public for one reason: the drawing buffer and the backdrop capture have to
+   * be sized together — they are matched texel for texel — so anything that
+   * changes the pixel ratio from outside cannot just call `setPixelRatio` and
+   * walk away. See the knockouts in `diagnostics`.
+   */
+  refresh(): void {
+    this.handleResize()
+  }
+
   private handleResize(): void {
     const { clientWidth, clientHeight } = this.container
     if (clientWidth === 0 || clientHeight === 0) return
@@ -166,6 +205,10 @@ export class SceneOrchestrator {
   private readonly loop = (): void => {
     if (!this.running) return
     this.frameHandle = requestAnimationFrame(this.loop)
+
+    // Requested before the work and read after it, so the reading covers this
+    // frame's own cost and not the idle that preceded it.
+    const started = this.onFrame ? performance.now() : 0
 
     // Clamped so a backgrounded tab does not fast-forward the whole intro.
     const delta = Math.min(this.clock.getDelta(), 1 / 30)
@@ -187,5 +230,21 @@ export class SceneOrchestrator {
     // not a redraw. See `SHUTTER_HZ`.
     this.film.update(delta)
     this.stage.renderer.render(this.stage.scene, this.stage.camera)
+
+    // After the draw, so the interval spans a whole frame including whatever
+    // the GPU was still finishing when the last one returned. That lag is the
+    // point: it is the only place the cost of the fragment work shows up.
+    const now = performance.now()
+    const interval = this.lastFrameAt === 0 ? 0 : now - this.lastFrameAt
+    this.lastFrameAt = now
+    if (interval > 0) {
+      const ratio = this.resolution.update(interval, now)
+      if (ratio !== null) {
+        this.stage.renderer.setPixelRatio(ratio)
+        this.handleResize()
+      }
+    }
+
+    this.onFrame?.(now - started)
   }
 }

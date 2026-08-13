@@ -2,6 +2,8 @@ import './style.css'
 import closeSound from '../sound-effects/close.mp3?url'
 import openSound from '../sound-effects/open.mp3?url'
 import pickSound from '../sound-effects/pick.mp3?url'
+import { FrameCounter } from './diagnostics/FrameCounter'
+import { createKnockouts } from './diagnostics/knockouts'
 import { SceneOrchestrator } from './sheets/application/SceneOrchestrator'
 import { composition } from './sheets/domain/composition'
 import { SoundBoard } from './sound/SoundBoard'
@@ -27,6 +29,18 @@ if (import.meta.env.DEV) {
   // running, so they need a way in from outside. DEV-guarded, so neither
   // reaches a build.
   Object.assign(window, { __sheets: orchestrator, __sound: sound })
+}
+
+// On in development, and reachable in a build with `?fps` — a production build
+// is the only place the real cost can be read, since dev serves unminified
+// modules and runs its own machinery alongside the frame loop. Never on by
+// default in a build: the instrument is for whoever came looking for it.
+if (import.meta.env.DEV || new URLSearchParams(location.search).has('fps')) {
+  const counter = new FrameCounter()
+  orchestrator.onFrame = (cpuMs) => counter.sample(cpuMs)
+  // Alongside the readout, since a reading with nothing to compare it against
+  // says only that the frame is slow. `__perf.pixelRatio(1)` first.
+  Object.assign(window, { __perf: createKnockouts(orchestrator) })
 }
 
 // Captured before anything touches them, so restoring the preference puts the
