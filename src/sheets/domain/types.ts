@@ -177,6 +177,25 @@ export interface SheetSurface {
    * drive both off the viewing angle, which is where a scattering medium gets
    * its whole character.
    */
+  /**
+   * How much the surface finish wanders across the sheet, 0..1-ish.
+   *
+   * A single roughness number is the most reliable tell that a surface was
+   * computed. Nothing manufactured is uniformly polished: injection-moulded
+   * plastic carries the texture of the mould, a laminate carries the pressure
+   * pattern of the rollers that pressed it, and a card that has been handled
+   * carries the handling. None of it is visible as texture — it is visible
+   * because the highlight stops being one clean shape and starts breaking up.
+   *
+   * That is why this lives in ROUGHNESS and not in the albedo or the normal.
+   * Dirt drawn into the colour reads as dirt. Roughness that varies reads as a
+   * real surface, because what changes is the way the light leaves it.
+   *
+   * Two scales, and both are physical rather than decorative: a broad
+   * unevenness across the sheet, and a fine grain stretched along its length —
+   * the drag direction of the rollers a film is pressed between.
+   */
+  imperfection: number
   frost: number
   /**
    * Whether this layer scatters what is BEHIND it as well as its own body.

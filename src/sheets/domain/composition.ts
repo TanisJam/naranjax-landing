@@ -132,6 +132,9 @@ const baseSurface: SheetSurface = {
   clearcoatRoughness: 0.06,
   iridescence: 0,
   opacity: 1,
+  // Every sheet in the stack carries some. The interior layers are pressed film
+  // and laminate, and neither comes out of a roller evenly polished.
+  imperfection: 0.13,
   // Off by default: the two covers are finished card and scatter nothing. Every
   // layer between them turns it on — that is what they are made of.
   frost: 0,
@@ -177,6 +180,9 @@ const printedCard: SheetSurface = {
   coreColor: '#ffffff',
   absorption: 0,
   roughness: 0.26,
+  // A varnished card, and the varnish is where a real one gives itself away —
+  // it pools and thins across the print, so the sheen is never one flat value.
+  imperfection: 0.1,
   specularIntensity: 1.05,
   opacity: 1,
   decalInk: 1,
@@ -335,6 +341,12 @@ const layers: SheetDraft[] = [
       // The glossiest layer of the stack. Nothing is pressed into it, so the
       // only thing it has to show is the light sweeping across it — which is
       // also why it takes the least frost: scattering is what kills a mirror.
+      //
+      // And the most imperfection, which is not a contradiction. A surface whose
+      // whole job is a specular sweep is the one where a single roughness value
+      // is most obvious: the sweep comes out as one clean unbroken shape that no
+      // manufactured plastic has ever produced.
+      imperfection: 0.2,
       roughness: 0.07,
       opacity: 0.9,
       frost: 0.28,
@@ -368,6 +380,9 @@ const layers: SheetDraft[] = [
       // The woven core: fine threads one way, a dot grid the other. Two fields
       // crossing is what reads as cloth rather than corduroy, and it is why
       // this layer needs no decal — the weave is procedural all the way down.
+      // Already the roughest surface in the stack and already carrying a weave,
+      // so it needs the least of this — the cloth is doing the work.
+      imperfection: 0.07,
       roughness: 0.36,
       ribShading: 0.42,
       ribContrast: 0.28,

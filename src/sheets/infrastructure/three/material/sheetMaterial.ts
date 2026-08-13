@@ -118,6 +118,7 @@ export interface SheetUniforms extends StackOcclusionUniforms, BackdropUniforms 
   uBevelGlow: IUniform<number>
   uCoreColor: IUniform<Color>
   uAbsorption: IUniform<number>
+  uImperfection: IUniform<number>
   uFrost: IUniform<number>
   uFrostColor: IUniform<Color>
   /** Blur radius, as a fraction of the drawing buffer HEIGHT so it is
@@ -293,6 +294,7 @@ export function createSheetMaterial(
     uBevelGlow: { value: surface.bevelGlow },
     uCoreColor: { value: new Color(surface.coreColor) },
     uAbsorption: { value: surface.absorption },
+    uImperfection: { value: surface.imperfection },
     uFrost: { value: surface.frost },
     uFrostColor: { value: new Color(surface.frostColor) },
     // Zero on a layer that does not frost its backdrop, which is also what

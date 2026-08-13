@@ -65,6 +65,7 @@ varying vec3 vTangentV;
 varying vec3 vWorldPos;
 varying float vBevel;
 varying float vOcclusion;
+varying float vImperfection;
 
 const float SHEET_PI = 3.141592653589793;
 const float SHEET_HALF_PI = 1.5707963267948966;
@@ -85,6 +86,36 @@ const float SHEET_TWO_PI = 6.283185307179586;
  * sheet giving way for a dent punched into a slab.
  */
 const float SHEET_BEND_REACH = 0.3;
+
+/**
+ * Value noise, smoothed.
+ *
+ * The hash carries no transcendental on purpose. The obvious
+ * fract(sin(dot(p, k)) * big) was measured costing a full vsync step here —
+ * eight sines per fragment across eleven overlapping layers — for a roughness
+ * wobble a few percent wide. This is the usual multiply-and-fold instead: worse
+ * as a random number generator, indistinguishable at this amplitude, and a
+ * handful of cheap ops.
+ */
+float sheetHash(vec2 cell) {
+  vec3 p = fract(vec3(cell.xyx) * 0.1031);
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
+}
+
+float sheetNoise(vec2 p) {
+  vec2 cell = floor(p);
+  vec2 f = fract(p);
+  // Hermite, so the field has no derivative jumps at the cell boundaries —
+  // linear interpolation here shows up as a faint grid in the highlight, which
+  // is the one artefact this effect cannot afford.
+  vec2 w = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(sheetHash(cell), sheetHash(cell + vec2(1.0, 0.0)), w.x),
+    mix(sheetHash(cell + vec2(0.0, 1.0)), sheetHash(cell + vec2(1.0, 1.0)), w.x),
+    w.y
+  );
+}
 
 // The guide curve the cross-section is swept along.
 vec3 spineAt(float u) {
@@ -416,6 +447,12 @@ vTangentV = normalize(normalMatrix * gTangentV);
 vec3 gStackPos = (uStackMatrix * vec4(gPosition, 1.0)).xyz;
 float gSide = (uStackMatrix * vec4(gNormal, 0.0)).y;
 vOcclusion = mix(1.0, stackVisibility(gStackPos, sign(gSide)), clamp(abs(gSide), 0.0, 1.0));
+
+// Where this point sits in the sheet's own unevenness of finish. A handful of
+// patches across the plate, which is the scale a moulded or laminated surface
+// genuinely varies at — and low enough in frequency that interpolating it
+// across the interior grid loses nothing.
+vImperfection = sheetNoise(aParam * 5.0) - 0.5;
 `
 
 /**
@@ -447,6 +484,7 @@ vTangentU = vec3(0.0);
 vTangentV = vec3(0.0);
 // A shadow map records where the plate IS, not how lit it is.
 vOcclusion = 1.0;
+vImperfection = 0.0;
 `
 
 export const FRAGMENT_PRELUDE = /* glsl */ `
@@ -467,6 +505,7 @@ uniform float uRimPower;
 uniform float uBevelGlow;
 uniform vec3 uCoreColor;
 uniform float uAbsorption;
+uniform float uImperfection;
 uniform float uFrost;
 uniform vec3 uFrostColor;
 uniform sampler2D uBackdrop;
@@ -484,6 +523,7 @@ varying vec3 vTangentV;
 varying vec3 vWorldPos;
 varying float vBevel;
 varying float vOcclusion;
+varying float vImperfection;
 
 const float SHEET_TWO_PI = 6.283185307179586;
 
@@ -804,6 +844,32 @@ reflectedLight.directSpecular *= computeSpecularOcclusion(
  */
 export const FRAGMENT_ROUGHNESS_CHUNK = /* glsl */ `
 roughnessFactor *= mix(0.25, 1.0, smoothstep(0.0, 0.45, vBevel));
+
+// The finish wanders. See the imperfection field in the domain types.
+//
+// The field itself is built per VERTEX and arrives here interpolated — the same
+// trade the occlusion makes, and for the same reason: it is smooth, the plates
+// carry 72x48 samples, and measuring it per fragment cost a full vsync step
+// across eleven overlapping layers for a change of three luminance points. That
+// is the wrong side of any trade.
+//
+// ADDITIVE rather than a multiplier, and that is why it reads at all. The layers
+// this matters most on are the glossy ones, and a proportional wobble on a
+// roughness of 0.07 moves it by hundredths — far under what a highlight can
+// show. What breaks a specular sweep is an ABSOLUTE change in how tight it is.
+//
+// Kept off the bullnose. A rounded edge is polished by the same process that
+// rounds it — the line above already says so — and it is a band a few pixels
+// wide holding the brightest specular in the frame, which makes it the one place
+// a roughness wobble stops reading as finish and starts reading as sparkle.
+// Floored just above zero: a perfect mirror is the artificial case.
+if (uImperfection > 0.0) {
+  roughnessFactor = clamp(
+    roughnessFactor + vImperfection * uImperfection * smoothstep(0.0, 0.5, vBevel),
+    0.015,
+    1.0
+  );
+}
 
 // Detail that shrinks below a pixel must not vanish — it has to become
 // roughness.
