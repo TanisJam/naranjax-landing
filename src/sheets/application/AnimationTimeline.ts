@@ -75,6 +75,31 @@ const HOVER_RESPONSE = 14
  */
 const HOVER_GLOW_RESPONSE = 45
 
+/**
+ * How sharply the plate GIVES WAY under the drag, and how sharply it comes back.
+ *
+ * Both are fast, and the reason is a measurement rather than a taste. The stack
+ * spans roughly 0.6 of NDC across eleven layers, so a sweep at an ordinary
+ * speed is over any ONE of them in about 30ms. A response of 11 — which is a
+ * perfectly reasonable "loads gradually, like card stock" — reaches a quarter
+ * of its target in that window, and a quarter of a subtle displacement is
+ * nothing at all. The gesture this answers is a tenth the length of the gesture
+ * those numbers were picked for.
+ *
+ * So the asymmetry that survives is modest, and it is still in the right
+ * direction: a spring with almost no internal damping does not ease home, it
+ * snaps, so the return stays the quicker of the two. What it must not become is
+ * so quick that a jitter in one frame's measured travel strobes the geometry —
+ * this is the only thing standing between the pointer's raw velocity and the
+ * shape of the plate.
+ *
+ * The release is not what makes the plate stop when the hand does. The push is
+ * already zero on the first frame after that, so this only decides how long the
+ * spring takes to unwind once it is no longer being held.
+ */
+const BEND_LOAD_RESPONSE = 30
+const BEND_RELEASE_RESPONSE = 42
+
 // Flex amplitudes at windAmount 1, in radians/units. With the arc radius
 // ≈ length / angle ≈ 1, FLEX_TIP_ANGLE sweeps the tip ~0.09 units tangentially.
 const FLEX_ROOT_ANGLE = 0.014
@@ -147,6 +172,24 @@ export class AnimationTimeline {
    */
   hovered: SheetObject | null = null
   /**
+   * Where along that layer the pointer is, 0 at the root and 1 at the tip.
+   * Written from outside on the same terms as `hovered`, and undamped on
+   * purpose: the pointer's position is already continuous, and the layer it
+   * belongs to is fading its own bend in from zero, so a jump on a crossing has
+   * nothing visible to jump.
+   */
+  hoveredAt = 0.5
+  /**
+   * How hard the pointer is pushing that layer's face and which way, -1 into it
+   * to +1 out of it. Written from outside every frame, on the same terms as
+   * `hovered`, and zero whenever the pointer is not moving.
+   *
+   * This is the difference between a bend that is a GESTURE and one that is a
+   * state. Nothing here holds it up: the moment the hand stops, the number is
+   * zero and the plate is on its way back with no timer having to expire.
+   */
+  hoverPush = 0
+  /**
    * How far a hovered layer slides out of the stack, along its own long axis.
    * Zero leaves only the rim highlight, which is what reduced motion wants: the
    * feedback survives, the movement does not.
@@ -160,6 +203,18 @@ export class AnimationTimeline {
   windGustiness = 0.7
   /** Peak tip sweep applied this frame — read-only debug readout. */
   windFlex = 0
+  /**
+   * Deepest bend on any layer this frame, signed — read-only debug readout.
+   *
+   * Here because "the deformation is invisible" and "the deformation is not
+   * happening" look identical on screen and are different bugs, and estimating
+   * which one it is from the shape of the code is how an afternoon gets spent.
+   * `__sheets.timeline.bendPeak` in DEV answers it in a second.
+   *
+   * This is the DRIVE, before each layer's material scales it. A stiff cover
+   * reporting 1 here and not visibly moving is working correctly.
+   */
+  bendPeak = 0
   /**
    * Raised by the swatch card while it owns the shape uniforms: the wind then
    * neither writes flexion nor re-samples the rest pose, so flattening the
@@ -177,6 +232,20 @@ export class AnimationTimeline {
 
   /** Per-layer hover highlight. Same target, its own far quicker response. */
   private readonly hoverGlows: number[]
+
+  /**
+   * Per-layer bend centre, tracked while the layer is hovered and HELD once it
+   * is not.
+   *
+   * Reading `hoveredAt` straight through would drag a layer's bow after the
+   * pointer while that bow is springing back, so leaving a layer would sweep a
+   * relaxing bulge across it on the way to the next one. A card released
+   * flattens where it was bent. It does not follow your hand out.
+   */
+  private readonly hoverCenters: number[]
+
+  /** Per-layer bend, signed and sprung. See the two response constants. */
+  private readonly bends: number[]
   private readonly restPoses: WindRestPose[]
   /**
    * The authored horizontal nudge, which exists to answer the twist: the lower
@@ -212,6 +281,8 @@ export class AnimationTimeline {
     this.closedOrientation = new Quaternion().setFromEuler(new Euler(...closedPose))
     this.hoverAmounts = sheets.map(() => 0)
     this.hoverGlows = sheets.map(() => 0)
+    this.hoverCenters = sheets.map(() => 0.5)
+    this.bends = sheets.map(() => 0)
 
     // The wind starts out flexing around the authored composition.
     this.restPoses = sheets.map((sheet) => ({
@@ -316,6 +387,7 @@ export class AnimationTimeline {
     }
 
     this.windFlex = 0
+    this.bendPeak = 0
 
     for (let i = 0; i < this.sheets.length; i++) {
       const sheet = this.sheets[i]!
@@ -329,16 +401,45 @@ export class AnimationTimeline {
       // Hover is scaled by the deploy, not gated by it: while the stack is
       // closed it is one card, and a single layer of it lighting up under the
       // pointer would be a lie about what the user is looking at.
-      const target = sheet === this.hovered ? 1 : 0
+      const hovered = sheet === this.hovered
+      const target = hovered ? 1 : 0
       const hover = damp(this.hoverAmounts[i]!, target, HOVER_RESPONSE, delta)
       const glow = damp(this.hoverGlows[i]!, target, HOVER_GLOW_RESPONSE, delta)
       this.hoverAmounts[i] = hover
       this.hoverGlows[i] = glow
+      if (hovered) this.hoverCenters[i] = this.hoveredAt
+
+      // The drag. Gated on `local` rather than `reveal` because this is a shape
+      // uniform and the closed card is the strict case: eleven layers sit
+      // 0.0019 apart in there, and a bend of any size at all would push one
+      // straight through the face of the next.
+      //
+      // Loading and releasing are told apart by which way the magnitude is
+      // going, so a push that reverses partway — the hand turning around
+      // mid-sweep — counts as loading the other direction rather than as a
+      // release, which is what it is.
+      const push = hovered ? this.hoverPush * local : 0
+      const bent = this.bends[i]!
+      const bend = damp(
+        bent,
+        push,
+        Math.abs(push) > Math.abs(bent) ? BEND_LOAD_RESPONSE : BEND_RELEASE_RESPONSE,
+        delta,
+      )
+      this.bends[i] = bend
+      if (Math.abs(bend) > Math.abs(this.bendPeak)) this.bendPeak = bend
 
       // Position, twist and shape all ride the same number, which is what keeps
       // the layer from arriving somewhere before it has finished unbending. The
       // highlight is the one thing that does not wait for them.
-      sheet.setPose(local, hover * reveal, glow * reveal, this.hoverSlide)
+      sheet.setPose(
+        local,
+        hover * reveal,
+        glow * reveal,
+        this.hoverSlide,
+        this.hoverCenters[i]!,
+        bend,
+      )
       sheet.setFanOpenness(local * breathe)
       // These two are what make a closed stack believable. `uCurl` scales the
       // lift and the roll and `uOpen` scales the arc, so at 0 every crest,

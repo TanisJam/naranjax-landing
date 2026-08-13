@@ -140,6 +140,9 @@ const baseSurface: SheetSurface = {
   ribContrast: 0,
   decalInk: 0,
   decalRelief: 0,
+  // The interior of the stack is film and foil, and film gives way. This is the
+  // reference the covers below are stiff RELATIVE to.
+  flex: 1,
   rimColor: '#eaf2ff',
   // Every one of these is additive in practice: a fresnel rim fires across most
   // of a plate seen this obliquely, and eleven plates stacked mean eleven of
@@ -175,6 +178,19 @@ const printedCard: SheetSurface = {
   decalRelief: 0,
   rimStrength: 0.12,
   bevelGlow: 0.55,
+  // The two covers, and the only layers in the stack that are card rather than
+  // laminate. `CARD_THICKNESS` over `FILM_THICKNESS` is 2.23, stiffness goes
+  // with the cube of it, and 2.23⁻³ is this. Not a taste — the thicknesses were
+  // authored above and this is what they already imply.
+  //
+  // It lands almost exactly on the visibility floor, and that is the answer
+  // rather than an accident of it: a full-strength drag deflects a film 0.168
+  // and moves these 0.015, which is the same 0.015 that was measured as
+  // invisible when the whole effect was mistuned. The covers therefore read as
+  // the finger passing OVER them, which is what a finger on a finished card
+  // does. Left at the physical value rather than rounded to zero, so the
+  // authored thicknesses stay the single source of it.
+  flex: 0.09,
 }
 
 /**

@@ -170,6 +170,25 @@ export interface SheetSurface {
    * cannot produce it because it is not view-dependent.
    */
   bevelGlow: number
+  /**
+   * How readily this layer bends under a pointer drag. 1 is a film that gives
+   * way freely; 0 is rigid and never deforms at all.
+   *
+   * A material property and not an animation one, which is why it is authored
+   * here beside the roughness and the ior rather than tuned in the timeline.
+   * The stack is not eleven copies of one thing — it is two printed card covers
+   * with laminate and foil between them, and those do not answer a finger the
+   * same way.
+   *
+   * The numbers are not free choices either. Bending stiffness goes with the
+   * CUBE of thickness, so deflection under a given push goes with its inverse
+   * cube, and the thicknesses are already authored in `composition.ts`: a card
+   * cover at 0.0089 of the long side against a film at 0.004 is
+   * (0.004/0.0089)³ ≈ 0.09. That is what "a more rigid plastic" is worth, and
+   * it is a much larger gap than the thickness alone suggests — which is the
+   * whole reason a card feels stiff and the film inside it does not.
+   */
+  flex: number
 }
 
 /** Where the sheet sits in the fan, and how it swings when animated. */

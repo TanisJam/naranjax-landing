@@ -151,6 +151,8 @@ export class SceneOrchestrator {
     // after the motion is written and paying for a second matrix update.
     this.picker.update(this.stage.camera)
     this.timeline.hovered = this.picker.hovered
+    this.timeline.hoveredAt = this.picker.hoveredAt
+    this.timeline.hoverPush = this.picker.hoveredPush
     this.timeline.update(delta)
     this.parallax?.update(delta)
     this.inspector?.update()

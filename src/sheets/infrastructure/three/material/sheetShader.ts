@@ -28,6 +28,8 @@ uniform float uRibAmplitude;
 uniform float uRibPhase;
 uniform float uOpen;
 uniform float uCurl;
+uniform float uBendCenter;
+uniform float uBendAmount;
 
 varying vec2 vParam;
 varying vec3 vTangentU;
@@ -38,6 +40,22 @@ varying float vBevel;
 const float SHEET_PI = 3.141592653589793;
 const float SHEET_HALF_PI = 1.5707963267948966;
 const float SHEET_TWO_PI = 6.283185307179586;
+
+/**
+ * How far the drag bend reaches either side of its centre, along the sweep.
+ *
+ * What the eye reads off a deformation is the SLOPE, not the height — a normal
+ * that turns is what changes the shading, and a rise spread thin enough turns
+ * nothing. This number is the denominator of that slope, which makes it as much
+ * of an amplitude control as the amplitude is: the same displacement over 0.3 of
+ * the length is half again as steep as it is over 0.45, and reads at half the
+ * travel.
+ *
+ * The floor is where it stops being a card. A plate pushed at a point flexes
+ * along a real fraction of its length, so tightening this much further trades a
+ * sheet giving way for a dent punched into a slab.
+ */
+const float SHEET_BEND_REACH = 0.3;
 
 // The guide curve the cross-section is swept along.
 vec3 spineAt(float u) {
@@ -130,8 +148,12 @@ vec2 roundedRectParam(vec2 p) {
   return sign(centred) * ((1.0 - corner) + corner * disc) * 0.5 + 0.5;
 }
 
-// The zero-thickness surface, ribs included so the finite-difference normals
-// below pick the corrugation up for free.
+// The zero-thickness surface, ribs and hover bend included so the
+// finite-difference normals below pick both up for free. That is not a
+// convenience for the ribs and it is load-bearing for the bend: a bow the
+// silhouette shows but the shading does not reads as a bug, and differencing a
+// displacement that is already in the position is exact where a hand-derived
+// normal for it would be one more thing to keep in sync.
 vec3 basePosition(vec2 raw) {
   vec2 p = roundedRectParam(raw);
 
@@ -143,11 +165,47 @@ vec3 basePosition(vec2 raw) {
 
   vec3 pos = origin + binormal * offset.x + normalAxis * offset.y;
 
-  if (uRibAmplitude > 0.0) {
+  // Both displacements ride the surface normal, so it is worth computing once.
+  // Ten of the eleven layers take neither branch on any given frame — these are
+  // uniform conditions, coherent across the whole draw call.
+  if (uRibAmplitude > 0.0 || uBendAmount != 0.0) {
     vec3 surfaceNormal = binormal * inPlaneNormal.x + normalAxis * inPlaneNormal.y;
-    float fade = smoothstep(0.0, 0.06, p.x) * smoothstep(0.0, 0.06, 1.0 - p.x);
-    pos += surfaceNormal * sin(p.y * uRibFrequency * SHEET_TWO_PI + uRibPhase)
-         * uRibAmplitude * fade;
+
+    if (uRibAmplitude > 0.0) {
+      float fade = smoothstep(0.0, 0.06, p.x) * smoothstep(0.0, 0.06, 1.0 - p.x);
+      pos += surfaceNormal * sin(p.y * uRibFrequency * SHEET_TWO_PI + uRibPhase)
+           * uRibAmplitude * fade;
+    }
+
+    // The drag bend: the plate giving way under a finger pushing across it.
+    //
+    // SIGNED, and that is the whole of what makes it a gesture rather than a
+    // state. Positive is out of the face, negative is into it, and which one
+    // arrives is decided by where the pointer is heading — not by the fact that
+    // it is here. A pointer standing still pushes nothing and this is zero.
+    //
+    // Along the sweep only, and that is a physical claim, not a shortcut. Card
+    // stock is stiff across its short axis and flexible along its long one, so
+    // a card pushed at one point moves across its ENTIRE width there and falls
+    // away toward the ends. Localising it in v as well would be a finger poked
+    // through a sheet of rubber.
+    //
+    // Raised cosine rather than a gaussian, because this one closes. It reaches
+    // zero at the edge of its reach and arrives with zero slope, so the flat
+    // plate meets the bow with no crease and the term costs nothing outside its
+    // own span. A gaussian's tail never quite shuts, and the far end of the card
+    // stays imperceptibly bent — which the rim light finds even when the eye
+    // does not.
+    //
+    // Truncation at the ends is correct rather than a case to guard: with the
+    // centre near u = 0 the bell is cut off mid-rise and the tip of the card
+    // simply swings, which is what a card pushed near its end does.
+    if (uBendAmount != 0.0) {
+      float d = (p.x - uBendCenter) / SHEET_BEND_REACH;
+      if (abs(d) < 1.0) {
+        pos += surfaceNormal * (0.5 + 0.5 * cos(d * SHEET_PI)) * uBendAmount;
+      }
+    }
   }
 
   return pos;

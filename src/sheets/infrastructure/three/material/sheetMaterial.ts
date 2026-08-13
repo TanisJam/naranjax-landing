@@ -44,6 +44,13 @@ export interface SheetUniforms {
   uOpen: IUniform<number>
   /** Scales lift and roll together. 0 straightens the sheet out completely. */
   uCurl: IUniform<number>
+  /** Where along the sweep the hover bend is centred, in the same 0..1 as `u`. */
+  uBendCenter: IUniform<number>
+  /**
+   * Height of that bend, in the sheet's own units. 0 skips it outright, which
+   * is what every layer the pointer is not on is doing at any given moment.
+   */
+  uBendAmount: IUniform<number>
   uColorA: IUniform<Color>
   uColorB: IUniform<Color>
   uGradient: IUniform<Vector4>
@@ -140,6 +147,8 @@ export function createSheetMaterial(
     uRibShading: { value: surface.ribShading },
     uOpen: { value: 1 },
     uCurl: { value: 1 },
+    uBendCenter: { value: 0.5 },
+    uBendAmount: { value: 0 },
     uColorA: { value: new Color(surface.colorA) },
     uColorB: { value: new Color(surface.colorB) },
     uGradient: {

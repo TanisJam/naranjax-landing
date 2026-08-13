@@ -7,7 +7,7 @@ import {
   type MeshPhysicalMaterial,
   type Texture,
 } from 'three'
-import { lerp } from '../../domain/easing'
+import { clamp, lerp } from '../../domain/easing'
 import type { SheetDecal, SheetLayer } from '../../domain/types'
 import { createShellGeometry } from './geometry/shellGeometry'
 import { createCardFaceTexture } from './material/cardFaceTexture'
@@ -52,6 +52,35 @@ const HOVER_RIM_GAIN = 3.2
  * reaches the one above it.
  */
 const HOVER_LIFT_RATIO = 0.25
+
+/**
+ * How far the plate gives way under a full-strength drag, per unit of slide.
+ *
+ * Measured against the slide rather than authored outright, for the same reason
+ * the lift is: they are one gesture, and the slide is where its size is set. It
+ * also means reduced motion gets this for free — a zeroed slide leaves the rim
+ * highlight and takes every displacement with it, this one included.
+ *
+ * Larger than the lift, which looks backwards for a secondary motion and is
+ * not. The lift is a translation and the eye catches a whole plate leaving a
+ * row at once; the bend has to bow a surface enough to turn its normal, and a
+ * displacement that would be obvious as travel is nothing as curvature.
+ *
+ * Signed, unlike the lift, so the ceiling is the gap in BOTH directions. At the
+ * authored slide of 0.28 the furthest it goes is 0.168, and the worst case is
+ * outward where it rides on top of the 0.07 lift: 0.238 against a 0.31 gap.
+ */
+const DRAG_BEND_RATIO = 0.6
+
+/**
+ * How much wider than the plate its pick proxy is.
+ *
+ * Slightly generous, so the gap between two layers is not a dead band the
+ * pointer falls into on the way from one to the next. Named because the bend
+ * has to undo it: an overhanging target means a hit at its very edge reports a
+ * position just off the end of the sheet it stands for.
+ */
+const HIT_AREA_MARGIN = 1.04
 
 /**
  * Invisible material shared by every hit area. `visible: false` on the MATERIAL
@@ -111,6 +140,14 @@ export class SheetObject {
   private readonly baseRim: number
   private readonly baseBevelGlow: number
 
+  /**
+   * How readily this plate gives way, from its material. Applied here and not
+   * in the timeline on purpose: the timeline decides what the POINTER is doing,
+   * which is the same for every layer, and what a layer makes of that is a
+   * property of the layer.
+   */
+  private readonly flex: number
+
   constructor(layer: SheetLayer) {
     this.layer = layer
 
@@ -139,6 +176,7 @@ export class SheetObject {
     this.explodedPosition = new Vector3(...placement.offset)
     this.baseRim = layer.surface.rimStrength
     this.baseBevelGlow = layer.surface.bevelGlow
+    this.flex = layer.surface.flex
 
     const mesh = new Mesh(geometry, material)
     mesh.name = layer.id
@@ -153,9 +191,10 @@ export class SheetObject {
     mesh.frustumCulled = false
     this.mesh = mesh
 
-    // Slightly generous, so the gap between two layers is not a dead band the
-    // pointer falls into on the way from one to the next.
-    const hitArea = new Mesh(new PlaneGeometry(shape.length * 1.04, shape.width * 1.04), HIT_AREA_MATERIAL)
+    const hitArea = new Mesh(
+      new PlaneGeometry(shape.length * HIT_AREA_MARGIN, shape.width * HIT_AREA_MARGIN),
+      HIT_AREA_MATERIAL,
+    )
     hitArea.name = `${layer.id}-hit`
     // Into the plate's own plane: the loft lies in XZ with the spine on X.
     hitArea.rotation.x = -Math.PI / 2
@@ -198,8 +237,20 @@ export class SheetObject {
    * `glow` is that rim, and it is a SECOND parameter rather than the same one
    * because the two answer the pointer at different speeds — the plate has mass
    * and the light does not. The caller decides how far apart to run them.
+   *
+   * `bendCenter` is where along the plate the drag has hold of it and `bend` is
+   * how hard and which way, signed, already sprung by the caller. Neither rides
+   * `hover`: the slide answers a layer being UNDER the pointer and the bend
+   * answers the pointer MOVING, and a finger resting on a card does not bend it.
    */
-  setPose(deploy: number, hover: number, glow: number, slide: number): void {
+  setPose(
+    deploy: number,
+    hover: number,
+    glow: number,
+    slide: number,
+    bendCenter: number,
+    bend: number,
+  ): void {
     // The hit area takes the deploy and stops there, and this is load-bearing:
     // it is the pointer target, and a target that moved with the hover would be
     // sliding out from under the pointer that triggered it — hover on, layer
@@ -222,6 +273,53 @@ export class SheetObject {
     )
     this.uniforms.uRimStrength.value = this.baseRim * lerp(1, HOVER_RIM_GAIN, glow)
     this.uniforms.uBevelGlow.value = this.baseBevelGlow * lerp(1, HOVER_RIM_GAIN, glow)
+
+    // The bow travels with the pointer, so it has to be told which of the
+    // plate's own material is under it — and that is NOT where the pick landed.
+    // The pick landed on the hit area, which stayed parked while the plate slid
+    // out by `hover * slide`; the material that used to be there has been
+    // carried forward by exactly that much, so the point still under the
+    // pointer is that far back along the sheet. Skipping this correction bends
+    // the card ahead of the cursor by a tenth of its length, and it reads as
+    // the bow leading the hand rather than following it.
+    this.uniforms.uBendCenter.value = bendCenter - (hover * slide) / this.layer.shape.length
+    // The drag is the same for every layer; `flex` is what this one makes of it.
+    // The spring runs at full amplitude in the timeline and is scaled down here,
+    // rather than the reverse, so a stiff plate keeps the TIMING of the gesture
+    // and only loses the travel — a rigid cover that also loaded and released
+    // more slowly would read as heavy rather than as stiff, and they are not the
+    // same material.
+    this.uniforms.uBendAmount.value = bend * this.flex * slide * DRAG_BEND_RATIO
+  }
+
+  /**
+   * Turns a hit on this layer's pick proxy into a position along its spine.
+   *
+   * The proxy's u axis is the plate's own long axis — it is a plane laid into
+   * the plate's plane, and neither the deploy nor the pivot separates the two.
+   * All this undoes is the overhang, so an edge hit reports the edge instead of
+   * a point past it.
+   */
+  spineParamAt(hitU: number): number {
+    return clamp((hitU - 0.5) * HIT_AREA_MARGIN + 0.5, 0, 1)
+  }
+
+  /**
+   * Which way this layer's face points, in world space.
+   *
+   * Read off the pick proxy rather than the plate, and that is the only place it
+   * could come from: the plate's vertices are built in the vertex shader and the
+   * CPU does not know where a single one of them ends up. The proxy is a plane
+   * laid into the plate's own plane, so its +Z — which is what
+   * `getWorldDirection` returns — IS the face normal, carrying every rotation
+   * the pivot, the artwork and the float have applied to it.
+   *
+   * The plate's real surface curls away from this toward the tip. What reads the
+   * normal is deciding which side of a card a finger is on, and that does not
+   * change across the length of one.
+   */
+  faceNormal(target: Vector3): Vector3 {
+    return this.hitArea.getWorldDirection(target)
   }
 
   /** 0 collapses the fan onto the back sheet, 1 is the composed layout. */
