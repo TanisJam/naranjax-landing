@@ -21,3 +21,37 @@
   width: 100%;
   height: 100%;
 }
+
+/* Film grain over the render.
+
+   A rendered frame is optically perfect and the eye reads that perfection as
+   synthetic — a photograph of the same object carries sensor or film noise, and
+   its absence is one of the loudest tells that an image was computed. This is
+   the cheapest of the camera artefacts that put it back.
+
+   Laid over the canvas rather than composited in the shader on purpose: grain
+   belongs to the IMAGE, not to any surface in it. Grain that lived in the
+   material would swim with the geometry as the stack turns, which is the one
+   thing real grain never does — it sits on the film plane and the subject moves
+   behind it. It also keeps the piece free of a post-processing pass, which for
+   one screen-space effect would cost a full-frame redraw to buy nothing else.
+
+   Static rather than animated. Grain that churns every frame reads as video
+   noise and pulls attention to itself; a fixed field reads as the emulsion the
+   frame was captured on. It also costs one composite instead of one per frame.
+
+   `overlay` so it darkens the lights and lifts the darks rather than veiling
+   everything uniformly, which is how grain sits in a real exposure. The opacity
+   is low enough to be invisible as texture and only felt as tooth. */
+#sheets-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.14;
+  mix-blend-mode: overlay;
+  /* Fine and dense: baseFrequency near 1 puts the cell close to a pixel, which
+     is grain. Lower values make clouds. */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23g)'/></svg>");
+  background-size: 160px 160px;
+}
