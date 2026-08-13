@@ -191,11 +191,15 @@ export class SheetObject {
    *
    * Hover slides along +X, the spine, which is the layer's own long axis: the
    * gesture is a sheet drawn out of a stack, so it has to follow the sheet and
-   * not the screen. It rises as it goes — see `HOVER_LIFT_RATIO`. The rim rides
-   * with it, because at this angle a plate shows far more edge than face and
-   * the edge is where a highlight is legible.
+   * not the screen. It rises as it goes — see `HOVER_LIFT_RATIO`. The rim is
+   * the reason this reads at all, because at this angle a plate shows far more
+   * edge than face and the edge is where a highlight is legible.
+   *
+   * `glow` is that rim, and it is a SECOND parameter rather than the same one
+   * because the two answer the pointer at different speeds — the plate has mass
+   * and the light does not. The caller decides how far apart to run them.
    */
-  setPose(deploy: number, hover: number, slide: number): void {
+  setPose(deploy: number, hover: number, glow: number, slide: number): void {
     // The hit area takes the deploy and stops there, and this is load-bearing:
     // it is the pointer target, and a target that moved with the hover would be
     // sliding out from under the pointer that triggered it — hover on, layer
@@ -216,8 +220,8 @@ export class SheetObject {
       this.layer.shape.thickness,
       deploy,
     )
-    this.uniforms.uRimStrength.value = this.baseRim * lerp(1, HOVER_RIM_GAIN, hover)
-    this.uniforms.uBevelGlow.value = this.baseBevelGlow * lerp(1, HOVER_RIM_GAIN, hover)
+    this.uniforms.uRimStrength.value = this.baseRim * lerp(1, HOVER_RIM_GAIN, glow)
+    this.uniforms.uBevelGlow.value = this.baseBevelGlow * lerp(1, HOVER_RIM_GAIN, glow)
   }
 
   /** 0 collapses the fan onto the back sheet, 1 is the composed layout. */

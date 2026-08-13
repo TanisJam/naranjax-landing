@@ -56,8 +56,24 @@ const DEPLOY_EASE = {
   close: { ease: easeInOutCubic, progressFor: easeInOutCubicT },
 } as const
 
-/** How sharply a layer answers the pointer. High: hover should feel immediate. */
+/**
+ * How sharply a layer SLIDES under the pointer. It carries the whole plate, so
+ * it is allowed to take a moment to get going — that is what reads as mass.
+ */
 const HOVER_RESPONSE = 14
+
+/**
+ * How sharply a layer LIGHTS UP under the pointer.
+ *
+ * Deliberately not the same number. Light has no mass, and running the rim off
+ * the slide's damping was most of why the hover felt slow: the highlight —
+ * the part the eye actually times the response by — was still climbing 200ms
+ * after the crossing because it was waiting for the plate to finish moving.
+ * At 45 it is effectively there in three frames, which is as close to the
+ * crossing as a frame loop can put it, while a damp rather than a hard set
+ * keeps a fast sweep from strobing.
+ */
+const HOVER_GLOW_RESPONSE = 45
 
 // Flex amplitudes at windAmount 1, in radians/units. With the arc radius
 // ≈ length / angle ≈ 1, FLEX_TIP_ANGLE sweeps the tip ~0.09 units tangentially.
@@ -156,8 +172,11 @@ export class AnimationTimeline {
   private deployProgress = 0
   /** Which curve is in force. Starts closed, as if it had just finished closing. */
   private deployDirection: 1 | -1 = -1
-  /** Per-layer hover, damped so the highlight arrives instead of switching. */
+  /** Per-layer hover slide, damped so the plate arrives instead of switching. */
   private readonly hoverAmounts: number[]
+
+  /** Per-layer hover highlight. Same target, its own far quicker response. */
+  private readonly hoverGlows: number[]
   private readonly restPoses: WindRestPose[]
   /**
    * The authored horizontal nudge, which exists to answer the twist: the lower
@@ -192,6 +211,7 @@ export class AnimationTimeline {
     this.explodedOrientation = artwork.quaternion.clone()
     this.closedOrientation = new Quaternion().setFromEuler(new Euler(...closedPose))
     this.hoverAmounts = sheets.map(() => 0)
+    this.hoverGlows = sheets.map(() => 0)
 
     // The wind starts out flexing around the authored composition.
     this.restPoses = sheets.map((sheet) => ({
@@ -309,12 +329,16 @@ export class AnimationTimeline {
       // Hover is scaled by the deploy, not gated by it: while the stack is
       // closed it is one card, and a single layer of it lighting up under the
       // pointer would be a lie about what the user is looking at.
-      const hover = damp(this.hoverAmounts[i]!, sheet === this.hovered ? 1 : 0, HOVER_RESPONSE, delta)
+      const target = sheet === this.hovered ? 1 : 0
+      const hover = damp(this.hoverAmounts[i]!, target, HOVER_RESPONSE, delta)
+      const glow = damp(this.hoverGlows[i]!, target, HOVER_GLOW_RESPONSE, delta)
       this.hoverAmounts[i] = hover
+      this.hoverGlows[i] = glow
 
       // Position, twist and shape all ride the same number, which is what keeps
-      // the layer from arriving somewhere before it has finished unbending.
-      sheet.setPose(local, hover * reveal, this.hoverSlide)
+      // the layer from arriving somewhere before it has finished unbending. The
+      // highlight is the one thing that does not wait for them.
+      sheet.setPose(local, hover * reveal, glow * reveal, this.hoverSlide)
       sheet.setFanOpenness(local * breathe)
       // These two are what make a closed stack believable. `uCurl` scales the
       // lift and the roll and `uOpen` scales the arc, so at 0 every crest,

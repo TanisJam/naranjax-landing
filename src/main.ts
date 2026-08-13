@@ -126,13 +126,44 @@ stage.addEventListener('keydown', (event) => {
   setDeployed(!orchestrator.timeline.deployed)
 })
 
+/**
+ * Pointer speed, in NDC units per second, at which a crossing is a scrape
+ * rather than a visit. Below the floor it is someone choosing a layer; above
+ * the ceiling they are dragging a thumb down the edge of a deck.
+ */
+const SCRAPE_FLOOR = 0.6
+const SCRAPE_CEILING = 5
+
 // Entering a layer is the event. Leaving one is not — a cue on the way out
 // doubles every crossing and turns a sweep across the stack into a stutter.
 // And only when the pointer put it there: the artwork floats, so a boundary
 // can wander across a still pointer on its own, and answering that with a
 // click in someone's ears is answering something they did not do.
-orchestrator.picker.onChange = (layer, fromPointer) => {
-  if (layer && fromPointer) sound.play('pick')
+//
+// The scrape is not a second sample. It is this one, fired as densely as the
+// crossings actually arrive and detuned per voice — which is what a riffle is.
+// The detune is not decoration: an unvaried sample repeated twenty times in
+// half a second stops sounding like an object and starts sounding like a
+// buffer, and no amount of level riding fixes that.
+orchestrator.picker.onChange = (layer, change) => {
+  if (!layer || !change.fromPointer) return
+
+  const intensity = Math.min(
+    Math.max((change.speed - SCRAPE_FLOOR) / (SCRAPE_CEILING - SCRAPE_FLOOR), 0),
+    1,
+  )
+
+  sound.play('pick', {
+    // The crossing's own place in the frame's burst. Several arrive per frame
+    // on a fast sweep and they are milliseconds apart, not simultaneous.
+    delay: change.offset,
+    // Shorter and brighter as the gesture speeds up, plus a per-voice wobble
+    // that is there whether the sweep is fast or slow.
+    rate: (1 + intensity * 0.42) * (0.96 + Math.random() * 0.08),
+    // Each individual tick softens as they pile up, so the run reads as one
+    // texture instead of twenty separate announcements.
+    gain: 1 - intensity * 0.35,
+  })
 }
 
 setDeployed(false, true)
