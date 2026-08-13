@@ -238,6 +238,7 @@ const flatPlate = {
   rollEnd: 0,
   lift: 0,
   bow: 0,
+  peel: 0,
   cornerRadius: CORNER_RADIUS,
   ribFrequency: 0,
   ribAmplitude: 0,
@@ -300,7 +301,11 @@ const layers: SheetDraft[] = [
       // peels up, the rest of the plate stays calm.
       crownEnd: 0.12,
       rollEnd: 0.44,
-      lift: 0.09,
+      // No lift of its own. Raising the tail and rolling it are the same
+      // gesture, and the roll is the one that says which way the sheet came
+      // off; running both just spends the gap to the layer above twice.
+      lift: 0,
+      peel: 0.8,
       thickness: FILM_THICKNESS,
     },
     surface: {
@@ -482,6 +487,9 @@ const layers: SheetDraft[] = [
     shape: {
       ...flatPlate,
       ...waveFold,
+      // Overrides the fold's own lift, for the reason the film above gives.
+      lift: 0,
+      peel: 0.85,
       thickness: FILM_THICKNESS,
     },
     surface: {
@@ -508,6 +516,8 @@ const layers: SheetDraft[] = [
     shape: {
       ...flatPlate,
       ...waveFold,
+      lift: 0,
+      peel: 0.6,
       thickness: FOIL_THICKNESS,
     },
     surface: {

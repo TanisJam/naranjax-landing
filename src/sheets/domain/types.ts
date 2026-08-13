@@ -39,6 +39,27 @@ export interface SheetShape {
   lift: number
   /** Lateral bow of the spine, peaking mid-sweep. */
   bow: number
+  /**
+   * How far the tail rolls back on itself, in radians of turn.
+   *
+   * The difference between a sheet that is lying there and a sheet that is
+   * being LIFTED. Every other control here bends the cross-section — the arc
+   * opens, the crown migrates, the frame rolls — and all of that happens across
+   * the width while the spine stays straight. A peel is the spine itself
+   * turning, which is the one deformation the loft could not express and the
+   * one the reference render is full of: films caught mid-lift, curling off the
+   * stack with a hinge partway along them.
+   *
+   * Bounded in practice by the gap between layers rather than by the model. The
+   * turn is spread over `SHEET_PEEL_REACH` of the sweep, so the tip rises by
+   * (1 - cos(peel)) * reach * length / peel — about 0.28 at a turn of 0.9 on
+   * this card, against a 0.31 layer gap. Past that a peeled sheet climbs into
+   * its neighbour.
+   *
+   * Scaled by the same curl the lift and roll answer to, so the whole stack
+   * flattens into a card when it closes.
+   */
+  peel: number
   /** Total plate thickness. The bullnose edge radius is half of this. */
   thickness: number
   /**

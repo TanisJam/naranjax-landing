@@ -49,6 +49,7 @@ uniform float uRollStart;
 uniform float uRollEnd;
 uniform float uLift;
 uniform float uBow;
+uniform float uPeel;
 uniform float uThickness;
 uniform float uCornerRadius;
 uniform float uRibFrequency;
@@ -117,24 +118,66 @@ float sheetNoise(vec2 p) {
   );
 }
 
+/**
+ * How much of the sweep the peel rolls, counting back from the tail.
+ *
+ * A sheet lifted off a stack does not bend along its whole length — it stays
+ * flat where it is still lying down and turns over a hinge. This is where that
+ * hinge sits, and it is also what converts the peel angle into a radius: the
+ * same turn over a shorter run is a tighter roll.
+ */
+const float SHEET_PEEL_REACH = 0.28;
+
 // The guide curve the cross-section is swept along.
+//
+// The tail rolls back on itself at CONSTANT curvature, which is both what a
+// sheet bent over an edge actually does and the only profile whose integral
+// closes. That second point is not a convenience: spineTangentAt below is the
+// exact derivative of this function, and it is exact because the tangent of a
+// circular arc is a rotation of its start. Ease the turn instead — angle going
+// with u squared, say — and the position integral becomes a Fresnel integral
+// with no closed form, so the derivative would have to become a second finite
+// difference inside the hottest function in the program.
+//
+// What the roll costs in exchange is a curvature step at the hinge. A tangent
+// step would crease the surface; a curvature step is the crease, and it is the
+// one a sheet folded over an edge is supposed to have.
 vec3 spineAt(float u) {
-  return vec3(
-    (u - 0.5) * uLength,
-    uLift * uCurl * u * u * u,
-    uBow * sin(u * SHEET_PI)
-  );
+  float x = (u - 0.5) * uLength;
+  float y = uLift * uCurl * u * u * u;
+
+  float turn = uPeel * uCurl;
+  float run = max(u - (1.0 - SHEET_PEEL_REACH), 0.0);
+  if (turn > 1e-4 && run > 0.0) {
+    // Curvature, from the turn spread over the length the hinge leaves it.
+    float k = turn / (SHEET_PEEL_REACH * uLength);
+    float phi = k * run * uLength;
+    x = ((1.0 - SHEET_PEEL_REACH) - 0.5) * uLength + sin(phi) / k;
+    y += (1.0 - cos(phi)) / k;
+  }
+
+  return vec3(x, y, uBow * sin(u * SHEET_PI));
 }
 
 // Closed-form derivative of spineAt. The surface is sampled five times per
 // vertex for the finite-difference normals, so differencing the spine as well
 // would triple the trig in the hottest function in the program.
 vec3 spineTangentAt(float u) {
-  return vec3(
-    uLength,
-    3.0 * uLift * uCurl * u * u,
-    uBow * SHEET_PI * cos(u * SHEET_PI)
-  );
+  float dx = uLength;
+  float dy = 3.0 * uLift * uCurl * u * u;
+
+  float turn = uPeel * uCurl;
+  float run = max(u - (1.0 - SHEET_PEEL_REACH), 0.0);
+  if (turn > 1e-4 && run > 0.0) {
+    // d/du of sin(phi)/k and of (1 - cos(phi))/k, with phi = k * u * uLength.
+    // The 1/k and the k cancel, which is the whole point of the arc.
+    float k = turn / (SHEET_PEEL_REACH * uLength);
+    float phi = k * run * uLength;
+    dx = cos(phi) * uLength;
+    dy += sin(phi) * uLength;
+  }
+
+  return vec3(dx, dy, uBow * SHEET_PI * cos(u * SHEET_PI));
 }
 
 // Orthonormal frame on the spine, rolled progressively along the sweep. The
@@ -142,7 +185,20 @@ vec3 spineTangentAt(float u) {
 void frameAt(float u, out vec3 origin, out vec3 binormal, out vec3 normalAxis) {
   origin = spineAt(u);
   vec3 tangent = normalize(spineTangentAt(u));
-  vec3 b = normalize(cross(tangent, vec3(0.0, 1.0, 0.0)));
+
+  // The width axis, taken as +Z made perpendicular to the spine rather than as
+  // cross(tangent, +Y).
+  //
+  // Identical for every sheet that does not peel: with no bow the spine lies in
+  // XY, and cross((tx, ty, 0), (0,1,0)) is (0, 0, tx) — which normalises to +Z
+  // exactly, since tx is the sheet's own length and always positive. The
+  // Gram-Schmidt form gives the same +Z and keeps giving it once a tail rolls.
+  //
+  // That is the whole reason for the change. A rolling spine drives the tangent
+  // through vertical, and there cross(tangent, +Y) is the cross product of a
+  // vector with itself: zero. The frame collapses and the sheet tears itself
+  // apart at exactly the angle a peel has to pass through.
+  vec3 b = normalize(vec3(0.0, 0.0, 1.0) - tangent * tangent.z);
   vec3 n = normalize(cross(b, tangent));
 
   // Biased hard toward the tip. A linear roll twists the whole body into a

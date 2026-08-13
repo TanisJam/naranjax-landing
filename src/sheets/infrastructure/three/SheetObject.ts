@@ -128,8 +128,16 @@ export class SheetObject {
    * against a plate collapsed to a point at the origin.
    *
    * A plane is a fair stand-in because these layers ARE plates — they lie in
-   * their own XZ, the spine runs along X and the arc across Z, and what curl is
-   * left at the tail is a fraction of the gap between layers.
+   * their own XZ, the spine runs along X and the arc across Z.
+   *
+   * With one honest exception, added when the sheets learned to peel. A peeled
+   * tail rises about 0.25 against a 0.31 layer gap, so over the last quarter of
+   * a peeled sheet the proxy is no longer near the surface it stands for — it
+   * is nearer the layer above. Hovering a raised flap can therefore pick its
+   * neighbour. Left as it is on purpose: following the peel means a curved
+   * proxy rebuilt whenever the shape moves, which is the CPU-side geometry this
+   * whole design exists to avoid, and the cost falls on a flap at the far edge
+   * of three of the eleven layers rather than on the body of any of them.
    *
    * It sits BESIDE the mesh under the carrier rather than under the mesh, which
    * is what keeps the hover from moving its own target. `setPose` has the whole

@@ -87,6 +87,7 @@ export interface SheetUniforms extends StackOcclusionUniforms, BackdropUniforms 
   uRollEnd: IUniform<number>
   uLift: IUniform<number>
   uBow: IUniform<number>
+  uPeel: IUniform<number>
   uThickness: IUniform<number>
   uCornerRadius: IUniform<number>
   uRibFrequency: IUniform<number>
@@ -263,6 +264,7 @@ export function createSheetMaterial(
     uRollEnd: { value: shape.rollEnd },
     uLift: { value: shape.lift },
     uBow: { value: shape.bow },
+    uPeel: { value: shape.peel },
     uThickness: { value: shape.thickness },
     uCornerRadius: { value: shape.cornerRadius },
     uRibFrequency: { value: shape.ribFrequency },
