@@ -1,6 +1,6 @@
 import { CanvasTexture, SRGBColorSpace } from 'three'
 
-export type LayerMotif = 'embossed-circles' | 'currency-frame' | 'border-frame'
+export type LayerMotif = 'embossed-circles' | 'currency-frame' | 'border-frame' | 'facet-fold'
 
 /** Same ID-1 canvas as the printed faces, so every decal shares one UV space. */
 const WIDTH = 1024
@@ -264,10 +264,120 @@ function drawBorderFrame(ctx: CanvasRenderingContext2D): void {
   })
 }
 
+/**
+ * Where the two creases cross the top edge, as a fraction of the width.
+ *
+ * Both run from a bottom corner up to the top edge, so the layer reads as one
+ * sheet folded twice rather than as three shapes laid side by side. Off-centre
+ * on purpose — the reference's creases are not symmetric, and a symmetric pair
+ * turns the fold into a paper aeroplane.
+ */
+const CREASE_LEFT = 0.36
+const CREASE_RIGHT = 0.64
+
+/**
+ * The height each facet holds at its two ends.
+ *
+ * These are the whole motif. A fold is not a shape drawn onto a sheet, it is a
+ * place where the sheet's slope CHANGES — so what is authored here is a value
+ * per corner, and the creases appear for free wherever two facets arrive at the
+ * same edge on different gradients. Drawing the creases as lines instead would
+ * have produced three flat panels with a stroke between them, which is a
+ * diagram of a fold and not a fold.
+ *
+ * The centre panel is the tall one and it falls away downwards, which is what
+ * puts the highlight along the top edge in the reference.
+ *
+ * The SPAN between the extremes matters more than any single value, and it is
+ * deliberately narrow. Measured off the reference, its facets differ by about a
+ * tenth in lightness — they are a fold catching light, not a colour-blocked
+ * graphic. A first pass ran this from 0.25 to 0.95 and produced a washed-out
+ * chevron that looked painted on; through `decalInk` at 0.32 and the 0.85 cap
+ * below, the range here lands at roughly a tenth of albedo, which is the
+ * number the photograph actually shows.
+ */
+const FACET_AT_CREASE = 0.5
+const FACET_LEFT_EDGE = 0.34
+const FACET_RIGHT_EDGE = 0.36
+const FACET_CENTRE_TOP = 0.72
+const FACET_CENTRE_BOTTOM = 0.44
+
+function fillFacet(
+  ctx: CanvasRenderingContext2D,
+  points: ReadonlyArray<readonly [number, number]>,
+  ramp: { from: readonly [number, number]; to: readonly [number, number] },
+  levels: readonly [number, number],
+): void {
+  const fill = ctx.createLinearGradient(ramp.from[0], ramp.from[1], ramp.to[0], ramp.to[1])
+  fill.addColorStop(0, `rgba(255, 255, 255, ${levels[0]})`)
+  fill.addColorStop(1, `rgba(255, 255, 255, ${levels[1]})`)
+
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(points[0]![0], points[0]![1])
+  for (const [x, y] of points.slice(1)) ctx.lineTo(x, y)
+  ctx.closePath()
+  ctx.fillStyle = fill
+  ctx.fill()
+  ctx.restore()
+}
+
+/**
+ * The decorative interior print: one sheet folded into three facets.
+ *
+ * Unlike every other motif here this one covers the whole plate rather than
+ * sitting inside a border, because it is not artwork applied to a layer — it is
+ * what the layer is. That is also why it goes through `paintRelief` with a
+ * wider blur than the engraved motifs: those need their lines to stay lines,
+ * while a crease that resolves in two pixels reads as a scratch in the plastic
+ * instead of as a fold in it.
+ */
+function drawFacetFold(ctx: CanvasRenderingContext2D): void {
+  const left = CREASE_LEFT * WIDTH
+  const right = CREASE_RIGHT * WIDTH
+
+  paintRelief(ctx, { ink: '#ffffff', alpha: 0.85, blur: 5 }, (scratch) => {
+    fillFacet(
+      scratch,
+      [
+        [0, 0],
+        [left, 0],
+        [0, HEIGHT],
+      ],
+      { from: [0, 0], to: [left, HEIGHT * 0.5] },
+      [FACET_LEFT_EDGE, FACET_AT_CREASE],
+    )
+
+    fillFacet(
+      scratch,
+      [
+        [left, 0],
+        [right, 0],
+        [WIDTH, HEIGHT],
+        [0, HEIGHT],
+      ],
+      { from: [0, 0], to: [0, HEIGHT] },
+      [FACET_CENTRE_TOP, FACET_CENTRE_BOTTOM],
+    )
+
+    fillFacet(
+      scratch,
+      [
+        [right, 0],
+        [WIDTH, 0],
+        [WIDTH, HEIGHT],
+      ],
+      { from: [right, HEIGHT * 0.5], to: [WIDTH, 0] },
+      [FACET_AT_CREASE, FACET_RIGHT_EDGE],
+    )
+  })
+}
+
 const MOTIF_PAINTERS: Record<LayerMotif, (ctx: CanvasRenderingContext2D) => void> = {
   'embossed-circles': drawEmbossedCircles,
   'currency-frame': drawCurrencyFrame,
   'border-frame': drawBorderFrame,
+  'facet-fold': drawFacetFold,
 }
 
 /**

@@ -77,10 +77,44 @@ function createLighting(scene: Scene): DirectionalLight {
   // Not off. It is the only source behind the piece, and it is what separates
   // the far edge of a plate from whatever is behind it. Cut to where it draws
   // that edge and stops filling the body.
-  const rim = new RectAreaLight(0xdae8ff, 3.4, 8, 2.2)
+  //
+  // The tint moved with the rebrand and the intensity deliberately did not: hue
+  // carries none of the fitted luminance, so this stayed the same 3.4 of fill,
+  // shifted off blue so the back edge of an orange plate is separated by the
+  // page's own violet rather than by a colour nowhere else in the piece.
+  //
+  // DIRECTIONAL now, where it was a `RectAreaLight`, and this is the second
+  // light to make that trip for the same measured reason `bounce` did. Three
+  // evaluates a `RectAreaLight` with linearly transformed cosines — float
+  // texture lookups plus matrix work, per light, PER FRAGMENT — and eleven
+  // overlapping layers pay it eleven times over. The cost is per LIGHT and is
+  // completely indifferent to how bright that light is, which is what makes a
+  // dim panel the worst deal in a rig. This one delivered 6.5 luminance points
+  // of a direct total of 64.3 — ten per cent of the light for half of what
+  // remained of the area-light budget.
+  //
+  // The job survives, and here it survives more comfortably than `bounce`'s
+  // did. A panel buys a wrapped, gradual falloff, which is worth paying for on
+  // a key that models form. This draws an EDGE: it sits behind the piece and
+  // its whole brief is to separate the far side of a plate from the background.
+  // A parallel source raking in from behind draws that edge harder, not softer,
+  // so the risk here is a rim that reads too crisp rather than one that
+  // disappears — watch the far corners of the middle plates, not the average.
+  //
+  // The intensity is derived on the same chain `bounce` used. The knockouts
+  // read `spec` at 29.5 points for an intensity of 5.2, i.e. 5.67 points per
+  // unit, and this delivered 6.5, so 6.5 / 5.67 ≈ 1.15.
+  //
+  // Not a caster. `spec` is still the only one; a second shadow pass to save a
+  // fragment cost would be a poor trade in any direction. Its 6.5 does change
+  // SIDES in `CAST_SHARE` though, because it is thrown by a directional source
+  // now — see the arithmetic there.
+  const rim = new DirectionalLight(0xe4dcff, 1.15)
   rim.name = 'rim'
+  // Target left at the origin, which is exactly where the old `lookAt(0, 0, 0)`
+  // aimed it. A moved target would have to be added to the scene to have any
+  // effect at all, which is the trap `bounce` documents below.
   rim.position.set(3, 2.6, -3)
-  rim.lookAt(0, 0, 0)
 
   // The only shadow caster in the scene — RectAreaLight cannot cast at all.
   // Every one of the eleven sheets is now rendered into its map, translucent
@@ -149,10 +183,45 @@ function createLighting(scene: Scene): DirectionalLight {
   // blacks in it — a trough is dark because nothing reaches it, and this reached
   // all of them. Half of it still keeps the concave faces off pure black, which
   // is the whole job it was added for; the other half was the wash.
-  const bounce = new RectAreaLight(0xcfe0f8, 1.6, 7, 4)
+  //
+  // DIRECTIONAL, where it used to be a `RectAreaLight`, and the reason is a
+  // measurement rather than a preference.
+  //
+  // `__perf.sweep()` put the three area lights at 17.0 ms of a 36 ms frame,
+  // reproduced across two runs — the most expensive thing the piece draws, more
+  // than halving the resolution. Three evaluates a `RectAreaLight` with linearly
+  // transformed cosines: float-texture lookups plus matrix work, per light, per
+  // fragment, and eleven overlapping layers pay all of it eleven times over.
+  // Roughly six milliseconds each, and the cost is per LIGHT — it does not care
+  // how bright the light is.
+  //
+  // Which is what condemns this one specifically. The knockouts in `CAST_SHARE`
+  // put its contribution at 2.0 of a direct total of 64.3: THREE PER CENT of the
+  // light for a third of the area-light budget. Nothing else in the rig is
+  // anywhere near that ratio — the key is 41% for the same price.
+  //
+  // And the job survives the change, because of what the job IS. A soft panel
+  // buys a wrapped, gradual falloff across a surface, and that is worth paying
+  // for on a key that models the form. This is FILL: its whole brief is to reach
+  // the downward-facing surfaces so they are not black. Reaching them is
+  // something a parallel light does perfectly well, and far more cheaply.
+  //
+  // The intensity is derived, not guessed. The same knockouts read `spec` at
+  // 29.5 luminance points for an intensity of 5.2 — 5.67 points per unit — and
+  // this used to contribute 2.0, so 2.0 / 5.67 ≈ 0.35. That is a starting point
+  // and not a result: a parallel light distributes what it delivers differently
+  // from a panel, so the AVERAGE can match while the darkest trough does not.
+  // The trough is the thing to look at.
+  //
+  // Not a caster. `spec` is still the only one, and adding a second shadow pass
+  // to save a fragment cost would be a poor trade in any direction.
+  // Retinted with `rim` and, for the same reason, at exactly its old intensity.
+  const bounce = new DirectionalLight(0xd8cbf4, 0.35)
   bounce.name = 'bounce'
+  // Target left at the origin, which is where `lookAt(0, 0.4, 0)` was pointing
+  // this to within a few degrees — and a moved target would have to be added to
+  // the scene to have any effect at all.
   bounce.position.set(-2.6, -3.2, 2.8)
-  bounce.lookAt(0, 0.4, 0)
 
   scene.add(key, rim, spec, bounce)
   return spec
@@ -166,7 +235,15 @@ function createLighting(scene: Scene): DirectionalLight {
  */
 const FIT_ASPECT = 0.86
 
-const TARGET = new Vector3(0, -0.12, 0)
+/**
+ * Where the camera looks, and therefore where the middle of the frame is.
+ *
+ * Exported because centring something ON that frame — which is what opening a
+ * layer full-frame does — needs the same point the lens is pointed at, and two
+ * copies of it would drift the first time this moved.
+ */
+export const CAMERA_TARGET = new Vector3(0, -0.12, 0)
+const TARGET = CAMERA_TARGET
 const CAMERA_OFFSET = new Vector3(0.18, 0.5, 7.6).sub(TARGET)
 
 export function createStage(container: HTMLElement): Stage {

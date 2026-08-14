@@ -1,8 +1,8 @@
-import { Clock, Group } from 'three'
+import { Clock, Group, Vector3 } from 'three'
 import type { Composition } from '../domain/types'
 import { BackdropCapture } from '../infrastructure/three/BackdropCapture'
 import { SheetObject } from '../infrastructure/three/SheetObject'
-import { createStage, type Stage } from '../infrastructure/three/stage'
+import { CAMERA_TARGET, createStage, type Stage } from '../infrastructure/three/stage'
 import { AnimationTimeline } from './AnimationTimeline'
 import { CameraInspector } from './CameraInspector'
 import { FilmGrain } from './FilmGrain'
@@ -31,6 +31,37 @@ const EXPLODED_POSE: [number, number, number] = [0.42, -0.62, 0.18]
  * angle answers the camera's small sideways offset for the same reason.
  */
 const CLOSED_POSE: [number, number, number] = [1.489, -0.024, 0]
+
+/**
+ * How far past the edge of the canvas a layer opened full-frame reaches.
+ *
+ * A few percent, and it earns them: a layer that merely FITS leaves a hairline
+ * of backdrop down one side that the idle float and the pointer parallax then
+ * breathe in and out of, which reads as the card not quite having arrived. This
+ * is the knob for the crop — `focusZoom` itself is measured and must not be
+ * authored over.
+ */
+const FOCUS_BLEED = 1.04
+
+/**
+ * How far along from the camera to its target a layer being read comes to rest,
+ * as a fraction of that distance. 1 would leave it in the plane of the stack.
+ *
+ * It has to clear the stack, and by a real margin rather than a hair. Eleven
+ * plates 0.31 apart, tilted, and each 2.36 across reach something over a unit
+ * towards the lens from the middle of the fan — so a layer that stopped at the
+ * target would be standing among the ones it just left, sorted against them
+ * every frame and lit by whatever happened to be in front of it.
+ *
+ * This is also why `fitFocus` measures at THIS distance and not at the camera
+ * target: a plate a third of the way closer to the lens is a third larger on
+ * screen before it is scaled at all, and framing it against the wrong plane
+ * would overshoot by exactly that much.
+ */
+const FOCUS_APPROACH = 0.72
+
+/** Scratch for the framing measurement. Reused, never handed out. */
+const FOCUS_TRAVEL = new Vector3()
 
 /**
  * Owns the scene graph and the frame loop. The nesting is deliberate: pointer
@@ -77,6 +108,10 @@ export class SceneOrchestrator {
    */
   readonly resolution: ResolutionGovernor
 
+  /** The card's long and short sides, in world units. See `fitFocusZoom`. */
+  private readonly cardSpan: number
+  private readonly cardRise: number
+
   /** Wall clock of the previous frame, for the governor's interval. */
   private lastFrameAt = 0
   private readonly clock = new Clock()
@@ -120,6 +155,16 @@ export class SceneOrchestrator {
       this.artwork.add(sheet.pivot)
       return sheet
     })
+
+    // The card's own footprint, taken from the widest sheet rather than from a
+    // constant: this is what a layer opened full-frame has to be measured
+    // against, and the composition is the only thing that knows it.
+    this.cardSpan = Math.max(
+      ...composition.sheets.map((layer) => layer.shape.length * layer.placement.scale),
+    )
+    this.cardRise = Math.max(
+      ...composition.sheets.map((layer) => layer.shape.width * layer.placement.scale),
+    )
 
     this.floatGroup.add(this.artwork)
     this.parallaxGroup.add(this.floatGroup)
@@ -193,6 +238,75 @@ export class SceneOrchestrator {
     this.handleResize()
   }
 
+  /**
+   * Changes the size of the canvas without the artwork appearing to move.
+   *
+   * `apply` is whatever resizes the container — going fullscreen, in practice.
+   * What this adds is the compensation, and it is the whole reason opening a
+   * layer does not begin with a lurch: a canvas that stops being a narrow column
+   * and becomes the viewport changes TWO things about how large the artwork is
+   * drawn, and both of them at once.
+   *
+   * The first is the dolly. `createStage` pulls the camera back when the aspect
+   * is narrower than it can frame, so a 38% column is seen from about half again
+   * as far away as the full viewport is — let that go and the artwork jumps that
+   * much larger between two frames.
+   *
+   * The second is simply that a taller canvas draws the same world units across
+   * more pixels. Both are captured here as one number, because an object's
+   * height on screen is its world size over its distance, times the height of
+   * the viewport in pixels, and nothing else.
+   *
+   * The offset is the same idea in two dimensions: the artwork sat in the middle
+   * of the column, the column is not in the middle of the viewport, and the gap
+   * between those two centres is a pixel distance that has to be spent as world
+   * units at the new camera distance.
+   *
+   * Measured rather than derived from the layout, and deliberately: reading the
+   * camera back after the resize means this stays correct if the dolly rule, the
+   * fov or the panel's share of the page ever changes. None of those numbers
+   * appear here.
+   */
+  reframe(apply: () => void): void {
+    const camera = this.stage.camera
+    const before = this.container.getBoundingClientRect()
+    const beforeDistance = camera.position.distanceTo(CAMERA_TARGET)
+
+    apply()
+    // Synchronously, not on the resize observer: the measurements below have to
+    // come from a camera that has already answered the new size, and the
+    // observer does not run until the frame is over.
+    this.handleResize()
+
+    const after = this.container.getBoundingClientRect()
+    const afterDistance = camera.position.distanceTo(CAMERA_TARGET)
+    if (before.height === 0 || after.height === 0) return
+
+    this.timeline.framePreserveScale =
+      (afterDistance / beforeDistance) * (before.height / after.height)
+
+    // World units per pixel at the plane the camera is aimed at.
+    const unitsPerPixel =
+      (2 * afterDistance * Math.tan((camera.fov * Math.PI) / 360)) / after.height
+
+    this.timeline.framePreserveOffset
+      .set(
+        (before.left + before.width / 2 - (after.left + after.width / 2)) * unitsPerPixel,
+        // Screen y runs down and world y runs up.
+        -(before.top + before.height / 2 - (after.top + after.height / 2)) * unitsPerPixel,
+        0,
+      )
+      // Into world space. The camera is tilted a few degrees off the axes, so a
+      // screen-space offset is not a world-space one until it is turned.
+      .applyQuaternion(camera.quaternion)
+  }
+
+  /** Drops the compensation, once nothing is relying on it any more. */
+  clearReframe(): void {
+    this.timeline.framePreserveScale = 1
+    this.timeline.framePreserveOffset.set(0, 0, 0)
+  }
+
   private handleResize(): void {
     const { clientWidth, clientHeight } = this.container
     if (clientWidth === 0 || clientHeight === 0) return
@@ -200,6 +314,41 @@ export class SceneOrchestrator {
     // After the stage, which is what sets the drawing buffer the capture has to
     // match texel for texel.
     this.backdrop.resize(this.stage.renderer)
+    // And after the camera, which is what this measures.
+    this.fitFocus()
+  }
+
+  /**
+   * Works out where a layer being read comes to rest, and how large it has to
+   * be there to span the canvas.
+   *
+   * Re-measured on every resize rather than authored once, because the camera
+   * dollies back whenever the canvas is narrower than it can frame — so the
+   * size that fills a 38% column, the size that fills a laptop viewport and the
+   * size that fills a phone held upright are three different numbers. A
+   * constant would be right on exactly one screen.
+   *
+   * Contained rather than covered: the SMALLER of the two ratios. On a viewport
+   * shaped roughly like a card, which is what a laptop is, the two agree to
+   * within a couple of percent and the card fills everything. On a phone held
+   * upright they do not, and the choice is between showing the whole card and
+   * showing a band across the middle of it — and the card is the thing that was
+   * asked for.
+   */
+  private fitFocus(): void {
+    const camera = this.stage.camera
+    const approach = FOCUS_TRAVEL.copy(CAMERA_TARGET).sub(camera.position)
+    const distance = approach.length() * FOCUS_APPROACH
+
+    this.timeline.framePoint
+      .copy(camera.position)
+      .addScaledVector(approach.normalize(), distance)
+
+    const height = 2 * distance * Math.tan((camera.fov * Math.PI) / 360)
+    const width = height * camera.aspect
+
+    this.timeline.focusZoom =
+      Math.min(width / this.cardSpan, height / this.cardRise) * FOCUS_BLEED
   }
 
   private readonly loop = (): void => {
@@ -222,6 +371,9 @@ export class SceneOrchestrator {
     this.timeline.update(delta)
     this.parallax?.update(delta)
     this.inspector?.update()
+    // After the timeline, which is what decides — and releases — the layer
+    // being read. Ahead of the draw, which is what the order is for.
+    this.stackOrder.focused = this.timeline.focused
     this.stackOrder.update(this.stage.camera)
     // After every source of motion and before the draw: what a layer is under
     // has to be answered for the frame being rendered, not the one before it.

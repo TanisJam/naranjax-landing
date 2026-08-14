@@ -1,5 +1,5 @@
 /**
- * The page's three sound effects.
+ * The page's sound effects.
  *
  * Web Audio rather than `<audio>` elements: these are short cues that have to
  * fire on the same frame as the thing they answer, retrigger before they have
@@ -10,7 +10,12 @@
  * something this page does with it.
  */
 
-export type SoundName = 'open' | 'close' | 'pick'
+/**
+ * `specOpen` and `specClose` score a layer being brought up to be read, and are
+ * shorter than the two that score the whole stack coming apart — the gesture is
+ * one sheet, not eleven, and the cue is what says so.
+ */
+export type SoundName = 'open' | 'close' | 'pick' | 'specOpen' | 'specClose'
 
 /**
  * How long a cue waits before it will retrigger, in seconds.
@@ -23,7 +28,13 @@ export type SoundName = 'open' | 'close' | 'pick'
  * The transitions retrigger freely because a click that reverses the animation
  * should reverse the sound with it.
  */
-const RETRIGGER_GUARD: Record<SoundName, number> = { open: 0, close: 0, pick: 0 }
+const RETRIGGER_GUARD: Record<SoundName, number> = {
+  open: 0,
+  close: 0,
+  pick: 0,
+  specOpen: 0,
+  specClose: 0,
+}
 
 /**
  * How long a voice counts as crowding the ones after it, in seconds.

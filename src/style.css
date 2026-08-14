@@ -1,7 +1,35 @@
 @import 'tailwindcss';
 
+/* The brand, and where the two numbers come from.
+
+   `--color-nx-orange` and `--color-nx-purple` are sampled from the palette of
+   the Naranja X isologo itself, not eyeballed from a screenshot: the file is an
+   8-bit colormapped PNG, so its PLTE chunk states the brand inks exactly. Every
+   other value below is derived from one of those two, which is the only reason
+   the page holds together as one identity — there is no third colour that
+   somebody picked because it looked nice next to them.
+
+   The `ink` ramp is that same violet taken down to near-black at constant hue.
+   It is what the page is built on rather than a neutral grey, and that is the
+   load-bearing choice here: a grey page with orange on it is a page with an
+   accent colour, while a violet-black page with orange on it is the brand. The
+   difference is only visible against a true neutral, which is exactly why it
+   works — nobody sees the tint, everybody sees that the page is not generic. */
 @theme {
   --font-sans: 'Rubik', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-nx-orange: #ff5000;
+  --color-nx-orange-bright: #ff7833;
+  --color-nx-purple: #50007f;
+
+  --color-ink-950: #190a22;
+  --color-ink-900: #240f30;
+  --color-ink-800: #351847;
+  --color-ink-700: #4d2664;
+  --color-ink-600: #6a3e84;
+  --color-ink-400: #ad97ba;
+  --color-ink-300: #cdbdd6;
+  --color-ink-200: #e8deed;
 }
 
 #sheets-stage {
@@ -12,7 +40,7 @@
 /* Inset, because the stage is flush with the panel edges and an outline drawn
    outside them is clipped away by the layout. */
 #sheets-stage:focus-visible {
-  outline: 2px solid var(--color-cyan-400);
+  outline: 2px solid var(--color-nx-orange);
   outline-offset: -4px;
 }
 
@@ -20,6 +48,71 @@
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* Opening a layer, which is the card leaving the page.
+
+   The canvas stops being the left column and becomes the viewport. It does that
+   INSTANTLY and invisibly — the artwork is compensated back to the size and
+   place it was already drawn at, so nothing is seen to happen — and then the
+   card grows across the whole screen under its own power. Growth the user can
+   watch is the entire point of the gesture, so none of it may be spent on the
+   canvas catching up.
+
+   The backdrop fades in rather than cutting. Until the card is large enough to
+   cover the page, the page is still there behind a transparent canvas, and for
+   that first moment it should be: the card is lifting off the page it was
+   sitting beside. By the time it fills the screen there is nothing left to see
+   through to.
+
+   Closing is two states rather than one, and it has to be. The backdrop has to
+   be gone BY the time the canvas goes back to its column, not begin leaving
+   then — a fade that starts at the swap leaves the panel sitting darker than
+   its own background for four hundred milliseconds, right at the moment the eye
+   is already following something. So `closing` keeps the canvas fullscreen and
+   takes the backdrop away while the card is still shrinking, and dropping the
+   attribute at the end has nothing left to animate.
+
+   The stage stops taking the pointer while either applies, so a click always
+   reaches the panel over it rather than the layer picker under it. */
+#sheets-stage[data-framed] {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  transition: background-color 420ms ease;
+}
+
+#sheets-stage[data-framed='true'] {
+  background-color: var(--color-ink-950);
+}
+
+/* The text arrives after the growth, never during it. A panel that faded in
+   alongside the card would be covering the one thing the click was asking to
+   see. Coming back has nothing to wait for, so the delay lives on the opening
+   state alone — the text is gone before the card starts shrinking, instead of
+   sitting over a moving card on the way out. */
+#layer-specs {
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
+#layer-specs[data-shown='true'] {
+  opacity: 1;
+  transition-delay: 380ms;
+}
+
+/* Same criterion the timeline uses for the deploy: the transition is not
+   removed, it becomes a cut. What the user asked for still happens — they
+   clicked a layer and the layer's specifications are what they get — it simply
+   arrives between two frames instead of sweeping there. */
+@media (prefers-reduced-motion: reduce) {
+  #sheets-stage[data-framed],
+  #layer-specs,
+  #layer-specs[data-shown='true'] {
+    transition-duration: 0ms;
+    transition-delay: 0ms;
+  }
 }
 
 /* Film grain over the render.

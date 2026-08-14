@@ -106,14 +106,32 @@ function layerOffset(index: number): [number, number, number] {
 /**
  * Shared surface defaults. Each layer overrides only what makes it distinct.
  *
- * The palette runs down the stack: steel blue under the top card, opening
- * through cyan and holographic white, closing on the mint of the bottom one. As
- * in the original piece the gradient is a hue rotation at near-constant
- * lightness — built as dark-to-pale it turns into washed-out plastic.
+ * The stack is a BILL OF MATERIALS, not a gradient, and that is the one thing
+ * to preserve when tuning it. An earlier version ran a smooth hue rotation from
+ * orange down to violet, which was pretty and was a lie: the reference build
+ * sheet for this card alternates pigmented orange plies with cream laminates
+ * and off-white substrates, because that is what a laminated card is. Layers
+ * that all differ by a few degrees of hue read as one object dissolving;
+ * layers that alternate saturated and pale read as parts.
+ *
+ * Reading down: the pigmented PVC core, a matte protective laminate, the
+ * polyester substrate, a clear security foil, the white print ply, the
+ * decorative geometric print, a second foil, the printed exterior face, and the
+ * solid base. Two of the eleven are the finished cards themselves.
+ *
+ * The brand's violet survives in exactly one place — the lower foil — and it
+ * earns it there rather than being applied: a security hologram does flash
+ * violet, so the second ink arrives as an optical property of a real material
+ * instead of as a colour somebody wanted on screen.
+ *
+ * Lightness is the axis that was NOT free to move. The light rig, the rim
+ * strengths and the frost were fitted against these luminances over several
+ * sessions; the orange plies sit where the blue ones used to and the pale plies
+ * are pale because the reference says so, not because a slot needed filling.
  */
 const baseSurface: SheetSurface = {
-  colorA: '#1c74ad',
-  colorB: '#2f9fd0',
+  colorA: '#ad561c',
+  colorB: '#d06f2f',
   gradient: { bias: -0.05, alongSweep: 0.25, alongArc: 0.45, alongY: 0.25 },
   roughness: 0.12,
   metalness: 0,
@@ -121,7 +139,7 @@ const baseSurface: SheetSurface = {
   refractionDepth: 0.25,
   attenuationColor: '#ffffff',
   attenuationDistance: Infinity,
-  coreColor: '#155a86',
+  coreColor: '#864215',
   absorption: 0.35,
   specularIntensity: 1.15,
   ior: 1.46,
@@ -139,11 +157,11 @@ const baseSurface: SheetSurface = {
   // layer between them turns it on — that is what they are made of.
   frost: 0,
   frostsBackdrop: false,
-  frostColor: '#eef6ff',
+  frostColor: '#fff5ee',
   dotScale: 0,
   dotDepth: 0,
   dotContrast: 0,
-  dotTint: '#7f93bb',
+  dotTint: '#bb977f',
   ribShading: 0,
   ribContrast: 0,
   decalInk: 0,
@@ -151,7 +169,7 @@ const baseSurface: SheetSurface = {
   // The interior of the stack is film and foil, and film gives way. This is the
   // reference the covers below are stiff RELATIVE to.
   flex: 1,
-  rimColor: '#eaf2ff',
+  rimColor: '#fff2ea',
   // Every one of these is additive in practice: a fresnel rim fires across most
   // of a plate seen this obliquely, and eleven plates stacked mean eleven of
   // them summing into the same pixels. Values tuned against a single sheet blow
@@ -219,6 +237,23 @@ const embossed = { decalInk: 0.05, decalRelief: 11 }
 
 /** Security print is the opposite trade: it is ink, with the barest impression. */
 const printed = { decalInk: 0.55, decalRelief: 3 }
+
+/**
+ * The decorative interior print sits between the two.
+ *
+ * Its facets are a printed tonal field AND a fold, so unlike the emboss layers
+ * it needs real ink — the reference's facets differ in colour, not only in the
+ * way they catch light. And unlike the security print it needs real relief,
+ * because a fold that changes tone without changing slope is a photograph of a
+ * fold printed flat. Both channels at once is what the material actually is.
+ *
+ * The relief runs high against that ink for a reason the motif explains: its
+ * facet levels span about a third rather than the full range, so the gradient
+ * the shader differentiates is correspondingly shallow. The tone had to come
+ * down to match the reference; the fold did not, so the relief goes up to keep
+ * it. Ink and relief are not two dials pointing the same way here.
+ */
+const faceted = { decalInk: 0.32, decalRelief: 8 }
 
 /**
  * Flat-plate defaults for the shape.
@@ -311,12 +346,14 @@ const layers: SheetDraft[] = [
     surface: {
       ...baseSurface,
       ...embossed,
-      colorA: '#2f9ad8',
-      colorB: '#4fb8ee',
-      coreColor: '#1d70a8',
-      roughness: 0.2,
+      colorA: '#f0800f',
+      colorB: '#f79a35',
+      coreColor: '#c25f06',
+      // Pigmented PVC, not a polished film: the reference's core is the same
+      // matte body the printed face is, seen without its laminate.
+      roughness: 0.32,
       opacity: 0.92,
-      frost: 0.5,
+      frost: 0.45,
     },
     placement: {
       pivot: PIVOT,
@@ -340,21 +377,29 @@ const layers: SheetDraft[] = [
     },
     surface: {
       ...baseSurface,
-      colorA: '#4fbcea',
-      colorB: '#86d6f4',
-      coreColor: '#3492c4',
-      // The glossiest layer of the stack. Nothing is pressed into it, so the
-      // only thing it has to show is the light sweeping across it — which is
-      // also why it takes the least frost: scattering is what kills a mirror.
+      colorA: '#f7e9dc',
+      colorB: '#fdf6ee',
+      coreColor: '#e3cfbc',
+      // The matte protective laminate, and it used to be the glossiest layer in
+      // the stack. The reference is explicit — "laminado protector MATE" — so
+      // the roughness went from 0.07 to 0.34 and the sheet stopped being the
+      // one mirror in the piece. Worth stating because it reads as a regression
+      // otherwise: the layer nothing is pressed into is now also the layer with
+      // no specular sweep to show, and what carries it instead is the tooth
+      // below and the fact that it is the only near-white ply this high up.
       //
-      // And the most imperfection, which is not a contradiction. A surface whose
-      // whole job is a specular sweep is the one where a single roughness value
-      // is most obvious: the sweep comes out as one clean unbroken shape that no
-      // manufactured plastic has ever produced.
+      // Keeps the most imperfection of any layer, which matters MORE now, not
+      // less. A matte surface at one flat roughness value is the most obviously
+      // synthetic thing a renderer can produce.
       imperfection: 0.2,
-      roughness: 0.07,
-      opacity: 0.9,
-      frost: 0.28,
+      roughness: 0.34,
+      opacity: 0.72,
+      frost: 0.35,
+      // The tooth the matte finish actually has. Faint enough to be felt rather
+      // than seen, which is the difference between a matte laminate and a
+      // frosted one.
+      ribShading: 0.12,
+      ribContrast: 0.1,
     },
     placement: {
       pivot: PIVOT,
@@ -379,12 +424,16 @@ const layers: SheetDraft[] = [
     },
     surface: {
       ...baseSurface,
-      colorA: '#3d7fbe',
-      colorB: '#5a9ad2',
-      coreColor: '#2b5f92',
-      // The woven core: fine threads one way, a dot grid the other. Two fields
-      // crossing is what reads as cloth rather than corduroy, and it is why
-      // this layer needs no decal — the weave is procedural all the way down.
+      colorA: '#e6e0d4',
+      colorB: '#f2ede3',
+      coreColor: '#cdc5b6',
+      // The polyester substrate, which is the one ply in the reference that is
+      // literally woven — fine threads one way, a dot grid the other. Two
+      // fields crossing is what reads as cloth rather than corduroy, and it is
+      // why this layer needs no decal: the weave is procedural all the way
+      // down. It was already built this way before the reference arrived, which
+      // is the good kind of coincidence — the material it was imitating and the
+      // material the build sheet names turned out to be the same one.
       // Already the roughest surface in the stack and already carrying a weave,
       // so it needs the least of this — the cloth is doing the work.
       imperfection: 0.07,
@@ -394,7 +443,7 @@ const layers: SheetDraft[] = [
       dotScale: 200,
       dotDepth: 1.5,
       dotContrast: 0.24,
-      dotTint: '#23507e',
+      dotTint: '#b8ad9c',
       opacity: 1,
     },
     placement: {
@@ -425,9 +474,9 @@ const layers: SheetDraft[] = [
       // were pale because at 0.16 alpha almost nothing of the body reached the
       // frame and the colour was carrying the layer on its own; a sheet with a
       // real body has to hold a real dye or the frost turns it into fog.
-      colorA: '#5cc3dd',
-      colorB: '#8fdcea',
-      coreColor: '#3f9fbb',
+      colorA: '#f3c8a8',
+      colorB: '#f8dcc6',
+      coreColor: '#d9a37e',
       absorption: 0.14,
       roughness: 0.18,
       // The one place iridescence earns its cost: on a holographic foil it is
@@ -443,7 +492,7 @@ const layers: SheetDraft[] = [
       opacity: 0.56,
       frost: 0.8,
       frostsBackdrop: true,
-      rimColor: '#eafaff',
+      rimColor: '#ffebea',
       rimStrength: 0.3,
     },
     placement: {
@@ -466,9 +515,9 @@ const layers: SheetDraft[] = [
     surface: {
       ...baseSurface,
       ...printed,
-      colorA: '#79d2dd',
-      colorB: '#a6e6ea',
-      coreColor: '#4fb0bc',
+      colorA: '#f2ece2',
+      colorB: '#fbf7f0',
+      coreColor: '#d8d0c2',
       roughness: 0.22,
       opacity: 0.74,
       frost: 0.62,
@@ -482,8 +531,10 @@ const layers: SheetDraft[] = [
     },
   },
   {
+    // The decorative geometric ply. The only layer whose artwork covers the
+    // whole plate rather than sitting inside a border — see `facet-fold`.
     id: 'embossed-wave',
-    decal: 'embossed-circles',
+    decal: 'facet-fold',
     animationPhase: 0.54,
     shape: {
       ...flatPlate,
@@ -496,16 +547,25 @@ const layers: SheetDraft[] = [
       // as two things happening to one sheet and start reading as a crumple.
       peel: 0.42,
       thickness: FILM_THICKNESS,
+      // The woven tooth the reference shows across this ply, under its facets.
+      // Same shading-only corrugation the substrate uses and a quarter of its
+      // strength: this is printed film with a texture, not cloth.
+      ribFrequency: 96,
     },
     surface: {
       ...baseSurface,
-      ...embossed,
-      colorA: '#2fa6e6',
-      colorB: '#4fc0f2',
-      coreColor: '#1d7ab0',
+      ...faceted,
+      colorA: '#ef8417',
+      colorB: '#f7a244',
+      coreColor: '#c26208',
       roughness: 0.18,
       opacity: 0.93,
-      frost: 0.48,
+      ribShading: 0.11,
+      ribContrast: 0.09,
+      // Less than the plies around it. Frost scatters the surface normal, and
+      // the normal is where a fold lives — frosting this one to match its
+      // neighbours would sand the creases off the only layer that has any.
+      frost: 0.3,
     },
     placement: {
       pivot: PIVOT,
@@ -528,17 +588,20 @@ const layers: SheetDraft[] = [
     surface: {
       ...baseSurface,
       ...printed,
-      colorA: '#63c8e0',
-      colorB: '#95dfec',
-      coreColor: '#4aa8c2',
+      colorA: '#b184c9',
+      colorB: '#d3b3e2',
+      coreColor: '#8a5aa8',
       absorption: 0.14,
       roughness: 0.26,
       iridescence: 0.7,
-      // The same frosted foil as `holo-currency`, folded into a wave.
+      // The same frosted foil as `holo-currency`, folded into a wave. Its rim
+      // follows its own body into the magenta half of the run rather than
+      // staying on the upper foil's warm white — a rim is the sheet's own edge
+      // catching the light, so it cannot belong to a different sheet's hue.
       opacity: 0.56,
       frost: 0.8,
       frostsBackdrop: true,
-      rimColor: '#eafaff',
+      rimColor: '#f4eaff',
       rimStrength: 0.3,
     },
     placement: {
@@ -561,9 +624,9 @@ const layers: SheetDraft[] = [
     surface: {
       ...baseSurface,
       ...embossed,
-      colorA: '#40bde6',
-      colorB: '#6ed4ee',
-      coreColor: '#2892b8',
+      colorA: '#f18a1e',
+      colorB: '#f8a852',
+      coreColor: '#c66a09',
       roughness: 0.21,
       opacity: 0.82,
       frost: 0.66,
@@ -589,9 +652,9 @@ const layers: SheetDraft[] = [
     surface: {
       ...baseSurface,
       ...printed,
-      colorA: '#2b9ade',
-      colorB: '#44b2ea',
-      coreColor: '#1a6fa8',
+      colorA: '#e0e0dc',
+      colorB: '#eeeee9',
+      coreColor: '#c2c2bc',
       roughness: 0.14,
       opacity: 1,
     },
@@ -662,6 +725,6 @@ function assemble(drafts: readonly SheetDraft[]): SheetLayer[] {
 }
 
 export const composition: Composition = {
-  background: '#1e293b',
+  background: '#240f30',
   sheets: assemble(layers),
 }

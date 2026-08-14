@@ -9,34 +9,47 @@ const HEIGHT = 646
 /** No printed element is allowed to reach past this inset. */
 const MARGIN = 48
 
-const TAU = Math.PI * 2
+/**
+ * The card body, measured off the reference render of the finished card.
+ *
+ * Deliberately NOT the logo's #FF5000. That value is an ink and this is a
+ * pigmented PVC body photographed under light; they are two different things
+ * and the render says so. The logo ink still governs everywhere the mark itself
+ * is drawn — the page header, the isotype — and this governs the object.
+ */
+const BODY_ORANGE = '#f6840f'
 
 /**
- * The graphite/mint boundary as a fraction of the width, sampled at the top
- * edge, the vertical middle and the bottom edge.
+ * The front carries no account data at all — no number, no expiry, no name.
  *
- * The seam is an S-curve, not a diagonal: it bulges right at mid-height and
- * pulls back at both ends, which is what makes the mint side read as a sweep
- * rather than a cut.
+ * That is the reference design and it is also where the card industry went:
+ * once the front stopped being run through an imprinter there was no reason for
+ * it to carry the data, and moving it to the back buys back the whole face for
+ * the brand. So the two faces no longer share a layout, and the constants below
+ * are per-face rather than shared. An earlier version of this file aligned them
+ * deliberately so the marks would hold still through a flip; there is nothing
+ * left on the front for them to hold still against.
  */
-const SEAM_TOP = 0.48
-const SEAM_MIDDLE = 0.55
-const SEAM_BOTTOM = 0.45
-
-/** Half-width of the blend band that hides the seam's stair-stepping. */
-const SEAM_FEATHER = 4
-
-/** Shared layout, so the two faces line up when the card flips. */
-const TEXT_LEFT = MARGIN + 40
-const NUMBER_BASELINE = 430
-const CAPTION_BASELINE = 492
-const EXPIRY_BASELINE = 534
-const NAME_BASELINE = 590
-const CHIP: Rect = { x: 96, y: 196, width: 120, height: 92 }
-
 const CARD_NUMBER = '5412 7512 3412 3456'
 const EXPIRY = '12/28'
 const CARDHOLDER = 'Lee M. Cardholder'
+
+/** Front: the mark sits low and left, the network mark low and right. */
+const WORDMARK_LEFT = MARGIN + 40
+const WORDMARK_BASELINE = 486
+const SUBBRAND_BASELINE = 544
+const NETWORK_RIGHT = WIDTH - MARGIN - 32
+const NETWORK_BASELINE = 560
+
+/** Back: one column of data, and the same left margin as the front's mark. */
+const TEXT_LEFT = MARGIN + 40
+const NUMBER_BASELINE = 300
+const CAPTION_BASELINE = 380
+const EXPIRY_BASELINE = 422
+const NAME_BASELINE = 520
+
+const CHIP: Rect = { x: 96, y: 168, width: 128, height: 98 }
+const CONTACTLESS = { x: 300, y: 217, radius: 62 }
 
 interface Rect {
   x: number
@@ -49,18 +62,9 @@ interface CardNumberStyle {
   font: string
   /** Extra advance per glyph, in px. Negative tightens. */
   tracking: number
-  /** Ink for every group but the last. */
-  leadingGroups: string
-  /** Ink for the trailing group, which on the front runs onto the mint side. */
-  lastGroup: string
+  ink: string
   /** Soft cast shadow that lifts flat type off the body without embossing it. */
   shadow: string
-}
-
-interface MastercardPalette {
-  red: string
-  amber: string
-  overlap: string
 }
 
 interface ContactlessOptions {
@@ -83,42 +87,6 @@ function createSurface(width: number, height: number): CanvasRenderingContext2D 
   }
 
   return context
-}
-
-/** Hermite ease, so the two halves of the seam meet with a matching slope. */
-function smoothstep(t: number): number {
-  return t * t * (3 - 2 * t)
-}
-
-/** The x where the S-curved seam crosses a given scanline. */
-function seamXAt(y: number): number {
-  const t = Math.min(Math.max(y / HEIGHT, 0), 1)
-
-  const [from, to, local] =
-    t < 0.5 ? [SEAM_TOP, SEAM_MIDDLE, t / 0.5] : [SEAM_MIDDLE, SEAM_BOTTOM, (t - 0.5) / 0.5]
-
-  return (from + (to - from) * smoothstep(local)) * WIDTH
-}
-
-/**
- * A hard horizontal ramp between two colours, placed on the seam at height `y`.
- *
- * Used for artwork that may straddle the split: the mint side needs dark ink
- * where the graphite side needs light. A gradient hands off between the two
- * without cutting a run of text into separate draws, so the layout survives
- * whatever metrics the host substitutes for the generic families.
- */
-function createSeamFill(
-  ctx: CanvasRenderingContext2D,
-  y: number,
-  left: string,
-  right: string,
-): CanvasGradient {
-  const boundary = seamXAt(y)
-  const fill = ctx.createLinearGradient(boundary - SEAM_FEATHER, 0, boundary + SEAM_FEATHER, 0)
-  fill.addColorStop(0, left)
-  fill.addColorStop(1, right)
-  return fill
 }
 
 /**
@@ -152,91 +120,112 @@ function trackedWidth(ctx: CanvasRenderingContext2D, text: string, tracking: num
 }
 
 /**
- * The primary account number, drawn group by group so each can carry its own
- * ink without re-measuring the run.
+ * The matte body: a flat brand orange, a fine woven tooth, and a vignette.
+ *
+ * Flat is the hard part. The reference card has no gradient across it at all —
+ * it is one colour of pigmented PVC — and a body drawn as a literal flat fill
+ * comes out looking like coloured paper, because a real matte surface is never
+ * uniform at close range. The tooth is what fixes that, and it has to be laid
+ * in the ALBEDO rather than left to the material's roughness: roughness varies
+ * the highlight, and this card is matte precisely so that it has almost no
+ * highlight to vary.
+ *
+ * The hatch pitch is deliberately coarse enough to survive mipmapping. Finer
+ * would be more faithful to the photograph and would turn into a moiré the
+ * moment the card is seen at an angle, which is most of the time here.
  */
-function drawCardNumber(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  baseline: number,
-  style: CardNumberStyle,
-): void {
-  ctx.save()
-  ctx.font = style.font
-  ctx.textBaseline = 'alphabetic'
-  ctx.textAlign = 'left'
-  ctx.shadowColor = style.shadow
-  ctx.shadowBlur = 10
-  ctx.shadowOffsetY = 3
-
-  const groups = CARD_NUMBER.split(' ')
-  const spaceAdvance = ctx.measureText(' ').width + style.tracking
-
-  let cursor = x
-  groups.forEach((group, index) => {
-    ctx.fillStyle = index === groups.length - 1 ? style.lastGroup : style.leadingGroups
-    fillTracked(ctx, group, cursor, baseline, style.tracking)
-    cursor += trackedWidth(ctx, group, style.tracking) + spaceAdvance
-  })
-  ctx.restore()
-}
-
-/** Three stacked bars, the mark that precedes the wordmark. */
-function drawBrandMark(ctx: CanvasRenderingContext2D, x: number, y: number, width: number): void {
-  const barHeight = 13
-  const gap = 7
+function fillMatteBody(ctx: CanvasRenderingContext2D, body: string): void {
+  ctx.fillStyle = body
+  ctx.fillRect(0, 0, WIDTH, HEIGHT)
 
   ctx.save()
-  ctx.fillStyle = '#ffffff'
-  for (let index = 0; index < 3; index++) {
-    ctx.beginPath()
-    ctx.roundRect(x, y + index * (barHeight + gap), width, barHeight, barHeight / 2)
-    ctx.fill()
+  ctx.lineWidth = 1
+  const pitch = 5
+  // Two crossing runs rather than one: a single direction reads as brushing,
+  // and the reference's tooth is woven.
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)'
+  ctx.beginPath()
+  for (let x = -HEIGHT; x < WIDTH; x += pitch) {
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x + HEIGHT, HEIGHT)
   }
+  ctx.stroke()
+
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.035)'
+  ctx.beginPath()
+  for (let x = 0; x < WIDTH + HEIGHT; x += pitch) {
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x - HEIGHT, HEIGHT)
+  }
+  ctx.stroke()
   ctx.restore()
+
+  // Corners fall away slightly, which is what a card photographed on a flat
+  // surface does. Radial rather than linear so no edge is favoured.
+  const vignette = ctx.createRadialGradient(
+    WIDTH * 0.45,
+    HEIGHT * 0.4,
+    HEIGHT * 0.2,
+    WIDTH * 0.5,
+    HEIGHT * 0.5,
+    WIDTH * 0.72,
+  )
+  vignette.addColorStop(0, 'rgba(0, 0, 0, 0)')
+  vignette.addColorStop(1, 'rgba(60, 20, 0, 0.16)')
+  ctx.fillStyle = vignette
+  ctx.fillRect(0, 0, WIDTH, HEIGHT)
 }
 
 /**
- * The gold contact plate: three stacked rounded bars, each cut in half by a
- * vertical divider. That is the module layout on the reference card, and it
- * reads at a glance where a generic contact grid turns to mush.
+ * The EMV contact plate.
+ *
+ * Eight pads around a central module, which is the layout on the reference and
+ * on every chip card in a pocket. The earlier three-bar version read as a chip
+ * at thumbnail size and as nothing in particular once the card fills the
+ * screen, which on this piece it does.
+ *
+ * The pad gaps are drawn as strokes over the plate rather than as gaps between
+ * filled pads, so the chip stays fully opaque for the ink-coverage mask — the
+ * material reads this texture's alpha, and a hole here punches through the
+ * print.
  */
 function drawChip(ctx: CanvasRenderingContext2D, rect: Rect): void {
   const { x, y, width, height } = rect
 
   const gold = ctx.createLinearGradient(x, y, x + width, y + height)
-  gold.addColorStop(0, '#e8cd86')
-  gold.addColorStop(0.45, '#d4af5a')
-  gold.addColorStop(1, '#a8842f')
+  gold.addColorStop(0, '#f0dcae')
+  gold.addColorStop(0.42, '#d9bd7f')
+  gold.addColorStop(1, '#b2914c')
 
   ctx.save()
   ctx.beginPath()
-  ctx.roundRect(x, y, width, height, 14)
+  ctx.roundRect(x, y, width, height, 12)
   ctx.fillStyle = gold
   ctx.fill()
 
-  const padX = 14
-  const padY = 13
-  const barLeft = x + padX
-  const barWidth = width - padX * 2
-  const gap = 9
-  const barHeight = (height - padY * 2 - gap * 2) / 3
-  const dividerWidth = 6
-  const dividerX = barLeft + (barWidth - dividerWidth) / 2
+  ctx.clip()
+  ctx.strokeStyle = 'rgba(74, 56, 20, 0.55)'
+  ctx.lineWidth = 3.5
 
-  for (let index = 0; index < 3; index++) {
-    const barTop = y + padY + index * (barHeight + gap)
+  // Two horizontal gaps split the plate into three bands, and one vertical gap
+  // splits the outer bands into pads. The middle band keeps its own island.
+  const thirdY = height / 3
+  ctx.beginPath()
+  ctx.moveTo(x, y + thirdY)
+  ctx.lineTo(x + width, y + thirdY)
+  ctx.moveTo(x, y + thirdY * 2)
+  ctx.lineTo(x + width, y + thirdY * 2)
+  ctx.moveTo(x + width / 2, y)
+  ctx.lineTo(x + width / 2, y + thirdY)
+  ctx.moveTo(x + width / 2, y + thirdY * 2)
+  ctx.lineTo(x + width / 2, y + height)
+  ctx.stroke()
 
-    ctx.beginPath()
-    ctx.roundRect(barLeft, barTop, barWidth, barHeight, barHeight / 2)
-    ctx.fillStyle = 'rgba(58, 42, 12, 0.55)'
-    ctx.fill()
-
-    // The divider is painted back in with the plate's own gold rather than
-    // erased, so the chip stays fully opaque for the ink-coverage mask.
-    ctx.fillStyle = gold
-    ctx.fillRect(dividerX, barTop, dividerWidth, barHeight)
-  }
+  // The module: a rounded island in the middle band, the one feature that
+  // separates a chip from a grid of squares.
+  ctx.beginPath()
+  ctx.roundRect(x + width * 0.24, y + thirdY + height * 0.06, width * 0.52, thirdY - height * 0.12, 5)
+  ctx.stroke()
   ctx.restore()
 }
 
@@ -256,202 +245,144 @@ function drawContactless(ctx: CanvasRenderingContext2D, options: ContactlessOpti
   ctx.restore()
 }
 
-function drawMastercard(
-  ctx: CanvasRenderingContext2D,
-  centerX: number,
-  centerY: number,
-  radius: number,
-  palette: MastercardPalette,
-): void {
-  const offset = radius * 0.62
-  const leftX = centerX - offset
-  const rightX = centerX + offset
-
+/**
+ * The wordmark, in the brand's own two-part construction.
+ *
+ * "Naranja" and "X" are one word set in one weight and one colour — the split
+ * the page header makes, tinting the X, is a UI affordance and not the logo.
+ * The reference card sets the whole thing in white, and a card is where a brand
+ * is least free to improvise.
+ *
+ * Returns the advance it consumed so the sub-brand line beneath can be placed
+ * against the mark rather than against a number copied from here.
+ */
+function drawWordmark(ctx: CanvasRenderingContext2D, x: number, baseline: number): number {
   ctx.save()
-  ctx.fillStyle = palette.red
-  ctx.beginPath()
-  ctx.arc(leftX, centerY, radius, 0, TAU)
-  ctx.fill()
-
-  ctx.fillStyle = palette.amber
-  ctx.beginPath()
-  ctx.arc(rightX, centerY, radius, 0, TAU)
-  ctx.fill()
-
-  // The overlap is painted explicitly instead of letting a translucent amber
-  // circle blend into the red. No alpha can reach the brand's overlap hue —
-  // it is more saturated than either circle — and any alpha below 1 would also
-  // let the card body bleed through the amber lobe.
-  ctx.beginPath()
-  ctx.arc(leftX, centerY, radius, 0, TAU)
-  ctx.clip()
-  ctx.beginPath()
-  ctx.arc(rightX, centerY, radius, 0, TAU)
-  ctx.clip()
-  ctx.fillStyle = palette.overlap
-  ctx.fillRect(centerX - radius * 2, centerY - radius, radius * 4, radius * 2)
+  ctx.fillStyle = '#ffffff'
+  ctx.font = '600 76px sans-serif'
+  ctx.textBaseline = 'alphabetic'
+  ctx.textAlign = 'left'
+  fillTracked(ctx, 'NaranjaX', x, baseline, -1)
+  const advance = trackedWidth(ctx, 'NaranjaX', -1)
   ctx.restore()
-}
-
-/** The teal-to-mint sweep both faces are built on, deeper at the lower left. */
-function fillMintBody(ctx: CanvasRenderingContext2D, deep: string, pale: string): void {
-  const mint = ctx.createLinearGradient(0, HEIGHT, WIDTH, 0)
-  mint.addColorStop(0, deep)
-  mint.addColorStop(1, pale)
-  ctx.fillStyle = mint
-  ctx.fillRect(0, 0, WIDTH, HEIGHT)
+  return advance
 }
 
 /**
- * Mint everywhere, then graphite composited over its left side.
+ * The network mark, set rather than drawn as artwork.
  *
- * The graphite half arrives through its own alpha mask instead of a clipped
- * path: a clip leaves a one-pixel step that crawls and shimmers once the card
- * is seen at an angle, while a feathered ramp resolves cleanly at any tilt.
- * The mask is accumulated on a third surface because `destination-in` acts on
- * the whole canvas, so it cannot be applied scanline by scanline in place.
+ * Right-aligned off `NETWORK_RIGHT`, because the thing that has to stay put is
+ * its right edge against the card's — a left-aligned mark drifts across the
+ * corner the moment the host substitutes a wider italic.
  */
-function drawFrontBody(ctx: CanvasRenderingContext2D): void {
-  fillMintBody(ctx, '#4fb3ab', '#8fd8cc')
-
-  const graphiteLayer = createSurface(WIDTH, HEIGHT)
-  const graphite = graphiteLayer.createLinearGradient(0, 0, WIDTH * 0.6, HEIGHT)
-  graphite.addColorStop(0, '#33383e')
-  graphite.addColorStop(0.55, '#24282e')
-  graphite.addColorStop(1, '#1b1e22')
-  graphiteLayer.fillStyle = graphite
-  graphiteLayer.fillRect(0, 0, WIDTH, HEIGHT)
-
-  const maskLayer = createSurface(WIDTH, HEIGHT)
-  for (let y = 0; y < HEIGHT; y++) {
-    // Sampling the curve at the row's centre keeps the seam symmetric about it.
-    const boundary = seamXAt(y + 0.5)
-    const ramp = maskLayer.createLinearGradient(
-      boundary - SEAM_FEATHER,
-      0,
-      boundary + SEAM_FEATHER,
-      0,
-    )
-    ramp.addColorStop(0, 'rgba(0, 0, 0, 1)')
-    ramp.addColorStop(1, 'rgba(0, 0, 0, 0)')
-    maskLayer.fillStyle = ramp
-    maskLayer.fillRect(0, y, boundary + SEAM_FEATHER, 1)
-  }
-
-  graphiteLayer.globalCompositeOperation = 'destination-in'
-  graphiteLayer.drawImage(maskLayer.canvas, 0, 0)
-
-  ctx.drawImage(graphiteLayer.canvas, 0, 0)
-}
-
-function drawFront(ctx: CanvasRenderingContext2D): void {
-  drawFrontBody(ctx)
-
-  const brandTop = MARGIN + 44
-  drawBrandMark(ctx, MARGIN + 24, brandTop, 54)
-
+function drawNetworkMark(ctx: CanvasRenderingContext2D): void {
   ctx.save()
   ctx.fillStyle = '#ffffff'
-  ctx.font = '900 60px sans-serif'
+  ctx.font = 'italic 800 62px sans-serif'
+  ctx.textBaseline = 'alphabetic'
+  ctx.textAlign = 'right'
+  ctx.fillText('VISA', NETWORK_RIGHT, NETWORK_BASELINE)
+  ctx.restore()
+}
+
+/** The primary account number, one ink and one run — it crosses nothing. */
+function drawCardNumber(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  baseline: number,
+  style: CardNumberStyle,
+): void {
+  ctx.save()
+  ctx.font = style.font
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
-  fillTracked(ctx, 'FACEBANK', MARGIN + 96, brandTop + 48, -2.5)
+  ctx.fillStyle = style.ink
+  ctx.shadowColor = style.shadow
+  ctx.shadowBlur = 10
+  ctx.shadowOffsetY = 3
+  fillTracked(ctx, CARD_NUMBER, x, baseline, style.tracking)
   ctx.restore()
+}
+
+/**
+ * The face the card is recognised by: flat orange, the mark, the network, and
+ * the two pieces of hardware. Nothing else.
+ *
+ * The restraint is the design. Every element removed from here is one the eye
+ * does not have to sort past before it reaches the mark, and this card is seen
+ * for a fraction of a second at a time inside a moving stack.
+ */
+function drawFront(ctx: CanvasRenderingContext2D): void {
+  fillMatteBody(ctx, BODY_ORANGE)
 
   drawChip(ctx, CHIP)
-
-  drawCardNumber(ctx, TEXT_LEFT, NUMBER_BASELINE, {
-    font: 'bold 56px sans-serif',
-    tracking: 2,
-    leadingGroups: '#ffffff',
-    // The run outgrows the graphite half, so the trailing group is toned down
-    // to a desaturated teal that keeps its contrast against the mint side.
-    lastGroup: '#a9d9d2',
-    shadow: 'rgba(8, 14, 18, 0.35)',
+  drawContactless(ctx, {
+    ...CONTACTLESS,
+    // White, matching the print rather than the plate. On the reference this
+    // symbol belongs to the ink layer, not to the chip it sits beside.
+    color: 'rgba(255, 255, 255, 0.95)',
+    lineWidth: 9,
   })
+
+  drawWordmark(ctx, WORDMARK_LEFT, WORDMARK_BASELINE)
 
   ctx.save()
-  ctx.fillStyle = 'rgba(214, 224, 228, 0.92)'
-  ctx.font = '700 20px sans-serif'
+  // Lighter than the mark and noticeably smaller: it names the product, and a
+  // sub-brand set at the mark's weight competes with it for the same glance.
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.88)'
+  ctx.font = '400 40px sans-serif'
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
-  fillTracked(ctx, 'VALID THRU', TEXT_LEFT, CAPTION_BASELINE, 4)
-
-  ctx.fillStyle = '#ffffff'
-  ctx.font = 'bold 38px sans-serif'
-  fillTracked(ctx, EXPIRY, TEXT_LEFT, EXPIRY_BASELINE, 1)
-
-  // The name is the longest line on this face and the seam is at its narrowest
-  // down here, so its ink flips to slate past the boundary rather than
-  // disappearing into the mint if the host's metrics run wide.
-  ctx.fillStyle = createSeamFill(ctx, NAME_BASELINE - 14, '#ffffff', '#1d2b33')
-  ctx.font = 'bold 40px sans-serif'
-  fillTracked(ctx, CARDHOLDER, TEXT_LEFT, NAME_BASELINE, 1.5)
+  fillTracked(ctx, 'Crédito', WORDMARK_LEFT + 4, SUBBRAND_BASELINE, 0.5)
   ctx.restore()
 
-  drawContactless(ctx, {
-    x: 838,
-    y: 192,
-    radius: 88,
-    color: 'rgba(16, 22, 26, 0.85)',
-    lineWidth: 12,
-  })
-
-  drawMastercard(ctx, 876, 512, 56, {
-    red: '#eb001b',
-    amber: '#f79e1b',
-    overlap: '#ff5f00',
-  })
+  drawNetworkMark(ctx)
 }
 
 /**
- * The reverse carries the same furniture as the front on an unbroken mint
- * body: no graphite region, no wordmark, and — per the spec sheet — no
- * magnetic stripe, so every mark keeps the front's coordinates.
+ * The reverse, which is where the account data went.
+ *
+ * A deeper orange than the front and the same tooth over it. Deeper because the
+ * back of a real card is the same pigment under a different finish and reads a
+ * shade heavier, and because it gives the white print something to sit on: this
+ * face carries far more type than the front and it is the one place on the card
+ * where white on orange has to be legible rather than merely branded.
  */
 function drawBack(ctx: CanvasRenderingContext2D): void {
-  fillMintBody(ctx, '#5cbdb4', '#a5ded2')
+  fillMatteBody(ctx, '#e06a05')
 
-  drawChip(ctx, CHIP)
+  // The signature panel, the only light field on either face. Kept because the
+  // number sits above it and needs the eye to have somewhere to stop.
+  ctx.save()
+  ctx.fillStyle = 'rgba(255, 248, 240, 0.92)'
+  ctx.beginPath()
+  ctx.roundRect(MARGIN, 120, WIDTH - MARGIN * 2, 76, 6)
+  ctx.fill()
+  ctx.restore()
 
-  const slate = '#20303a'
   drawCardNumber(ctx, TEXT_LEFT, NUMBER_BASELINE, {
-    font: 'bold 56px sans-serif',
+    font: 'bold 54px sans-serif',
     tracking: 2,
-    // Nothing crosses a boundary here, so the whole run shares one ink.
-    leadingGroups: slate,
-    lastGroup: slate,
-    shadow: 'rgba(18, 52, 52, 0.25)',
+    ink: '#ffffff',
+    shadow: 'rgba(96, 34, 0, 0.35)',
   })
 
   ctx.save()
-  ctx.fillStyle = 'rgba(32, 48, 58, 0.85)'
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
   ctx.font = '700 20px sans-serif'
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
   fillTracked(ctx, 'VALID THRU', TEXT_LEFT, CAPTION_BASELINE, 4)
 
-  ctx.fillStyle = slate
+  ctx.fillStyle = '#ffffff'
   ctx.font = 'bold 38px sans-serif'
   fillTracked(ctx, EXPIRY, TEXT_LEFT, EXPIRY_BASELINE, 1)
 
-  ctx.font = 'bold 40px sans-serif'
+  ctx.font = 'bold 38px sans-serif'
   fillTracked(ctx, CARDHOLDER, TEXT_LEFT, NAME_BASELINE, 1.5)
   ctx.restore()
 
-  drawContactless(ctx, {
-    x: 838,
-    y: 192,
-    radius: 88,
-    color: 'rgba(16, 22, 26, 0.85)',
-    lineWidth: 12,
-  })
-
-  drawMastercard(ctx, 876, 512, 56, {
-    red: '#eb001b',
-    amber: '#f79e1b',
-    overlap: '#ff5f00',
-  })
+  drawNetworkMark(ctx)
 }
 
 /**

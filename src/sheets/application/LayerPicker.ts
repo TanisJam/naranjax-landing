@@ -128,6 +128,12 @@ export class LayerPicker {
   /** Scratch for the hovered plate's face normal. Reused, never handed out. */
   private readonly faceNormal = new Vector3()
 
+  /**
+   * The camera the last frame picked against. Kept so a click can be resolved
+   * outside the frame loop, which is the only place a click ever arrives.
+   */
+  private camera: Camera | null = null
+
   /** Built once: this is walked several times per frame now, not once. */
   private readonly targets: Object3D[]
   private readonly byHitArea = new Map<Object3D, SheetObject>()
@@ -197,7 +203,43 @@ export class LayerPicker {
     return this.hovered
   }
 
+  /**
+   * Which layer sits under a point on the panel, in client coordinates.
+   *
+   * Separate from `hovered` on purpose, and the reason is the touch guard in
+   * `onPointerMove`: a touch pointer never feeds this class a sample, so
+   * `hovered` is permanently null on a phone and a tap resolved through it
+   * would hit nothing. A TAP has a position even where a hover has no meaning,
+   * and this is what reads it — one raycast, on demand, against the transforms
+   * the last frame drew.
+   *
+   * Those transforms are a frame old, which is exactly right: they are the ones
+   * that were on screen when the user aimed.
+   *
+   * Safe to share the scratch vectors with `resolve`, because a click arrives
+   * between frames and never during one.
+   */
+  pickAt(clientX: number, clientY: number): SheetObject | null {
+    const camera = this.camera
+    if (!camera) return null
+
+    const rect = this.element.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return null
+
+    this.ndc.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    this.raycaster.setFromCamera(this.ndc, camera)
+    const hit = this.raycaster.intersectObjects(this.targets, false)[0]
+    return hit ? (this.byHitArea.get(hit.object) ?? null) : null
+  }
+
   update(camera: Camera): void {
+    // Before the guards below: a disabled picker still has to be able to answer
+    // a click, and the camera is the one thing it cannot reconstruct.
+    this.camera = camera
+
     const count = this.pending
     this.pending = 0
 
