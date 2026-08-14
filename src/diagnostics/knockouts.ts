@@ -38,6 +38,22 @@ import type { SceneOrchestrator } from '../sheets/application/SceneOrchestrator'
 const SETTLE_MS = 400
 const MEASURE_MS = 1200
 
+/**
+ * Drawn and thrown away before the first baseline is taken.
+ *
+ * A GPU that has been idle is not running at the clocks it will settle on, and
+ * the first seconds of a sweep are therefore measured on a different device
+ * from the last. The first run of the timer-based version of this instrument
+ * read 11.09 gpu ms at the top and 31.16 at the bottom — a drift nearly three
+ * times the largest effect in the table, which cost the whole run.
+ *
+ * Bracketing cancels drift to first order, but only drift that is roughly
+ * LINEAR across the two baselines around a reading. A clock ramp is a curve at
+ * the start and flat afterwards, so the honest fix is to not measure the curve:
+ * spend a couple of seconds getting there first.
+ */
+const WARMUP_MS = 2500
+
 function median(samples: number[]): number {
   if (samples.length === 0) return 0
   const sorted = [...samples].sort((a, b) => a - b)
@@ -490,8 +506,13 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
         )
       }
 
+      // Nothing is read off this. It exists so the first baseline is taken on a
+      // GPU already at its running clocks — see `WARMUP_MS`.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, WARMUP_MS))
+      timer.take()
+
       const baselines = [await measure(timer)]
-      const measured: [label: string, reading: Reading, bracket: Reading][] = []
+      const measured: [label: string, reading: Reading, bracket: Reading, spread: number][] = []
 
       for (const [label, off, on] of trials) {
         off()
@@ -502,15 +523,19 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
         // The two that sandwich this reading, and no others.
         const before = baselines[baselines.length - 2]!
         const after = baselines[baselines.length - 1]!
-        measured.push([
-          label,
-          reading,
-          {
-            interval: (before.interval + after.interval) / 2,
-            gpu:
-              before.gpu !== null && after.gpu !== null ? (before.gpu + after.gpu) / 2 : null,
-          },
-        ])
+        const bracket: Reading = {
+          interval: (before.interval + after.interval) / 2,
+          gpu: before.gpu !== null && after.gpu !== null ? (before.gpu + after.gpu) / 2 : null,
+        }
+        // How far the machine moved UNDER THIS ROW specifically. The global
+        // drift condemns the whole table at once, which is too blunt: a sweep
+        // where the machine sagged during one trial still has four good rows in
+        // it, and this is what tells them apart.
+        const spread =
+          before.gpu !== null && after.gpu !== null
+            ? Math.abs(after.gpu - before.gpu)
+            : Math.abs(after.interval - before.interval)
+        measured.push([label, reading, bracket, spread])
       }
 
       timer.detach()
@@ -518,7 +543,9 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
 
       // Which column the verdict is taken from. The GPU one whenever the driver
       // gave it, because it is the only one that can carry a small number.
-      const usingGpu = measured.every(([, reading, bracket]) => reading.gpu !== null && bracket.gpu !== null)
+      const usingGpu = measured.every(
+        ([, reading, bracket]) => reading.gpu !== null && bracket.gpu !== null,
+      )
       const figure = (reading: Reading): number => (usingGpu ? reading.gpu! : reading.interval)
 
       // A reading is only a floor when something ELSE reached the same wall.
@@ -533,13 +560,22 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
       const atFloor = intervals.filter((ms) => ms <= floor * 1.03).length
 
       const rows: Record<string, Record<string, string>> = {}
-      for (const [label, reading, bracket] of measured) {
+      for (const [label, reading, bracket, spread] of measured) {
         const capped = atFloor > 1 && reading.interval <= floor * 1.03
+        const saves = usingGpu ? bracket.gpu! - reading.gpu! : bracket.interval - reading.interval
         rows[label] = usingGpu
           ? {
               'gpu ms': reading.gpu!.toFixed(2),
               'gpu baseline': bracket.gpu!.toFixed(2),
-              saves: `${(bracket.gpu! - reading.gpu!).toFixed(2)} ms`,
+              saves: `${saves.toFixed(2)} ms`,
+              // The row's own verdict. A saving smaller than how far the
+              // machine moved underneath it is not a small saving, it is no
+              // reading at all — and saying so per row keeps the good rows of a
+              // partly-spoiled sweep usable.
+              verdict:
+                Math.abs(saves) <= spread
+                  ? `lost in drift (±${spread.toFixed(2)})`
+                  : `drift ±${spread.toFixed(2)}`,
               'interval ms': `${reading.interval.toFixed(1)}${capped ? ' (at vsync)' : ''}`,
             }
           : {
@@ -559,6 +595,9 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
       const largest = Math.max(
         ...measured.map(([, reading, bracket]) => Math.abs(figure(bracket) - figure(reading))),
       )
+      const survivors = measured.filter(
+        ([, reading, bracket, spread]) => Math.abs(figure(bracket) - figure(reading)) > spread,
+      )
       const unit = usingGpu ? 'gpu ms' : 'ms interval'
 
       console.log(
@@ -568,7 +607,10 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
       // table looks exactly as authoritative either way.
       if (drift > largest) {
         console.warn(
-          `The machine moved ${drift.toFixed(2)} ${unit} during the sweep and the largest effect measured is ${largest.toFixed(2)}. Nothing in that table is a measurement. Close what else is running and try again.`,
+          `The machine moved ${drift.toFixed(2)} ${unit} across the whole sweep and the largest effect measured is ${largest.toFixed(2)}. ` +
+            (survivors.length > 0
+              ? `Read the per-row verdict rather than the table as a whole — ${survivors.length} of ${measured.length} rows still cleared their own bracket: ${survivors.map(([label]) => label).join(', ')}.`
+              : 'No row cleared its own bracket. Nothing in that table is a measurement. Close what else is running and try again.'),
         )
       }
 
