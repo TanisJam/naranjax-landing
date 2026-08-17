@@ -88,6 +88,16 @@ const applyMotionPreference = (): void => {
   // point; the layer travelling to deliver it is not.
   orchestrator.timeline.hoverSlide = still ? 0 : motion.hoverSlide
   if (orchestrator.parallax) orchestrator.parallax.enabled = !still
+  // And the backdrop behind an opened layer fades over exactly as long as that
+  // layer travels, in each direction, because it is the same gesture. It used
+  // to be 420ms authored into the stylesheet against a duration decoded from an
+  // mp3 — two numbers for one movement, agreeing only by hand, and the one that
+  // finished first left the other to be cut off partway. Written from here
+  // because this is already the one place that knows both the cue lengths and
+  // whether the user asked for stillness.
+  const root = document.documentElement.style
+  root.setProperty('--framed-in', `${(still ? 0 : motion.focus) * 1000}ms`)
+  root.setProperty('--framed-out', `${(still ? 0 : motion.focusReturn) * 1000}ms`)
 }
 applyMotionPreference()
 reducedMotion.addEventListener('change', applyMotionPreference)

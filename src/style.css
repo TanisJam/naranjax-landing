@@ -32,9 +32,25 @@
   --color-ink-200: #e8deed;
 }
 
+/* The backdrop transition lives HERE, on the bare element, and not on the
+   `[data-framed]` rule that turns it dark. Two reasons, and both of them were
+   visible.
+
+   Removing the attribute at the end of a return removed the `transition`
+   declaration along with it, so whatever was left of the fade did not finish —
+   it cut. And a transition declared in the same style change that alters the
+   value it animates is a fragile thing to rely on in the other direction. On
+   the base selector the rule is simply always in force, and both the darkening
+   and the clearing are ordinary transitions with nothing special about their
+   first or last frame.
+
+   The durations come from JS because the numbers are not ours: each direction
+   runs exactly as long as the cue that scores it, and the cue length is decoded
+   from the mp3. The fallbacks here are for the moment before that resolves. */
 #sheets-stage {
   touch-action: none;
   cursor: pointer;
+  transition: background-color var(--framed-out, 420ms) ease;
 }
 
 /* Inset, because the stage is flush with the panel edges and an outline drawn
@@ -80,11 +96,16 @@
   inset: 0;
   z-index: 40;
   pointer-events: none;
-  transition: background-color 420ms ease;
 }
 
+/* Only the opening direction overrides the duration. Clearing the backdrop
+   happens under `closing` and again under no attribute at all, and both of
+   those fall through to the base rule — which is exactly what lets the fade
+   carry on across the moment the attribute is dropped instead of stopping
+   dead in the middle of it. */
 #sheets-stage[data-framed='true'] {
   background-color: var(--color-ink-950);
+  transition-duration: var(--framed-in, 420ms);
 }
 
 /* The text arrives after the growth, never during it. A panel that faded in
@@ -107,7 +128,8 @@
    clicked a layer and the layer's specifications are what they get — it simply
    arrives between two frames instead of sweeping there. */
 @media (prefers-reduced-motion: reduce) {
-  #sheets-stage[data-framed],
+  #sheets-stage,
+  #sheets-stage[data-framed='true'],
   #layer-specs,
   #layer-specs[data-shown='true'] {
     transition-duration: 0ms;
