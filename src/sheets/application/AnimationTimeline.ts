@@ -289,6 +289,35 @@ export class AnimationTimeline {
   framePreserveScale = 1
   readonly framePreserveOffset = new Vector3()
   /**
+   * The point the compensation scales the artwork ABOUT, in world space.
+   *
+   * The camera's aim point, written by `SceneOrchestrator` beside the two
+   * above, and the reason it has to exist at all is a 29-pixel jump that the
+   * scale and the offset together could not remove.
+   *
+   * `framePreserveScale` applied to `artwork.scale` scales the artwork about
+   * its OWN origin, which holds its size exactly right and does nothing for
+   * where that origin lands. And the origin is not on the camera's axis: the
+   * twist nudges the stack 0.14 off centre and the lens aims a little below it.
+   * A point off the axis projects to a pixel distance of itself over the
+   * units-per-pixel, so when the distance and the viewport both change that
+   * distance is drawn at a different size — the artwork slides toward the axis
+   * by everything the two views disagree about.
+   *
+   * Which is a term with a closed form rather than a fudge. The ratio of the
+   * two units-per-pixel IS `framePreserveScale`, so the displacement from the
+   * aim point has to be multiplied by exactly the same number the size is —
+   * i.e. the whole artwork, origin included, scales about the aim point. What
+   * was measured before this existed: 23.5 px across and 16.3 down on a 1440
+   * wide laptop, toward the axis in both, which is the sign this predicts.
+   *
+   * Under the same flat-plate approximation the offset already makes. The stack
+   * is three units deep at seven from the lens, so the near and far plates do
+   * not agree about their units-per-pixel and no rigid transform can hold both.
+   * This holds the middle, which is where the eye is.
+   */
+  readonly framePreserveAnchor = new Vector3()
+  /**
    * Fired once, on the frame the return finishes and the layer is let go.
    *
    * This is the moment — and the only moment — at which the canvas can be given
@@ -304,6 +333,7 @@ export class AnimationTimeline {
   private focusProgress = 0
   /** Scratch for the framing maths. Reused, never handed out. */
   private readonly hinge = new Vector3()
+  private readonly anchored = new Vector3()
   private readonly framed = new Vector3()
   private readonly centred = new Vector3()
   private readonly lifted = new Vector3()
@@ -593,10 +623,34 @@ export class AnimationTimeline {
     // fullscreen. The stack is not what is travelling: it has to go on looking
     // exactly as it did in its column while one of its layers leaves.
     this.artwork.scale.setScalar(lerp(this.closedZoom, 1, reveal) * this.framePreserveScale)
+    // The aim point brought into the artwork's own parent frame, which is the
+    // only frame the position below can be given in.
+    //
+    // By subtracting the float alone. Two groups sit above the artwork and both
+    // of them TURN it, but a rotation about the origin moves the aim point and
+    // the artwork together — it very nearly cancels, because the aim point sits
+    // 0.12 from the origin and a few degrees of parallax across 0.12 units is
+    // under a pixel. The float's LIFT does not cancel: it slides the artwork
+    // bodily off the axis by up to 0.045, which is a few pixels of the term
+    // this is correcting, so it is the one that gets taken off.
+    //
+    // A frame behind, since the float is advanced at the end of this method. At
+    // 0.045 amplitude and 0.55 Hz that is 0.0026 units of lag, which is a fifth
+    // of a pixel and not worth reordering a working loop for.
+    this.anchored.copy(this.framePreserveAnchor).sub(this.floatGroup.position)
     // Set outright rather than assigned per axis: the compensation writes all
     // three, so leaving y and z holding last frame's value would drift.
+    //
+    // Scaled about the AIM POINT rather than left where the deploy puts it, and
+    // that is the difference between a swap nobody sees and one that jumps 29
+    // pixels — see `framePreserveAnchor` for the whole of why. At a preserve
+    // scale of 1 this collapses to the plain pose exactly, so the term costs
+    // nothing and says nothing whenever no canvas has changed size.
     this.artwork.position
       .set(this.centreNudge * reveal, 0, 0)
+      .sub(this.anchored)
+      .multiplyScalar(this.framePreserveScale)
+      .add(this.anchored)
       .add(this.framePreserveOffset)
 
     const windAmount = this.windAmount

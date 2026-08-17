@@ -166,7 +166,8 @@ const specs = new SpecsOverlay({ onDismiss: () => closeSpecs() })
 // the camera and the compensation all change inside the same frame.
 orchestrator.timeline.onFocusRelease = () => {
   delete stage.dataset.framed
-  orchestrator.refresh()
+  // One call, and deliberately: re-measuring the canvas and dropping the
+  // compensation have to happen together or not at all. See `clearReframe`.
   orchestrator.clearReframe()
 }
 

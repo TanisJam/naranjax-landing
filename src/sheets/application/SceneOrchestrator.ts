@@ -290,6 +290,12 @@ export class SceneOrchestrator {
     this.timeline.framePreserveScale =
       (afterDistance / beforeDistance) * (before.height / after.height)
 
+    // What that scale is applied ABOUT. The aim point, because the artwork is
+    // not on it and a point off the axis is drawn at a different distance from
+    // the centre once the camera and the viewport have both changed — see
+    // `framePreserveAnchor`, which carries the measurement.
+    this.timeline.framePreserveAnchor.copy(CAMERA_TARGET)
+
     // World units per pixel at the plane the camera is aimed at.
     const unitsPerPixel =
       (2 * afterDistance * Math.tan((camera.fov * Math.PI) / 360)) / after.height
@@ -306,21 +312,36 @@ export class SceneOrchestrator {
       .applyQuaternion(camera.quaternion)
   }
 
-  /** Drops the compensation, once nothing is relying on it any more. */
-  clearReframe(): void {
+  /**
+   * Gives the canvas back: re-measures it, then drops the compensation.
+   *
+   * Both, here, rather than two calls a caller has to remember to make in
+   * order. `handleResize` declines to do anything at all for a container with
+   * no size, and a compensation dropped while the camera is still framed for a
+   * viewport that is no longer there is not a small error — it is the entire
+   * factor, half again the size of the artwork, between two frames. The two
+   * cannot come apart if only one of them is reachable.
+   *
+   * Returns whether the canvas was actually re-measured, since a caller that
+   * has just changed the layout may want to know its change did not take.
+   */
+  clearReframe(): boolean {
+    if (!this.handleResize()) return false
     this.timeline.framePreserveScale = 1
     this.timeline.framePreserveOffset.set(0, 0, 0)
+    return true
   }
 
-  private handleResize(): void {
+  private handleResize(): boolean {
     const { clientWidth, clientHeight } = this.container
-    if (clientWidth === 0 || clientHeight === 0) return
+    if (clientWidth === 0 || clientHeight === 0) return false
     this.stage.resize(clientWidth, clientHeight)
     // After the stage, which is what sets the drawing buffer the capture has to
     // match texel for texel.
     this.backdrop.resize(this.stage.renderer)
     // And after the camera, which is what this measures.
     this.fitFocus()
+    return true
   }
 
   /**
