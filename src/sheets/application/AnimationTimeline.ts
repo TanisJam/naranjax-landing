@@ -375,12 +375,18 @@ export class AnimationTimeline {
   private readonly bends: number[]
   private readonly restPoses: WindRestPose[]
   /**
-   * The authored horizontal nudge, which exists to answer the twist: the lower
-   * layers swing further left than the upper ones swing right. A closed stack
-   * has no twist to answer, so the nudge rides the deploy and the card sits
-   * dead centre — which is also what buys the margin the closed zoom needs.
+   * The authored nudge, which exists to answer the twist: the lower layers
+   * swing further left than the upper ones swing right. A closed stack has no
+   * twist to answer, so the nudge rides the deploy and the card sits dead
+   * centre — which is also what buys the margin the closed zoom needs.
+   *
+   * A vector rather than the single horizontal number it was, because the
+   * layout it compensates can now be turned — see `setLayoutRotation`. What is
+   * off centre is a property of the LAYOUT, so when the layout turns about the
+   * view axis this has to turn with it or it goes on correcting a direction the
+   * stack no longer leans in. Written from outside, by whoever knows the turn.
    */
-  private readonly centreNudge: number
+  readonly centreNudge = new Vector3()
   /**
    * The two orientations, slerped rather than interpolated per Euler axis.
    *
@@ -403,7 +409,7 @@ export class AnimationTimeline {
     /** Orientation of the closed card, as Euler angles in the artwork's frame. */
     closedPose: readonly [number, number, number],
   ) {
-    this.centreNudge = artwork.position.x
+    this.centreNudge.copy(artwork.position)
     this.explodedOrientation = artwork.quaternion.clone()
     this.closedOrientation = new Quaternion().setFromEuler(new Euler(...closedPose))
     this.hoverAmounts = sheets.map(() => 0)
@@ -658,7 +664,8 @@ export class AnimationTimeline {
     // scale of 1 this collapses to the plain pose exactly, so the term costs
     // nothing and says nothing whenever no canvas has changed size.
     this.artwork.position
-      .set(this.centreNudge * reveal, 0, 0)
+      .copy(this.centreNudge)
+      .multiplyScalar(reveal)
       .sub(this.anchored)
       .multiplyScalar(this.framePreserveScale)
       .add(this.anchored)

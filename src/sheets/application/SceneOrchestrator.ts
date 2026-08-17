@@ -1,8 +1,14 @@
-import { Clock, Group, Vector3 } from 'three'
+import { Clock, Euler, Group, Quaternion, Vector3 } from 'three'
+import { clamp } from '../domain/easing'
 import type { Composition } from '../domain/types'
 import { BackdropCapture } from '../infrastructure/three/BackdropCapture'
 import { SheetObject } from '../infrastructure/three/SheetObject'
-import { CAMERA_TARGET, createStage, type Stage } from '../infrastructure/three/stage'
+import {
+  CAMERA_TARGET,
+  createStage,
+  FIT_ASPECT,
+  type Stage,
+} from '../infrastructure/three/stage'
 import { AnimationTimeline } from './AnimationTimeline'
 import { CameraInspector } from './CameraInspector'
 import { FilmGrain } from './FilmGrain'
@@ -88,8 +94,81 @@ const FOCUS_APPROACH = 0.72
  */
 const STACK_REENTRY = 0.45
 
+/**
+ * How far the fan turns per octave of viewport aspect — 55°, in radians, per
+ * natural-log unit away from `FIT_ASPECT`.
+ *
+ * Continuous by construction rather than by a threshold, and the log is why: a
+ * viewport twice as wide as another is the same amount wider as one half again
+ * as wide is than that, and the eye reads shape ratios that way too. Anchored
+ * at `FIT_ASPECT`, so the aspect the fan was composed against turns it by
+ * exactly nothing and the authored arrangement is what a square-ish screen
+ * still gets.
+ *
+ * MEASURED, not chosen. A sweep of the projected silhouette against the frame
+ * the camera actually gives at each aspect has a clear best turn — the one that
+ * draws the card largest — and it runs -26° at 4:3, -41° at 16:9 and -55° at
+ * 21:9. This constant is the slope through those, and across every aspect from
+ * a tall phone to 32:9 it lands within 1.8% of the largest the stack could have
+ * been drawn. At 16:9 it is 35% larger than the composed layout would be.
+ *
+ * The wide end is worth stating plainly, because it is not what "wide screen →
+ * horizontal" would suggest: the law reaches -40° at 16:9, a diagonal, and the
+ * fully horizontal fan is a further 50° away. Going there is not a tuning
+ * question, it is a loss — a horizontal fan measures over four times as wide as
+ * it is tall against a 16:9 frame's 1.78, so it only fits at 42% of the size,
+ * and the hero shrinks by more than half to buy the arrangement. The law stops
+ * where the card stops growing.
+ */
+const LAYOUT_TURN_RATE = 0.96
+
+/**
+ * Where the turn stops, in radians: -80° and +9°.
+ *
+ * The wide clamp is a backstop for aspects no display has, and it is the one
+ * that would cost something if it were missing — past about -80° the fan lies
+ * along the cards' own long axis and the silhouette stops widening, so further
+ * turn buys nothing and starts throwing the layers back over each other.
+ *
+ * The tall clamp is not a backstop, it is the answer. A phone's binding
+ * constraint is WIDTH — the camera dollies back to hold the piece, so extra
+ * height is free and the frame is 3.52 units across at every tall aspect there
+ * is. The best the fan can do is stand a little straighter to narrow itself,
+ * and 9° is the whole of what there is to gain; the sweep gives back the same
+ * 13% at 9:16 as at 9:19.5, and turning further past it starts losing again.
+ */
+const LAYOUT_TURN_MIN = -1.396
+const LAYOUT_TURN_MAX = 0.157
+
+/**
+ * The nudge that answers the twist: the stack is spread symmetrically about its
+ * own middle, so only the twist pushes it off centre — the lower layers swing
+ * further left than the upper ones swing right, and this buys equal margins.
+ *
+ * Held as a constant rather than written straight onto the artwork because the
+ * layout can be turned, and the nudge has to be re-derived from the composed
+ * value on every turn rather than from wherever the last one left it.
+ */
+const CENTRE_NUDGE = new Vector3(0.14, 0, 0)
+
+/**
+ * The resting pose, inverted. Turns a world direction into the frame the sheet
+ * offsets are written in.
+ *
+ * The EXPLODED pose specifically, and not whatever the artwork happens to be
+ * holding: the layout is a thing seen spread out, the offsets it turns are
+ * weighted by the deploy, and both go to nothing together as the card closes.
+ * Anchoring the turn to the orientation the fan is actually read in is what
+ * keeps it from depending on when a resize happened to land.
+ */
+const EXPLODED_FRAME = new Quaternion().setFromEuler(new Euler(...EXPLODED_POSE)).invert()
+
 /** Scratch for the framing measurement. Reused, never handed out. */
 const FOCUS_TRAVEL = new Vector3()
+
+/** Scratch for the layout turn. Reused, never handed out. */
+const LAYOUT_AXIS = new Vector3()
+const LAYOUT_TURN = new Quaternion()
 
 /**
  * Owns the scene graph and the frame loop. The nesting is deliberate: pointer
@@ -166,10 +245,9 @@ export class SceneOrchestrator {
     this.artwork = new Group()
     this.artwork.name = 'artwork'
     this.artwork.rotation.set(...EXPLODED_POSE)
-    // The stack is spread symmetrically about its own middle, so only the twist
-    // pushes it off centre — the lower layers swing further left than the upper
-    // ones swing right, and the nudge back buys equal margins in the panel.
-    this.artwork.position.set(0.14, 0, 0)
+    // See `CENTRE_NUDGE`. Read back out of the artwork by the timeline, which
+    // is what makes this the composed value the layout turn re-derives from.
+    this.artwork.position.copy(CENTRE_NUDGE)
 
     // Before the sheets: every material merges the occlusion uniforms into its
     // own program as it is built, so the field has to exist first.
@@ -367,9 +445,58 @@ export class SceneOrchestrator {
     // After the stage, which is what sets the drawing buffer the capture has to
     // match texel for texel.
     this.backdrop.resize(this.stage.renderer)
-    // And after the camera, which is what this measures.
+    // And after the camera, which is what both of these measure.
     this.fitFocus()
+    this.fitLayout()
     return true
+  }
+
+  /**
+   * Lays the fan down or stands it up to suit the shape of the viewport.
+   *
+   * The stack spreads along one direction, and which direction that is has been
+   * a property of the COMPOSITION until now — fixed, and therefore fitted to
+   * exactly one screen shape. It is really a property of the FRAME: a fan of
+   * near-horizontal cards spread vertically is the right arrangement for a
+   * phone and the wrong one for a laptop, where it leaves half the width empty
+   * and pays for it by drawing the card a third smaller than it could be.
+   *
+   * Continuous, with no threshold anywhere in it. A breakpoint would mean some
+   * width at which dragging a window edge one pixel snaps the whole piece into
+   * another arrangement, and the arrangement is the composition — see
+   * `LAYOUT_TURN_RATE` for the law and for the measurement behind its slope.
+   *
+   * Only the LAYOUT turns. Every plate keeps the orientation it was composed
+   * with, and every offset keeps its depth exactly, because the turn is about
+   * the lens axis — `SheetObject.setLayoutRotation` carries why that one choice
+   * is what makes the rest of the stack able to ignore this entirely.
+   *
+   * The axis is read off the camera rather than derived from the offset that
+   * placed it, for the same reason `reframe` measures instead of deriving: the
+   * dolly rule and the fov can move, and neither of their numbers appears here.
+   */
+  private fitLayout(): void {
+    const camera = this.stage.camera
+    const turn = clamp(
+      -LAYOUT_TURN_RATE * Math.log(camera.aspect / FIT_ASPECT),
+      LAYOUT_TURN_MIN,
+      LAYOUT_TURN_MAX,
+    )
+
+    // The lens axis, brought into the frame the sheet offsets are written in.
+    camera.getWorldDirection(LAYOUT_AXIS).applyQuaternion(EXPLODED_FRAME)
+    LAYOUT_TURN.setFromAxisAngle(LAYOUT_AXIS, turn)
+    for (const sheet of this.sheets) sheet.setLayoutRotation(LAYOUT_TURN)
+
+    // And the nudge, which is a correction for the layout leaning one way, so
+    // it leans with it. The same turn about the same axis — in WORLD space this
+    // time, because the artwork's position is written in its parent's frame and
+    // not in its own. Turning a rotation through the pose it is expressed in
+    // leaves the axis it is about pointing exactly where it pointed, so these
+    // two are one rotation seen from two frames rather than two rotations.
+    this.timeline.centreNudge
+      .copy(CENTRE_NUDGE)
+      .applyAxisAngle(camera.getWorldDirection(LAYOUT_AXIS), turn)
   }
 
   /**

@@ -232,8 +232,14 @@ function createLighting(scene: Scene): DirectionalLight {
  * this and the fixed vertical fov starts cropping the sheets sideways, so the
  * camera dollies back instead of widening — a wider fov would buy the width
  * back at the cost of the long-lens look the whole composition depends on.
+ *
+ * Exported because it is also the aspect the LAYOUT was composed against, and
+ * that is not a coincidence to be restated in a second constant: the fan was
+ * tuned until it filled this frame, which is the same condition that put the
+ * dolly rule here. See `fitLayout`, which turns the fan away from the composed
+ * arrangement by how far the viewport has drifted from this.
  */
-const FIT_ASPECT = 0.86
+export const FIT_ASPECT = 0.86
 
 /**
  * Where the camera looks, and therefore where the middle of the frame is.
