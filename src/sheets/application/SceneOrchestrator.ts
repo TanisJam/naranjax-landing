@@ -77,7 +77,12 @@ export class SceneOrchestrator {
   readonly artwork: Group
   private readonly stackOrder: StackOrder
   private readonly stackOcclusion: StackOcclusion
-  private readonly backdrop: BackdropCapture
+  /**
+   * Public for the same reason `resolution` is: the capture stride is a cost
+   * knob the diagnostics have to be able to move, and its effect is only
+   * observable while the piece is running.
+   */
+  readonly backdrop: BackdropCapture
   private readonly film: FilmGrain
 
   private readonly parallaxGroup = new Group()
@@ -381,6 +386,9 @@ export class SceneOrchestrator {
     // Advanced on elapsed time rather than per frame — the grain is an exposure,
     // not a redraw. See `SHUTTER_HZ`.
     this.film.update(delta)
+    // Before the draw, never after: the capture stride counts layers within a
+    // frame, so it has to start from zero on the frame it is counting.
+    this.backdrop.beginFrame()
     this.stage.renderer.render(this.stage.scene, this.stage.camera)
 
     // After the draw, so the interval spans a whole frame including whatever

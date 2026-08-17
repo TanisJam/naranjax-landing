@@ -20,8 +20,44 @@ import { FramebufferTexture, LinearFilter, Vector2, type IUniform, type WebGLRen
  * therefore samples the frame as it stood when IT captured — the state of
  * everything behind it and nothing in front. A second capture overwriting the
  * texture cannot reach backwards into a draw call that already ran.
+ *
+ * WHAT THE COPY COSTS, because it is not what it looks like. Four of these
+ * measured 3.48 gpu ms of a 7.3 ms frame, reproduced across two sweeps, while
+ * the eleven-tap spiral every frosted fragment walks measured 0.02 ms. The
+ * blur is free and the copies are half the frame, which is the reverse of the
+ * intuition and the reverse of where an afternoon of optimisation would go.
+ *
+ * The reason is that it is not bandwidth. Four copies of a 1.5 M texel buffer
+ * is about 6 MB, which an M3 moves in microseconds; 0.87 ms EACH is per-call
+ * overhead, because `copyFramebufferToTexture` breaks the render pass — the
+ * driver has to end the pass, resolve, copy, and start another one. So the
+ * quantity to reduce is the NUMBER of captures. Making the texture smaller
+ * attacks the one term that was never the problem.
  */
 export class BackdropCapture {
+  /**
+   * How many frosted layers share one capture.
+   *
+   * 1 is the exact behaviour described above and 2 is what ships, which halves
+   * the render-pass breaks. What a shared capture costs is precise and small:
+   * the layers draw back to front, so a layer that reuses the previous capture
+   * is missing exactly ONE plate behind it — the frosted layer that captured.
+   * Not an arbitrary amount of the scene, one sheet.
+   *
+   * And that sheet is the best possible one to lose. It is itself translucent,
+   * it is immediately behind, and it is about to be put through a blur wide
+   * enough to dissolve it: the frost kernel cannot resolve a single film's
+   * contribution at that radius, so what is dropped is a difference the effect
+   * was going to destroy anyway. That is the whole argument for sharing, and it
+   * is why this is a stride over the DRAW ORDER rather than a cap on the count
+   * — the layers that share are always neighbours, never distant.
+   *
+   * Above 2 the reasoning stops holding, because then a layer is missing plates
+   * it has real separation from and the stack starts looking like it is frosting
+   * the page instead of itself.
+   */
+  stride = 2
+
   readonly uniforms: {
     uBackdrop: IUniform<FramebufferTexture>
     /** 1 / drawing buffer size, so the shader can work in pixels. */
@@ -31,6 +67,8 @@ export class BackdropCapture {
   private texture: FramebufferTexture
   private width = 0
   private height = 0
+  /** How many layers have asked to capture since `beginFrame`. */
+  private asked = 0
 
   constructor() {
     this.texture = BackdropCapture.createTexture(1, 1)
@@ -71,9 +109,29 @@ export class BackdropCapture {
     this.uniforms.uBackdropTexel.value.set(1 / width, 1 / height)
   }
 
-  /** Freezes everything drawn so far. Called immediately before a layer draws. */
+  /**
+   * Resets the stride. Called once per frame, before anything draws.
+   *
+   * Counted per frame rather than held across frames on purpose: the stride has
+   * to land on the same layers every frame, or the ones that share would take
+   * turns being a frame stale and the stack would shimmer.
+   */
+  beginFrame(): void {
+    this.asked = 0
+  }
+
+  /**
+   * Freezes everything drawn so far. Called immediately before a layer draws.
+   *
+   * Counting here rather than deciding at construction time is what keeps this
+   * correct as the draw order changes — `StackOrder` reverses the stack when it
+   * turns and lifts a layer out when one is opened, and the layers that ought
+   * to share a capture are whichever ones end up adjacent AFTER that.
+   */
   capture(renderer: WebGLRenderer): void {
     if (this.width === 0) return
+    const turn = this.asked++
+    if (turn % this.stride !== 0) return
     renderer.copyFramebufferToTexture(this.texture)
   }
 
