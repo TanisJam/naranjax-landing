@@ -22,9 +22,27 @@ import type { SceneOrchestrator } from '../sheets/application/SceneOrchestrator'
  * pays for the exception by forcing the rebuild inside its own call, so the
  * stall is over before anything is timed. See it for the whole argument.
  *
- * Read each one against the interval, not the frame rate — the difference
- * between 25 ms and 17 ms is the size of the thing you just switched off, and
- * the difference between 40 fps and 59 is not proportional to anything.
+ * Read each one against GPU MILLISECONDS, which is the column `sweep` leads
+ * with wherever the driver will give it. Not the frame rate, and — since this
+ * piece started holding 60 — not the frame interval either: an interval that is
+ * sitting on vsync reports the same number whatever you switch off. See
+ * `createGpuTimer` for how much that cost before it was noticed.
+ *
+ * THE TABLE, measured on an M3 once the timer made it measurable, against a
+ * baseline of 13.2 gpu ms with 0.67 of drift under it:
+ *
+ *   no frost          5.94 ms   45% of the frame
+ *   no shadows        5.47 ms   41%
+ *   no area lights    2.05 ms   15%
+ *   at pixel ratio 1  0.28 ms    2%
+ *   no grain          0.18 ms    1%
+ *
+ * Two of those overturn what this file used to assert, and the assertions are
+ * corrected where they live rather than only here. The frost was believed free
+ * and is the most expensive thing in the piece. The pixel ratio was THE test
+ * and is now noise, which is the real headline: at 0.28 ms this frame is not
+ * fill-rate bound any more, so the whole family of fixes that trade resolution
+ * for frames has nothing left to buy.
  */
 /**
  * How long each state is measured for, and how long it is given to settle
@@ -252,19 +270,99 @@ function measure(timer: GpuTimer | null): Promise<Reading> {
 export interface Knockouts {
   /**
    * Redraws at a different device pixel ratio, 1 being one buffer pixel per CSS
-   * pixel. THE fill-rate test, and the first one to run: fragment cost goes
-   * with the SQUARE of this, so a piece drawing at the 1.75 the stage clamps to
-   * is paying three times what it would at 1. A large drop here says the frame
-   * is fragment-bound and nothing else needs testing to know it.
+   * pixel. Fragment cost goes with the SQUARE of this, so a piece drawing at
+   * the 1.75 the stage clamps to is paying three times what it would at 1.
+   *
+   * This was THE test and the one to run first, on the reasoning that a large
+   * drop here says the frame is fragment-bound and nothing else needs testing.
+   * The reasoning still holds; the piece no longer answers to it. Measured at
+   * 0.28 ms of a 13.2 ms frame once GPU timing made it readable — two per cent,
+   * against the 19 ms the interval-based instrument was reporting while it was
+   * pinned to vsync and reading its own quantisation.
+   *
+   * So it stays as a control rather than as the headline: a near-zero here is
+   * now the EXPECTED result, and a large one would mean something regressed
+   * back into the fragment path.
    */
   pixelRatio(ratio: number): string
-  /** Stops the depth pass outright. Isolates the cost of eleven casters. */
+  /**
+   * Stops the depth pass outright. Isolates the cost of eleven casters.
+   *
+   * 5.47 ms of a 13.2 ms frame, which makes it co-equal with the frost and the
+   * joint most expensive thing here. Every one of the eleven sheets is rendered
+   * into the map, the translucent ones through a stochastic discard that
+   * forfeits early-Z, and that is what it costs.
+   *
+   * Worth knowing what this row used to say: on the interval instrument it read
+   * -3.9 ms — switching the shadow pass OFF made the frame SLOWER — which is
+   * impossible and was believed long enough to be worth chasing. It was vsync.
+   * The frame was pinned at the refresh either way and the reading had snapped
+   * to a different multiple of it.
+   */
   shadows(on: boolean): string
   /**
    * Stops the frost: no backdrop captures, no spiral, no manual composite. The
    * layers go back to being plain translucent sheets.
+   *
+   * THE MOST EXPENSIVE THING IN THE PIECE, at 5.94 ms of a 13.2 ms frame. Four
+   * of the layers capture the drawing buffer and each frosted fragment walks a
+   * spiral of taps through it, so the cost is a full-buffer copy plus a
+   * many-tap blur, several times over.
+   *
+   * It was measured at -0.1 ms twice and written off as free. Both of those
+   * readings were taken on the frame interval while the piece was holding 60,
+   * where every knockout reads as nothing — see `createGpuTimer`. Nothing about
+   * the frost changed between those readings and this one; the instrument did.
+   *
+   * Both halves at once. `frostCapture` and `frostTaps` split it, and the split
+   * is what says which one to attack — they are entirely different costs with
+   * entirely different fixes, and a single 5.94 ms cannot tell them apart.
    */
   frost(on: boolean): string
+  /**
+   * Stops the per-fragment half: the golden-angle spiral of eleven dependent
+   * taps every frosted fragment walks through the capture.
+   *
+   * Scales with COVERED PIXELS and with the blur radius in texels — a wide
+   * radius scatters the taps far enough apart to miss the texture cache, which
+   * is the failure mode a blur at full resolution is built to have.
+   */
+  frostTaps(on: boolean): string
+  /**
+   * Stops the per-frame half: the four full drawing-buffer copies, one before
+   * each frosted layer draws.
+   *
+   * Scales with BUFFER SIZE and with how many layers capture, and not at all
+   * with how much of the screen the stack covers. Leaves the taps running
+   * against a texture nobody refreshes — the frame goes wrong, which is fine,
+   * because what is being timed is the copy.
+   */
+  frostCapture(on: boolean): string
+  /**
+   * How many frosted layers share one backdrop capture. The shipping value is
+   * in `BackdropCapture`; this is for reading the curve, since the whole cost
+   * is per-call and should therefore fall roughly as 1/stride.
+   */
+  frostStride(stride: number): string
+  /**
+   * Resizes the shadow map, which is the depth pass's FRAGMENT budget.
+   *
+   * The depth material discards — that is what lets a film cast an honest
+   * shadow — and a discard forfeits early-Z, so every texel a caster covers
+   * runs a real fragment shader. If that is where the pass goes, cost falls
+   * with the SQUARE of this and 512 buys three quarters of it back.
+   */
+  shadowMap(size: number): string
+  /**
+   * How many of the eleven sheets are allowed to cast, which is the depth
+   * pass's per-draw budget.
+   *
+   * The other half of the same question: each caster is its own draw with its
+   * own run of the loft in the vertex stage. If the pass is per-caster rather
+   * than per-texel, this is the row that moves and the map size is the one that
+   * does not.
+   */
+  shadowCasters(count: number): string
   /** Stops the film grain. Four instructions per fragment; a control, mostly. */
   grain(on: boolean): string
   /**
@@ -360,6 +458,8 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
   const grainAmount = orchestrator.sheets[0]?.uniforms.uGrain.value ?? 0
   const lit = areaLights.map((light) => light.visible)
 
+  const shippedStride = orchestrator.backdrop.stride
+  const shippedShadowMap = orchestrator.stage.keyLight.shadow.mapSize.x
   const timer = createGpuTimer(renderer)
 
   const knockouts: Knockouts = {
@@ -384,16 +484,55 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
       return `shadows ${on ? 'on' : 'off'}`
     },
 
+    shadowMap(size) {
+      const light = orchestrator.stage.keyLight
+      const was = light.shadow.mapSize.x
+      light.shadow.mapSize.set(size, size)
+      // Three allocates the render target once and keeps it. Dropping it is
+      // what makes the new size take effect on the next shadow render.
+      light.shadow.map?.dispose()
+      light.shadow.map = null
+      return `shadow map ${was} → ${size}`
+    },
+
+    shadowCasters(count) {
+      let given = 0
+      orchestrator.sheets.forEach((sheet, i) => {
+        const wanted = casters[i]! && given < count
+        if (wanted) given++
+        sheet.mesh.castShadow = wanted
+      })
+      return `shadow casters ${given} of ${casters.filter(Boolean).length}`
+    },
+
     frost(on) {
+      knockouts.frostTaps(on)
+      knockouts.frostCapture(on)
+      return `frost ${on ? 'on' : 'off'}`
+    },
+
+    frostTaps(on) {
       orchestrator.sheets.forEach((sheet, i) => {
         // Zero is what the branch in the shader tests, so this costs the
         // fragment nothing beyond the compare — no taps and no composite.
         sheet.uniforms.uFrostSpread.value = on ? spreads[i]! : 0
-        // And the capture itself, which is a copy of the whole drawing buffer
-        // and would otherwise keep running for a blur nobody reads.
+      })
+      return `frost taps ${on ? 'on' : 'off'}`
+    },
+
+    frostStride(stride) {
+      const was = orchestrator.backdrop.stride
+      orchestrator.backdrop.stride = Math.max(1, Math.floor(stride))
+      return `frost capture stride ${was} → ${orchestrator.backdrop.stride}`
+    },
+
+    frostCapture(on) {
+      orchestrator.sheets.forEach((sheet, i) => {
+        // The copy of the whole drawing buffer that each frosted layer makes
+        // immediately before it draws.
         sheet.mesh.onBeforeRender = on ? captures[i]! : () => {}
       })
-      return `frost ${on ? 'on' : 'off'}`
+      return `frost capture ${on ? 'on' : 'off'}`
     },
 
     grain(on) {
@@ -419,7 +558,9 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
 
     reset() {
       knockouts.shadows(true)
+      knockouts.shadowMap(shippedShadowMap)
       knockouts.frost(true)
+      knockouts.frostStride(shippedStride)
       knockouts.grain(true)
       knockouts.lights(true)
       const restored = knockouts.pixelRatio(pixelRatio)
@@ -484,6 +625,21 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
       // that reallocates buffers.
       const trials: [label: string, off: () => void, on: () => void][] = [
         ['no frost', () => void knockouts.frost(false), () => void knockouts.frost(true)],
+        [
+          'no frost taps',
+          () => void knockouts.frostTaps(false),
+          () => void knockouts.frostTaps(true),
+        ],
+        [
+          'no frost capture',
+          () => void knockouts.frostCapture(false),
+          () => void knockouts.frostCapture(true),
+        ],
+        [
+          'capture stride 1',
+          () => void knockouts.frostStride(1),
+          () => void knockouts.frostStride(shippedStride),
+        ],
         ['no shadows', () => void knockouts.shadows(false), () => void knockouts.shadows(true)],
         ['no grain', () => void knockouts.grain(false), () => void knockouts.grain(true)],
         ['no area lights', () => void knockouts.lights(false), () => void knockouts.lights(true)],
