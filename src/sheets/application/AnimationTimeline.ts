@@ -152,13 +152,17 @@ export class AnimationTimeline {
    * How much closer the closed card sits, giving the expansion a pull-back it
    * would not otherwise have.
    *
-   * What bounds it is the panel's width, not its height: the closed card is
-   * square to the camera and spans its full 2.36 units across, where the
-   * exploded stack gives most of that back to foreshortening. Measured at 1440
-   * x 900 the card covers 72% of the panel at 1.0 and 81% here, which is as far
-   * as it goes before the margins stop reading as deliberate.
+   * Written from outside on every resize and no longer authored here — see
+   * `fitClosed`, which carries both the measurement and why a constant could
+   * not survive the canvas becoming the viewport. What it aims at is unchanged:
+   * the card filling as much of the frame as it can before the margins stop
+   * reading as deliberate.
+   *
+   * The initial value is what that works out to on the aspect the piece is
+   * composed against, so the first frame is already right if it somehow arrives
+   * before a resize has been answered.
    */
-  closedZoom = 1.2
+  closedZoom = 1.207
   /** Speed of the travelling shimmer along the ribs. */
   ribDrift = 0.35
   /** Amplitude of the idle open/close breathing. */

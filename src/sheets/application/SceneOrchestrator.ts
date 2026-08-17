@@ -163,6 +163,18 @@ const CENTRE_NUDGE = new Vector3(0.14, 0, 0)
  */
 const EXPLODED_FRAME = new Quaternion().setFromEuler(new Euler(...EXPLODED_POSE)).invert()
 
+/**
+ * How much of the frame the closed card fills, on whichever axis is tighter.
+ *
+ * Not a new number: it is what the authored `closedZoom` of 1.2 was WORTH on
+ * the panel it was tuned against, recovered rather than re-chosen. A 38% column
+ * of a 1440x900 page is 0.61 aspect, which dollies the camera back to frame a
+ * 3.52 by 5.78 window, and a card 2.36 across at 1.2 covers 81% of that width —
+ * the "as far as it goes before the margins stop reading as deliberate" the old
+ * constant's comment names. The intent survives; only its expression moves.
+ */
+const CLOSED_COVERAGE = 0.81
+
 /** Scratch for the framing measurement. Reused, never handed out. */
 const FOCUS_TRAVEL = new Vector3()
 
@@ -445,10 +457,48 @@ export class SceneOrchestrator {
     // After the stage, which is what sets the drawing buffer the capture has to
     // match texel for texel.
     this.backdrop.resize(this.stage.renderer)
-    // And after the camera, which is what both of these measure.
+    // And after the camera, which is what all three of these measure.
     this.fitFocus()
+    this.fitClosed()
     this.fitLayout()
     return true
+  }
+
+  /**
+   * How much closer the closed card sits, measured instead of authored.
+   *
+   * This was a constant of 1.2, and it stopped being right the moment the
+   * canvas stopped being a 38% column and became the viewport. The constant is
+   * not merely stale: at 1.2 on a 16:9 viewport the closed card covers 44% of
+   * the frame while the exploded fan covers 67%, so closing the stack — the
+   * gesture whose entire job is to pull the card TOWARD you — draws it a third
+   * SMALLER. It inverts itself, and no amount of retuning one number fixes that
+   * on every screen at once, because the number that is right for a phone is
+   * half the number that is right for a laptop.
+   *
+   * So it moves here, beside `fitFocus`, and for word for word the same reason
+   * that one gives: the camera dollies back whenever the canvas is narrower
+   * than it can frame, and a constant would be right on exactly one screen.
+   * `CLOSED_COVERAGE` carries what the old constant was worth, so a phone still
+   * gets 1.207 — within a thousandth of the 1.2 that was authored for it.
+   *
+   * Contained rather than covered, the same as `fitFocus`, and the closed card
+   * is the case that most needs it: it is square to the camera, so on a wide
+   * viewport the height binds and on a narrow one the width does, and covering
+   * would run the card off the frame on whichever axis lost.
+   *
+   * Measured at the camera's own target plane, not at `FOCUS_APPROACH`. A layer
+   * being read travels most of the way to the lens; the closed card does not
+   * travel at all — it is the stack, shut, where the stack already was.
+   */
+  private fitClosed(): void {
+    const camera = this.stage.camera
+    const distance = camera.position.distanceTo(CAMERA_TARGET)
+    const height = 2 * distance * Math.tan((camera.fov * Math.PI) / 360)
+    const width = height * camera.aspect
+
+    this.timeline.closedZoom =
+      Math.min(width / this.cardSpan, height / this.cardRise) * CLOSED_COVERAGE
   }
 
   /**
