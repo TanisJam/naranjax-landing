@@ -18,12 +18,25 @@
     <script type="module" src="/src/main.ts"></script>
   </head>
   <body class="bg-ink-950 font-sans text-ink-200 antialiased">
-    <main class="flex min-h-screen flex-col lg:h-screen lg:flex-row lg:overflow-hidden">
-      <!-- Left panel: the layered card, rendered live instead of a flat export.
-           On a landing it is the hero image, and it is the only one — the whole
-           product is a card that comes apart into what the account can do. -->
+    <main class="flex flex-col">
+      <!-- The hero is the whole viewport, and the card is the whole hero.
+           Rendered live instead of a flat export: the product IS a card that
+           comes apart into what the account can do, so the illustration is the
+           argument rather than a picture of it.
+
+           It used to be a 38% column beside the copy, and the change is not
+           only a matter of size. A column meant that opening a layer had to
+           take the canvas fullscreen and then hand it back, and that swap was a
+           measured 29-pixel jump that took a compensation, an aim-point anchor
+           and a flat-plate approximation to get down to two. At a full-viewport
+           hero the canvas an opened layer wants is the canvas it already has,
+           so the swap is a no-op and the jump has nowhere to live.
+
+           `svh` rather than `vh`: on a phone the URL bar makes `vh` taller than
+           what is actually on screen, and a hero that is exactly the viewport
+           is the entire point of this. -->
       <section
-        class="relative shrink-0 bg-ink-900 h-[46vh] min-h-[320px] lg:h-auto lg:min-h-0 lg:w-[38%] lg:max-w-[545px]"
+        class="relative h-[100svh] min-h-[520px] w-full bg-ink-900"
         aria-label="Ilustración de la tarjeta Naranja X"
       >
         <!-- The stage is the control: the card opens into its eleven layers on
@@ -36,24 +49,34 @@
           aria-expanded="false"
           aria-label="Ver todo lo que podés hacer con Naranja X"
         ></div>
-        <!-- Stacked layout puts the page directly under the panel; fade the two
-             backgrounds into each other so the split reads as one surface. -->
+        <!-- The page runs directly under the hero at every width now, so the
+             fade is unconditional where it used to be small-screen only: it is
+             what keeps the seam between the two backgrounds from reading as a
+             band across the screen. -->
         <div
-          class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-ink-950 lg:hidden"
+          class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-ink-950"
         ></div>
-        <!-- After the fade, not before: on the stacked layout the gradient runs
-             over this corner of the panel and would swallow the label. -->
+        <!-- After the fade in the source, not before: the gradient runs over
+             this strip of the hero and would swallow the label. -->
         <p
           id="sheets-hint"
           class="pointer-events-none absolute inset-x-0 bottom-5 text-center text-xs tracking-wide text-ink-300/70"
         >
           Tocá para ver todo lo que podés hacer
         </p>
-      </section>
+        <!-- Over the hero rather than above it. The canvas owns the viewport,
+             so a header stacked on top of it would be a band the card has to
+             start below — and the card starting below the fold is the one thing
+             this layout exists to prevent.
 
-      <section class="flex min-w-0 flex-1 flex-col lg:overflow-y-auto">
-        <header class="shrink-0 pt-7">
-          <div class="flex flex-wrap items-center justify-between gap-4 px-6 pb-6 lg:px-12">
+             Transparent to the pointer, and its contents are not: the hero is a
+             click target the size of the screen and the gaps between the mark
+             and the nav have to reach it, or the top strip of the card stops
+             answering to a click for no reason the user can see. -->
+        <header class="pointer-events-none absolute inset-x-0 top-0 z-10 pt-7">
+          <div
+            class="pointer-events-auto mx-auto flex w-full max-w-[80rem] flex-wrap items-center justify-between gap-4 px-6 pb-6 lg:px-12"
+          >
             <a href="#" class="flex items-center gap-2.5" aria-label="Naranja X — inicio">
               <span
                 aria-hidden="true"
@@ -72,10 +95,14 @@
             </nav>
           </div>
         </header>
+      </section>
 
-        <div class="mx-auto flex w-full max-w-[34rem] flex-col gap-16 px-6 pt-10 pb-20 lg:px-0">
-          <!-- Hero. The headline is the brand's own, and the line under it is
-               the promise the nine layers then itemise one at a time. -->
+      <section class="flex w-full flex-col">
+        <div class="mx-auto flex w-full max-w-[34rem] flex-col gap-16 px-6 pt-10 pb-20">
+          <!-- The written half of the pitch. The card above is the hero now, so
+               this opens the page rather than sitting beside it: the headline is
+               the brand's own, and the line under it is the promise the nine
+               layers then itemise one at a time. -->
           <div class="flex flex-col gap-6">
             <p
               class="text-xs leading-5 font-medium tracking-[0.2em] text-nx-orange uppercase"
