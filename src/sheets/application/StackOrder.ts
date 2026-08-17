@@ -24,7 +24,7 @@ const viewDirection = new Vector3()
  */
 export class StackOrder {
   /**
-   * The layer that has left the stack to be read, or null.
+   * The layer that is OUT IN FRONT of the stack, or null.
    *
    * It draws after every other one, and that is not a preference about which
    * looks better on top — it is the only correct answer. Seven of the eleven
@@ -32,6 +32,13 @@ export class StackOrder {
    * them buys nothing: whichever is drawn LAST blends over the other. A plate
    * that has come forward out of the fan and is being read would otherwise be
    * veiled by the films it left behind.
+   *
+   * Which is why this is not simply "the layer being read". A plate on its way
+   * back is being read right up until the animation ends, and it stops being IN
+   * FRONT well before that — see `STACK_REENTRY`, which is where the caller
+   * lets go of it. Holding it here for the whole return is what produced the
+   * complaint this is written against: the card came home, sat visibly on top
+   * of the stack it belonged in, and then snapped into place a moment later.
    */
   focused: SheetObject | null = null
 

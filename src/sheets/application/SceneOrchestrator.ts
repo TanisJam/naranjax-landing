@@ -60,6 +60,34 @@ const FOCUS_BLEED = 1.04
  */
 const FOCUS_APPROACH = 0.72
 
+/**
+ * How far out a layer has to be to count as being IN FRONT of the stack rather
+ * than inside it, as a fraction of its travel.
+ *
+ * The draw order is an integer and cannot be eased, so this is not a question
+ * of making the change smooth — it is a question of putting it where it is
+ * TRUE, and where the eye is least able to time it.
+ *
+ * True: the plate travels `1 - FOCUS_APPROACH` of the camera's distance toward
+ * the lens, about 2.1 units, and the tilted fan itself reaches something over a
+ * unit forward of its middle. So a plate is back among the layers it left at
+ * roughly half its travel, not at the end of it — everything after that point
+ * is a card being drawn over a deck it is already inside.
+ *
+ * And least able to time it: `easeInOutCubic` is at its steepest exactly here,
+ * so the plate is moving as fast as it moves all return. The old behaviour put
+ * the same one-frame change at the other extreme, where the curve arrives with
+ * no slope at all and the plate has been sitting still for several frames — the
+ * worst possible moment to change anything, and the reason it read as a snap.
+ *
+ * The fully correct answer is to sort the travelling plate into the stack by
+ * its real depth every frame, so each of the five or so layers it passes is
+ * crossed at the instant it is actually crossed. That is a bigger change than
+ * this one earns: those crossings all happen inside the window this constant
+ * already hides, and none of them is the one that was visible.
+ */
+const STACK_REENTRY = 0.45
+
 /** Scratch for the framing measurement. Reused, never handed out. */
 const FOCUS_TRAVEL = new Vector3()
 
@@ -399,7 +427,14 @@ export class SceneOrchestrator {
     this.inspector?.update()
     // After the timeline, which is what decides — and releases — the layer
     // being read. Ahead of the draw, which is what the order is for.
-    this.stackOrder.focused = this.timeline.focused
+    //
+    // Gated on how far out the plate actually is, not on whether it is the one
+    // being read, and the two part company on the way back. `StackOrder.focused`
+    // means IN FRONT OF THE STACK; a plate that has travelled most of the way
+    // home is not, and drawing it over the fan until the animation ends is a
+    // card sitting on top of the deck it is already inside.
+    this.stackOrder.focused =
+      this.timeline.focusAmount > STACK_REENTRY ? this.timeline.focused : null
     this.stackOrder.update(this.stage.camera)
     // After every source of motion and before the draw: what a layer is under
     // has to be answered for the frame being rendered, not the one before it.
@@ -409,7 +444,13 @@ export class SceneOrchestrator {
     this.film.update(delta)
     // Before the draw, never after: the capture stride counts layers within a
     // frame, so it has to start from zero on the frame it is counting.
-    this.backdrop.beginFrame()
+    //
+    // And sharing is switched off outright while a layer is being read. The
+    // stride is only sound while the draw order is the stack order — that is
+    // what keeps a reused capture one plate stale instead of half a deck — and
+    // `StackOrder` lifts the read layer to the end of the queue, which is
+    // precisely the case that breaks it. See `beginFrame`.
+    this.backdrop.beginFrame(this.timeline.focused === null)
     this.stage.renderer.render(this.stage.scene, this.stage.camera)
 
     // After the draw, so the interval spans a whole frame including whatever

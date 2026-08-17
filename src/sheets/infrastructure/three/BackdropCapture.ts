@@ -39,22 +39,39 @@ export class BackdropCapture {
    * How many frosted layers share one capture.
    *
    * 1 is the exact behaviour described above and 2 is what ships, which halves
-   * the render-pass breaks. What a shared capture costs is precise and small:
-   * the layers draw back to front, so a layer that reuses the previous capture
-   * is missing exactly ONE plate behind it — the frosted layer that captured.
-   * Not an arbitrary amount of the scene, one sheet.
+   * the render-pass breaks. What a shared capture costs is precise: the layers
+   * draw back to front, so a layer that reuses the previous capture is missing
+   * exactly ONE plate behind it — the frosted layer that captured. Not an
+   * arbitrary amount of the scene, one sheet.
    *
-   * And that sheet is the best possible one to lose. It is itself translucent,
-   * it is immediately behind, and it is about to be put through a blur wide
-   * enough to dissolve it: the frost kernel cannot resolve a single film's
-   * contribution at that radius, so what is dropped is a difference the effect
-   * was going to destroy anyway. That is the whole argument for sharing, and it
-   * is why this is a stride over the DRAW ORDER rather than a cap on the count
-   * — the layers that share are always neighbours, never distant.
+   * MEASURED, and this used to carry an argument instead. The argument was that
+   * the lost sheet is about to go through a blur wide enough to dissolve it, so
+   * the difference was one the effect would have destroyed anyway. That is
+   * wrong, and wrong in a way worth keeping written down: it assumes the frost
+   * BLENDS. It does not. A frosted material runs `One / Zero` and writes its
+   * composite straight over the destination, so a plate absent from the capture
+   * is not softened into the result — there is no destination left for it to
+   * survive in. Nothing about a wide kernel rescues that.
    *
-   * Above 2 the reasoning stops holding, because then a layer is missing plates
-   * it has real separation from and the stack starts looking like it is frosting
-   * the page instead of itself.
+   * The conclusion survives the argument dying, because the frame was then
+   * compared at both strides: switching from 1 to 2 moves the image by 0.72
+   * luminance points out of 255, against 3.08 and 2.34 for the two plates the
+   * sharing was predicted to erase. It is not erasing them. A quarter of one
+   * plate's worth of difference, spread over the whole frame, for 7.10 gpu ms.
+   *
+   * Still a stride over the DRAW ORDER rather than a cap on the count, so the
+   * layers that share are always neighbours. And still not above 2: past that a
+   * layer is missing plates it has real separation from, and the measurement
+   * above says nothing about that case — it was taken at 2.
+   *
+   * THAT NEIGHBOUR RULE IS A PRECONDITION, not a description, and it is the
+   * whole reason `beginFrame` can be told to suspend this. It holds only while
+   * every layer draws in its place in the stack. A layer being read does not:
+   * it is lifted to the front of the queue outright, so the plate it shares
+   * with is left half a deck behind it and everything in between goes missing
+   * from the capture it composites against — while it fills the screen. That is
+   * not a subtlety, it is three of the nine inner layers vanishing from a card
+   * held up to be read, and it was reported as exactly that.
    */
   stride = 2
 
@@ -69,6 +86,8 @@ export class BackdropCapture {
   private height = 0
   /** How many layers have asked to capture since `beginFrame`. */
   private asked = 0
+  /** Whether sharing is allowed this frame. See `beginFrame`. */
+  private sharing = true
 
   constructor() {
     this.texture = BackdropCapture.createTexture(1, 1)
@@ -115,9 +134,19 @@ export class BackdropCapture {
    * Counted per frame rather than held across frames on purpose: the stride has
    * to land on the same layers every frame, or the ones that share would take
    * turns being a frame stale and the stack would shimmer.
+   *
+   * `sharing` is how the caller says the precondition holds. Sharing is only
+   * ever safe while the draw order is the stack order, because that is what
+   * makes the plate omitted from a reused capture the immediate neighbour of
+   * the layer reusing it. Anything that lifts a layer out of that order — one
+   * being read, which jumps to the end of the queue — has to say so, and then
+   * every frosted layer captures for itself. The frames that pay for it are the
+   * frames with a card filling the screen, which are exactly the frames where
+   * seven eighths of the stack is not being drawn anyway.
    */
-  beginFrame(): void {
+  beginFrame(sharing = true): void {
     this.asked = 0
+    this.sharing = sharing
   }
 
   /**
@@ -131,7 +160,7 @@ export class BackdropCapture {
   capture(renderer: WebGLRenderer): void {
     if (this.width === 0) return
     const turn = this.asked++
-    if (turn % this.stride !== 0) return
+    if (this.sharing && turn % this.stride !== 0) return
     renderer.copyFramebufferToTexture(this.texture)
   }
 

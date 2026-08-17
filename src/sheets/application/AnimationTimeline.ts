@@ -327,6 +327,16 @@ export class AnimationTimeline {
    */
   onFocusRelease: (() => void) | null = null
 
+  /**
+   * How far out of the stack the read layer is this frame, eased, 0 to 1.
+   *
+   * Read-only, written every frame. Exposed because the DRAW ORDER has to know:
+   * a plate that has left the stack must be drawn over it, and a plate that has
+   * come back must be drawn inside it, and the moment between those two is not
+   * the moment the animation ends. See `StackOrder.focused`.
+   */
+  focusAmount = 0
+
   private time = 0
   private windTime = 0
   private deployProgress = 0
@@ -612,6 +622,7 @@ export class AnimationTimeline {
     // column: a third too small, off to one side, for 16ms. Which is a blink,
     // and looks like one.
     const focus = this.focusValue(delta)
+    this.focusAmount = focus
 
     const reveal = this.curve().ease(this.deployProgress)
     this.artwork.quaternion.slerpQuaternions(
