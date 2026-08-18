@@ -219,6 +219,12 @@ const closeSpecs = (): void => {
 }
 
 stage.addEventListener('click', (event) => {
+  // A finger that swept the deck already got its answer — every crossing it
+  // made, as it made them. The click the browser synthesises when it lifts is
+  // not a second gesture, and opening whatever happened to be under the last
+  // millimetre of a riffle would be answering a question nobody asked.
+  if (orchestrator.picker.dragged) return
+
   // A closed card is one object. Whichever layer the ray happens to land on
   // inside it, the only thing the user can be asking for is to open the card —
   // and opening a panel for a layer they were never shown coming apart would be
