@@ -1,8 +1,6 @@
 import './style.css'
 import closeSound from '../sound-effects/close.mp3?url'
-import specCloseSound from '../sound-effects/close-short.mp3?url'
 import openSound from '../sound-effects/open.mp3?url'
-import specOpenSound from '../sound-effects/open-short.mp3?url'
 import pickSound from '../sound-effects/pick.mp3?url'
 import { FrameCounter } from './diagnostics/FrameCounter'
 import { createKnockouts } from './diagnostics/knockouts'
@@ -11,7 +9,7 @@ import { composition } from './sheets/domain/composition'
 import { layerSpecs, specFor, type LayerSpec } from './sheets/domain/specs'
 import { SpecsOverlay } from './sheets/infrastructure/dom/SpecsOverlay'
 import type { SheetObject } from './sheets/infrastructure/three/SheetObject'
-import { SoundBoard } from './sound/SoundBoard'
+import { HAPTICS, SoundBoard, SWELLS } from './sound/SoundBoard'
 
 const stage = document.querySelector<HTMLElement>('#sheets-stage')
 if (!stage) throw new Error('#sheets-stage container is missing')
@@ -23,23 +21,41 @@ orchestrator.start()
 
 // The pointer cue is the one that fires most, so it sits well under the two
 // transitions — it is punctuation, not an announcement.
+//
+// Three recordings, not five. `specOpen` and `specClose` are built rather than
+// played: see `SWELLS`. They had been `open-short.mp3` and `close-short.mp3`,
+// and those two landed hard for a reason worth writing down, because it was not
+// the reason anyone assumed. Measured, they peak at 0.396 and 0.405 against
+// 0.038 for the two long cues — mastered some twenty decibels hotter — while
+// the gains here were chosen as though all five were comparable bounces. So the
+// smallest gesture on the page was going out ten times louder than the whole
+// stack coming apart. The timbre was never the problem, and neither was the mix
+// intent: the files simply were not the level anyone thought they were.
+//
+// Levels below are matched to `open` on RMS across the audible part of each
+// recording, so what is left here reads as three intentions rather than as an
+// accident of how the assets happened to be bounced.
 const sound = new SoundBoard(
-  {
-    open: openSound,
-    close: closeSound,
-    pick: pickSound,
-    specOpen: specOpenSound,
-    specClose: specCloseSound,
-  },
+  { open: openSound, close: closeSound, pick: pickSound },
   { open: 0.55, close: 0.55, pick: 0.3, specOpen: 0.5, specClose: 0.5 },
 )
 
 if (import.meta.env.DEV) {
   // Handles for the console and for automated checks. Draw order, blend
   // behaviour and which cue fired are only observable while the piece is
-  // running, so they need a way in from outside. DEV-guarded, so neither
+  // running, so they need a way in from outside. DEV-guarded, so none of them
   // reaches a build.
-  Object.assign(window, { __sheets: orchestrator, __sound: sound })
+  //
+  // The cue tables are here for the same reason the knockouts are: how a sound
+  // lands is not a thing anyone can read off a number, and editing a constant
+  // to wait for a reload puts several seconds between the change and the only
+  // evidence that counts. Every field is live —
+  // `__cues.swells.specOpen.to = 1100`, then `__sound.play('specOpen')`.
+  Object.assign(window, {
+    __sheets: orchestrator,
+    __sound: sound,
+    __cues: { swells: SWELLS, haptics: HAPTICS, gains: sound.gains },
+  })
 }
 
 // On in development, and reachable in a build with `?fps` — a production build
@@ -107,6 +123,12 @@ reducedMotion.addEventListener('change', applyMotionPreference)
 // rather than copying the number here keeps them from drifting apart the first
 // time somebody swaps an mp3 — the authored defaults on the timeline are the
 // fallback for when there is no audio at all, not a second source of truth.
+//
+// The two focus cues have no buffer to decode any more and still answer this,
+// from their authored length. Which is the better arrangement of the same
+// agreement: a recording's duration includes whatever silence its bounce left
+// at the head, and both of those files had 135ms of it — a third of the
+// animation ran before the cue scoring it made a sound.
 void sound.ready.then(() => {
   motion.deploy = sound.duration('open') ?? motion.deploy
   motion.collapse = sound.duration('close') ?? motion.collapse
