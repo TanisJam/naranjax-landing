@@ -725,6 +725,9 @@ function assemble(drafts: readonly SheetDraft[]): SheetLayer[] {
 }
 
 export const composition: Composition = {
-  background: '#240f30',
+  // The page's own `ink-900`. The canvas is transparent here so nothing clears
+  // to this, but it is what the composition says it sits on, and a value that
+  // has silently drifted from the page is worse than no value at all.
+  background: '#30100f',
   sheets: assemble(layers),
 }

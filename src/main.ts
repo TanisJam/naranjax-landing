@@ -175,7 +175,7 @@ const setDeployed = (deployed: boolean, silent = false): void => {
   stage.setAttribute('aria-expanded', String(deployed))
   stage.setAttribute(
     'aria-label',
-    deployed ? 'Armar la tarjeta' : 'Ver todo lo que podés hacer con Naranja X',
+    deployed ? 'Armar la tarjeta' : 'Ver todo lo que podés hacer con MandarinaX',
   )
   if (hint) {
     hint.textContent = deployed
@@ -357,11 +357,11 @@ if (features) {
       const button = document.createElement('button')
       button.type = 'button'
       button.className =
-        'group flex w-full items-baseline gap-4 py-4 text-left transition hover:text-neutral-50 focus-visible:outline-2 focus-visible:outline-nx-orange'
+        'group flex w-full items-baseline gap-4 py-4 text-left transition hover:text-neutral-50 focus-visible:outline-2 focus-visible:outline-mx-orange'
 
       const eyebrow = document.createElement('span')
       eyebrow.className =
-        'w-24 shrink-0 text-xs leading-5 font-medium tracking-[0.15em] text-nx-orange uppercase'
+        'w-24 shrink-0 text-xs leading-5 font-medium tracking-[0.15em] text-mx-orange uppercase'
       eyebrow.textContent = spec.eyebrow
 
       const body = document.createElement('span')

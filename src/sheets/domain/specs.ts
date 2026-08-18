@@ -9,11 +9,12 @@
  * line of claim, and a list of label/value pairs is a spec sheet whether the
  * subject is a film thickness or a rate.
  *
- * Copy is Naranja X's own, taken from naranjax.com — the voice is theirs
- * (voseo, "tu platita", "cuotitas fijas") and it is not to be flattened into
- * neutral Spanish on the next edit. The figures in `entries` are the ones the
- * site publishes; they are commercial terms and they move, so they belong here
- * as data rather than baked into any view.
+ * Copy is MandarinaX's own and it is written in Rioplatense — voseo throughout,
+ * "sacá", "ponete al día", "cuando quieras". That register is the product's
+ * market and not a stylistic flourish, so it is not to be flattened into
+ * neutral Spanish on the next edit. The figures in `entries` are commercial
+ * terms and they move, so they belong here as data rather than baked into any
+ * view.
  *
  * Pure data, no DOM and no Three.js, for the same reason `composition.ts` is:
  * the layer's identity is a property of the artwork, not of whatever happens to
@@ -93,7 +94,7 @@ export const layerSpecs: readonly LayerSpec[] = [
     layer: 'border-light',
     eyebrow: 'Préstamos',
     title: 'Préstamo en el acto',
-    summary: 'Se acredita al instante en tu cuenta y lo devolvés en cuotitas fijas.',
+    summary: 'Se acredita al instante en tu cuenta y lo devolvés en cuotas fijas.',
     entries: [
       { label: 'Desde', value: '$500' },
       { label: 'Acreditación', value: 'Al instante' },

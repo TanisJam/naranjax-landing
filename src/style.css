@@ -2,34 +2,45 @@
 
 /* The brand, and where the two numbers come from.
 
-   `--color-nx-orange` and `--color-nx-purple` are sampled from the palette of
-   the Naranja X isologo itself, not eyeballed from a screenshot: the file is an
-   8-bit colormapped PNG, so its PLTE chunk states the brand inks exactly. Every
-   other value below is derived from one of those two, which is the only reason
-   the page holds together as one identity — there is no third colour that
-   somebody picked because it looked nice next to them.
+   MandarinaX runs on two inks and the reference card states both of them at
+   full strength: `--color-mx-orange` and `--color-mx-red` are sampled off that
+   render rather than eyeballed from a description of it. Every other value
+   below is derived from one of those two, which is the only reason the page
+   holds together as one identity — there is no third colour that somebody
+   picked because it looked nice next to them.
 
-   The `ink` ramp is that same violet taken down to near-black at constant hue.
-   It is what the page is built on rather than a neutral grey, and that is the
-   load-bearing choice here: a grey page with orange on it is a page with an
-   accent colour, while a violet-black page with orange on it is the brand. The
-   difference is only visible against a true neutral, which is exactly why it
-   works — nobody sees the tint, everybody sees that the page is not generic. */
+   The two inks are not interchangeable and the page gives each one a job. Red
+   is the ground: the `ink` ramp is that red taken down to near-black at
+   constant hue, so it is what the page is built ON. Orange is everything
+   printed on top — the accent, the calls to action, the mark. That is the same
+   pairing the reference sheet makes when it puts the two cards side by side.
+
+   The ramp is a rotation, not a re-authoring. It used to be a violet at a
+   constant 277.7° hue, and every step here keeps that step's exact lightness
+   and saturation with the hue moved to 2° — the red's own. So the page reads
+   as a different brand while the contrast relationships that were tuned
+   against the artwork are, number for number, the ones that were tuned.
+
+   A near-black with a hue in it rather than a neutral grey is the load-bearing
+   choice: a grey page with orange on it is a page with an accent colour, while
+   a red-black page with orange on it is the brand. The difference is only
+   visible against a true neutral, which is exactly why it works — nobody sees
+   the tint, everybody sees that the page is not generic. */
 @theme {
   --font-sans: 'Rubik', ui-sans-serif, system-ui, -apple-system, sans-serif;
 
-  --color-nx-orange: #ff5000;
-  --color-nx-orange-bright: #ff7833;
-  --color-nx-purple: #50007f;
+  --color-mx-orange: #f37d06;
+  --color-mx-orange-bright: #fa9632;
+  --color-mx-red: #db1811;
 
-  --color-ink-950: #190a22;
-  --color-ink-900: #240f30;
-  --color-ink-800: #351847;
-  --color-ink-700: #4d2664;
-  --color-ink-600: #6a3e84;
-  --color-ink-400: #ad97ba;
-  --color-ink-300: #cdbdd6;
-  --color-ink-200: #e8deed;
+  --color-ink-950: #220b0a;
+  --color-ink-900: #30100f;
+  --color-ink-800: #471a18;
+  --color-ink-700: #642826;
+  --color-ink-600: #84403e;
+  --color-ink-400: #ba9897;
+  --color-ink-300: #d6bebd;
+  --color-ink-200: #eddfde;
 }
 
 /* The backdrop transition lives HERE, on the bare element, and not on the
@@ -56,7 +67,7 @@
 /* Inset, because the stage is flush with the panel edges and an outline drawn
    outside them is clipped away by the layout. */
 #sheets-stage:focus-visible {
-  outline: 2px solid var(--color-nx-orange);
+  outline: 2px solid var(--color-mx-orange);
   outline-offset: -4px;
 }
 

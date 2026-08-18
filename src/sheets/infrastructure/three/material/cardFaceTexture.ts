@@ -10,14 +10,20 @@ const HEIGHT = 646
 const MARGIN = 48
 
 /**
- * The card body, measured off the reference render of the finished card.
+ * The card body, sampled off the MandarinaX reference render pixel for pixel.
  *
- * Deliberately NOT the logo's #FF5000. That value is an ink and this is a
- * pigmented PVC body photographed under light; they are two different things
- * and the render says so. The logo ink still governs everywhere the mark itself
- * is drawn — the page header, the isotype — and this governs the object.
+ * It agrees with `--color-mx-orange` here, and that agreement is a fact about
+ * this brand rather than a rule: MandarinaX states its orange ON a card, so the
+ * ink and the body are the same measurement taken from the same artefact. Where
+ * a brand publishes the two separately they are two different things — an ink
+ * and a pigmented PVC body photographed under light — and this constant is
+ * still the one that governs the object.
+ *
+ * The reference sheet also shows a red card beside this one. The red is not a
+ * second body here: it is the page's ground, and a card the colour of the page
+ * behind it would disappear into the one thing it has to stand out from.
  */
-const BODY_ORANGE = '#f6840f'
+const BODY_ORANGE = '#f37d06'
 
 /**
  * The front carries no account data at all — no number, no expiry, no name.
@@ -248,7 +254,7 @@ function drawContactless(ctx: CanvasRenderingContext2D, options: ContactlessOpti
 /**
  * The wordmark, in the brand's own two-part construction.
  *
- * "Naranja" and "X" are one word set in one weight and one colour — the split
+ * "Mandarina" and "X" are one word set in one weight and one colour — the split
  * the page header makes, tinting the X, is a UI affordance and not the logo.
  * The reference card sets the whole thing in white, and a card is where a brand
  * is least free to improvise.
@@ -262,8 +268,8 @@ function drawWordmark(ctx: CanvasRenderingContext2D, x: number, baseline: number
   ctx.font = '600 76px sans-serif'
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
-  fillTracked(ctx, 'NaranjaX', x, baseline, -1)
-  const advance = trackedWidth(ctx, 'NaranjaX', -1)
+  fillTracked(ctx, 'MandarinaX', x, baseline, -1)
+  const advance = trackedWidth(ctx, 'MandarinaX', -1)
   ctx.restore()
   return advance
 }
@@ -349,7 +355,7 @@ function drawFront(ctx: CanvasRenderingContext2D): void {
  * where white on orange has to be legible rather than merely branded.
  */
 function drawBack(ctx: CanvasRenderingContext2D): void {
-  fillMatteBody(ctx, '#e06a05')
+  fillMatteBody(ctx, '#d76302')
 
   // The signature panel, the only light field on either face. Kept because the
   // number sits above it and needs the eye to have somewhere to stop.
