@@ -1,18 +1,73 @@
 @import 'tailwindcss';
 
+/* The brand, and where the two numbers come from.
+
+   MandarinaX runs on two inks and the reference card states both of them at
+   full strength: `--color-mx-orange` and `--color-mx-red` are sampled off that
+   render rather than eyeballed from a description of it. Every other value
+   below is derived from one of those two, which is the only reason the page
+   holds together as one identity — there is no third colour that somebody
+   picked because it looked nice next to them.
+
+   The two inks are not interchangeable and the page gives each one a job. Red
+   is the ground: the `ink` ramp is that red taken down to near-black at
+   constant hue, so it is what the page is built ON. Orange is everything
+   printed on top — the accent, the calls to action, the mark. That is the same
+   pairing the reference sheet makes when it puts the two cards side by side.
+
+   The ramp is a rotation, not a re-authoring. It used to be a violet at a
+   constant 277.7° hue, and every step here keeps that step's exact lightness
+   and saturation with the hue moved to 2° — the red's own. So the page reads
+   as a different brand while the contrast relationships that were tuned
+   against the artwork are, number for number, the ones that were tuned.
+
+   A near-black with a hue in it rather than a neutral grey is the load-bearing
+   choice: a grey page with orange on it is a page with an accent colour, while
+   a red-black page with orange on it is the brand. The difference is only
+   visible against a true neutral, which is exactly why it works — nobody sees
+   the tint, everybody sees that the page is not generic. */
 @theme {
   --font-sans: 'Rubik', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-mx-orange: #f37d06;
+  --color-mx-orange-bright: #fa9632;
+  --color-mx-red: #db1811;
+
+  --color-ink-950: #220b0a;
+  --color-ink-900: #30100f;
+  --color-ink-800: #471a18;
+  --color-ink-700: #642826;
+  --color-ink-600: #84403e;
+  --color-ink-400: #ba9897;
+  --color-ink-300: #d6bebd;
+  --color-ink-200: #eddfde;
 }
 
+/* The backdrop transition lives HERE, on the bare element, and not on the
+   `[data-framed]` rule that turns it dark. Two reasons, and both of them were
+   visible.
+
+   Removing the attribute at the end of a return removed the `transition`
+   declaration along with it, so whatever was left of the fade did not finish —
+   it cut. And a transition declared in the same style change that alters the
+   value it animates is a fragile thing to rely on in the other direction. On
+   the base selector the rule is simply always in force, and both the darkening
+   and the clearing are ordinary transitions with nothing special about their
+   first or last frame.
+
+   The durations come from JS because the numbers are not ours: each direction
+   runs exactly as long as the cue that scores it, and the cue length is decoded
+   from the mp3. The fallbacks here are for the moment before that resolves. */
 #sheets-stage {
   touch-action: none;
   cursor: pointer;
+  transition: background-color var(--framed-out, 420ms) ease;
 }
 
 /* Inset, because the stage is flush with the panel edges and an outline drawn
    outside them is clipped away by the layout. */
 #sheets-stage:focus-visible {
-  outline: 2px solid var(--color-cyan-400);
+  outline: 2px solid var(--color-mx-orange);
   outline-offset: -4px;
 }
 
@@ -20,6 +75,77 @@
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* Opening a layer, which is the card leaving the page.
+
+   The canvas stops being the left column and becomes the viewport. It does that
+   INSTANTLY and invisibly — the artwork is compensated back to the size and
+   place it was already drawn at, so nothing is seen to happen — and then the
+   card grows across the whole screen under its own power. Growth the user can
+   watch is the entire point of the gesture, so none of it may be spent on the
+   canvas catching up.
+
+   The backdrop fades in rather than cutting. Until the card is large enough to
+   cover the page, the page is still there behind a transparent canvas, and for
+   that first moment it should be: the card is lifting off the page it was
+   sitting beside. By the time it fills the screen there is nothing left to see
+   through to.
+
+   Closing is two states rather than one, and it has to be. The backdrop has to
+   be gone BY the time the canvas goes back to its column, not begin leaving
+   then — a fade that starts at the swap leaves the panel sitting darker than
+   its own background for four hundred milliseconds, right at the moment the eye
+   is already following something. So `closing` keeps the canvas fullscreen and
+   takes the backdrop away while the card is still shrinking, and dropping the
+   attribute at the end has nothing left to animate.
+
+   The stage stops taking the pointer while either applies, so a click always
+   reaches the panel over it rather than the layer picker under it. */
+#sheets-stage[data-framed] {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+/* Only the opening direction overrides the duration. Clearing the backdrop
+   happens under `closing` and again under no attribute at all, and both of
+   those fall through to the base rule — which is exactly what lets the fade
+   carry on across the moment the attribute is dropped instead of stopping
+   dead in the middle of it. */
+#sheets-stage[data-framed='true'] {
+  background-color: var(--color-ink-950);
+  transition-duration: var(--framed-in, 420ms);
+}
+
+/* The text arrives after the growth, never during it. A panel that faded in
+   alongside the card would be covering the one thing the click was asking to
+   see. Coming back has nothing to wait for, so the delay lives on the opening
+   state alone — the text is gone before the card starts shrinking, instead of
+   sitting over a moving card on the way out. */
+#layer-specs {
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
+#layer-specs[data-shown='true'] {
+  opacity: 1;
+  transition-delay: 380ms;
+}
+
+/* Same criterion the timeline uses for the deploy: the transition is not
+   removed, it becomes a cut. What the user asked for still happens — they
+   clicked a layer and the layer's specifications are what they get — it simply
+   arrives between two frames instead of sweeping there. */
+@media (prefers-reduced-motion: reduce) {
+  #sheets-stage,
+  #sheets-stage[data-framed='true'],
+  #layer-specs,
+  #layer-specs[data-shown='true'] {
+    transition-duration: 0ms;
+    transition-delay: 0ms;
+  }
 }
 
 /* Film grain over the render.

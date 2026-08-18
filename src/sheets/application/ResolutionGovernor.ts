@@ -101,8 +101,26 @@ export class ResolutionGovernor {
      * is built around start to crawl, and no frame rate buys that back.
      */
     private readonly floor = 1,
+    /**
+     * Where it BEGINS, which is not the same question as how high it may go.
+     *
+     * Defaulted to the ceiling, which is the old behaviour and the right one
+     * while the ceiling is what the piece was authored at. It stops being right
+     * the moment the ceiling carries something optional on top — the
+     * supersample in `stage.ts` — because then starting there means every load
+     * opens at the most expensive setting the piece has and walks DOWN from it.
+     * At a 12% step and 1.2 s a correction that is about seven seconds of
+     * dragging, on every visit, on exactly the machines that cannot afford it.
+     *
+     * Starting at the authored ratio inverts that: the piece opens at the cost
+     * it was designed for, and the probe upward — which this already does, and
+     * which is the only way to discover headroom behind a pinned vsync — buys
+     * the supersample back within a couple of seconds on a machine that has the
+     * room. Fast machines get the quality, slow ones never pay for asking.
+     */
+    start = ceiling,
   ) {
-    this.ratio = ceiling
+    this.ratio = Math.min(Math.max(start, floor), ceiling)
   }
 
   /**

@@ -77,10 +77,44 @@ function createLighting(scene: Scene): DirectionalLight {
   // Not off. It is the only source behind the piece, and it is what separates
   // the far edge of a plate from whatever is behind it. Cut to where it draws
   // that edge and stops filling the body.
-  const rim = new RectAreaLight(0xdae8ff, 3.4, 8, 2.2)
+  //
+  // The tint moved with the rebrand and the intensity deliberately did not: hue
+  // carries none of the fitted luminance, so this stayed the same 3.4 of fill,
+  // shifted off blue so the back edge of an orange plate is separated by the
+  // page's own violet rather than by a colour nowhere else in the piece.
+  //
+  // DIRECTIONAL now, where it was a `RectAreaLight`, and this is the second
+  // light to make that trip for the same measured reason `bounce` did. Three
+  // evaluates a `RectAreaLight` with linearly transformed cosines — float
+  // texture lookups plus matrix work, per light, PER FRAGMENT — and eleven
+  // overlapping layers pay it eleven times over. The cost is per LIGHT and is
+  // completely indifferent to how bright that light is, which is what makes a
+  // dim panel the worst deal in a rig. This one delivered 6.5 luminance points
+  // of a direct total of 64.3 — ten per cent of the light for half of what
+  // remained of the area-light budget.
+  //
+  // The job survives, and here it survives more comfortably than `bounce`'s
+  // did. A panel buys a wrapped, gradual falloff, which is worth paying for on
+  // a key that models form. This draws an EDGE: it sits behind the piece and
+  // its whole brief is to separate the far side of a plate from the background.
+  // A parallel source raking in from behind draws that edge harder, not softer,
+  // so the risk here is a rim that reads too crisp rather than one that
+  // disappears — watch the far corners of the middle plates, not the average.
+  //
+  // The intensity is derived on the same chain `bounce` used. The knockouts
+  // read `spec` at 29.5 points for an intensity of 5.2, i.e. 5.67 points per
+  // unit, and this delivered 6.5, so 6.5 / 5.67 ≈ 1.15.
+  //
+  // Not a caster. `spec` is still the only one; a second shadow pass to save a
+  // fragment cost would be a poor trade in any direction. Its 6.5 does change
+  // SIDES in `CAST_SHARE` though, because it is thrown by a directional source
+  // now — see the arithmetic there.
+  const rim = new DirectionalLight(0xe4dcff, 1.15)
   rim.name = 'rim'
+  // Target left at the origin, which is exactly where the old `lookAt(0, 0, 0)`
+  // aimed it. A moved target would have to be added to the scene to have any
+  // effect at all, which is the trap `bounce` documents below.
   rim.position.set(3, 2.6, -3)
-  rim.lookAt(0, 0, 0)
 
   // The only shadow caster in the scene — RectAreaLight cannot cast at all.
   // Every one of the eleven sheets is now rendered into its map, translucent
@@ -149,10 +183,45 @@ function createLighting(scene: Scene): DirectionalLight {
   // blacks in it — a trough is dark because nothing reaches it, and this reached
   // all of them. Half of it still keeps the concave faces off pure black, which
   // is the whole job it was added for; the other half was the wash.
-  const bounce = new RectAreaLight(0xcfe0f8, 1.6, 7, 4)
+  //
+  // DIRECTIONAL, where it used to be a `RectAreaLight`, and the reason is a
+  // measurement rather than a preference.
+  //
+  // `__perf.sweep()` put the three area lights at 17.0 ms of a 36 ms frame,
+  // reproduced across two runs — the most expensive thing the piece draws, more
+  // than halving the resolution. Three evaluates a `RectAreaLight` with linearly
+  // transformed cosines: float-texture lookups plus matrix work, per light, per
+  // fragment, and eleven overlapping layers pay all of it eleven times over.
+  // Roughly six milliseconds each, and the cost is per LIGHT — it does not care
+  // how bright the light is.
+  //
+  // Which is what condemns this one specifically. The knockouts in `CAST_SHARE`
+  // put its contribution at 2.0 of a direct total of 64.3: THREE PER CENT of the
+  // light for a third of the area-light budget. Nothing else in the rig is
+  // anywhere near that ratio — the key is 41% for the same price.
+  //
+  // And the job survives the change, because of what the job IS. A soft panel
+  // buys a wrapped, gradual falloff across a surface, and that is worth paying
+  // for on a key that models the form. This is FILL: its whole brief is to reach
+  // the downward-facing surfaces so they are not black. Reaching them is
+  // something a parallel light does perfectly well, and far more cheaply.
+  //
+  // The intensity is derived, not guessed. The same knockouts read `spec` at
+  // 29.5 luminance points for an intensity of 5.2 — 5.67 points per unit — and
+  // this used to contribute 2.0, so 2.0 / 5.67 ≈ 0.35. That is a starting point
+  // and not a result: a parallel light distributes what it delivers differently
+  // from a panel, so the AVERAGE can match while the darkest trough does not.
+  // The trough is the thing to look at.
+  //
+  // Not a caster. `spec` is still the only one, and adding a second shadow pass
+  // to save a fragment cost would be a poor trade in any direction.
+  // Retinted with `rim` and, for the same reason, at exactly its old intensity.
+  const bounce = new DirectionalLight(0xd8cbf4, 0.35)
   bounce.name = 'bounce'
+  // Target left at the origin, which is where `lookAt(0, 0.4, 0)` was pointing
+  // this to within a few degrees — and a moved target would have to be added to
+  // the scene to have any effect at all.
   bounce.position.set(-2.6, -3.2, 2.8)
-  bounce.lookAt(0, 0.4, 0)
 
   scene.add(key, rim, spec, bounce)
   return spec
@@ -163,23 +232,119 @@ function createLighting(scene: Scene): DirectionalLight {
  * this and the fixed vertical fov starts cropping the sheets sideways, so the
  * camera dollies back instead of widening — a wider fov would buy the width
  * back at the cost of the long-lens look the whole composition depends on.
+ *
+ * Exported because it is also the aspect the LAYOUT was composed against, and
+ * that is not a coincidence to be restated in a second constant: the fan was
+ * tuned until it filled this frame, which is the same condition that put the
+ * dolly rule here. See `fitLayout`, which turns the fan away from the composed
+ * arrangement by how far the viewport has drifted from this.
  */
-const FIT_ASPECT = 0.86
+export const FIT_ASPECT = 0.86
 
-const TARGET = new Vector3(0, -0.12, 0)
+/**
+ * Where the camera looks, and therefore where the middle of the frame is.
+ *
+ * Exported because centring something ON that frame — which is what opening a
+ * layer full-frame does — needs the same point the lens is pointed at, and two
+ * copies of it would drift the first time this moved.
+ */
+export const CAMERA_TARGET = new Vector3(0, -0.12, 0)
+const TARGET = CAMERA_TARGET
 const CAMERA_OFFSET = new Vector3(0.18, 0.5, 7.6).sub(TARGET)
+
+/**
+ * Drawing-buffer pixels per pixel the canvas is given, per axis — so the cost
+ * goes with the SQUARE of it.
+ *
+ * This is what the MSAA that `createStage` just gave up was buying, bought a
+ * different way — and 2 is where it was set because that is where the edge came
+ * back, not because it is a round number. Walked against the frozen stack at a
+ * 1.75 device ratio, with the resulting frame beside it:
+ *
+ *   1.0  no supersample   15.6 ms   staircase on the shallow diagonals
+ *   1.2                   18.4 ms
+ *   1.5                   26.7 ms   still stepped under magnification
+ *   1.71                  31.4 ms
+ *   2.0                   40.3 ms   clean, and matches the MSAA edge
+ *
+ * The line to read those against is what SHIPPED: MSAA 4x at the same buffer
+ * measured 51.5 ms. So this is the quality back AND a frame a fifth cheaper,
+ * which is why the trade is not a trade. 1.5 is here if more headroom is ever
+ * wanted — it is half the old frame — but it costs edge quality the piece never
+ * offered to give up.
+ *
+ * Four box samples per output pixel against four coverage samples, and the box
+ * wins on this subject: MSAA runs the fragment shader ONCE per pixel and only
+ * multiplies coverage at geometry edges. The shimmer here comes off eleven
+ * grazing rim terms and a specular sweep across near-flat plates — interior
+ * shading, which MSAA never covered and supersampling does.
+ *
+ * Not FXAA, and that is a choice rather than a shortcut. An edge filter finds
+ * edges by luminance gradient, and this piece is high-frequency detail nearly
+ * everywhere: the substrate's weave at `ribFrequency: 96`, the dot grid at
+ * `dotScale: 200`, the film grain. FXAA cannot tell those from a staircase and
+ * takes them all.
+ *
+ * It is the largest cost knob left now that the resolve is gone, and it is one
+ * the `ResolutionGovernor` already owns: this sets the CEILING it starts from
+ * and gives back first when a machine cannot hold the frame. A slow device
+ * therefore loses the supersample before it loses anything else, which is the
+ * right thing to lose. Worth knowing that it is also the largest MEMORY knob —
+ * the drawing buffer goes with its square, and on a wide desktop the first
+ * frame allocates that before the governor has seen a single interval.
+ */
+export const SUPERSAMPLE = 2
 
 export function createStage(container: HTMLElement): Stage {
   // Transparent: the page owns the backdrop, so the canvas can sit on the panel
   // without a seam at any viewport. The studio backdrop plane this diverges
   // from only existed to feed transmission refraction, and no sheet transmits.
   const renderer = new WebGLRenderer({
-    antialias: true,
+    // OFF, and it is the single most expensive line this file ever held.
+    //
+    // A multisampled default framebuffer makes every `copyFramebufferToTexture`
+    // resolve the WHOLE drawing buffer, and the frosted layers do four of those
+    // a frame. Measured on an M3, four captures of a 2520x1422 buffer, three
+    // brackets each:
+    //
+    //   antialias: true    ~31 ms   (31.4 / 16.6 / 38.6)
+    //   antialias: false   ~0.4 ms  (0.39 / 3.24 / -0.36)
+    //
+    // Eighty times, for the same four copies. And with it on the cost tracks
+    // the buffer: 24.7 ms at 4.03 Mpx against 6.28 ms at 1.17 Mpx, which is
+    // 3.44x the pixels for 3.94x the cost. `BackdropCapture` used to conclude
+    // the opposite — that the copies were per-call overhead and that a smaller
+    // texture "attacks the one term that was never the problem". They are
+    // bandwidth, and the bandwidth is a resolve nobody asked for.
+    //
+    // What replaces the antialiasing is `SUPERSAMPLE` below.
+    antialias: false,
     alpha: true,
     powerPreference: 'high-performance',
   })
   renderer.setClearColor(0x000000, 0)
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
+  // The AUTHORED ratio, with no supersample on it. The supersample is a ceiling
+  // the `ResolutionGovernor` climbs to, not a price of admission — it multiplies
+  // whatever ratio is current when the governor is built, which is also how the
+  // inspector path keeps the lower ratio it sets for itself.
+  //
+  // The mechanism, when it does climb: the drawing buffer is sized in device
+  // pixels while the canvas keeps its CSS box, so a backing store larger than
+  // the box is resampled by the compositor on the way to the screen.
+  // Supersampling with no pass of our own.
+  //
+  // This is deliberately NOT an offscreen render target, which is where this
+  // went first and had to be thrown away. Three switches tone mapping and the
+  // output colour space OFF when the destination is a render target — see the
+  // `_currentRenderTarget === null` test in its renderer — on the assumption
+  // that a post pass will do both. `NeutralToneMapping` at 0.72 exposure simply
+  // stopped applying, and the card came out blown to a flat saturated orange.
+  // Worse than the look: the frosted layers read the buffer back and composite
+  // against it by hand, and `FRAGMENT_BACKDROP_CHUNK` needs those bytes tone
+  // mapped and encoded. A target would hand them linear. The canvas is the one
+  // destination three finishes the frame for, so the frame is drawn there.
+  const authoredRatio = Math.min(window.devicePixelRatio, 1.75)
+  renderer.setPixelRatio(authoredRatio)
   renderer.outputColorSpace = SRGBColorSpace
   // Transmission re-renders the whole scene — heavy vertex shader included —
   // into its own target every frame. At full resolution it measured as two

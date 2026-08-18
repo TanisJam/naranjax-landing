@@ -1,8 +1,8 @@
-# Facebank — W-8BEN landing
+# MandarinaX — landing
 
-The Figma export in `../card/code.html` rebuilt as a real page, with the flat
-card-stack image on the left replaced by the live Three.js sheets from
-`../3dclaude`.
+A product landing whose hero is not a picture of the card but the card itself,
+rendered live in Three.js and coming apart into the nine things the account can
+do. The engine is the sheets renderer vendored from `../3dclaude`.
 
 ```bash
 pnpm install
@@ -10,17 +10,30 @@ pnpm dev        # http://localhost:5173
 pnpm build      # tsc --noEmit && vite build
 ```
 
+## The brand
+
+Two inks, both sampled off the MandarinaX reference card rather than eyeballed:
+orange `#f37d06` and red `#db1811`. They are not interchangeable and each has a
+job. Red is the ground — the `ink` ramp in `src/style.css` is that red taken
+down to near-black at a constant 2° hue — and orange is everything printed on
+it: the accent, the calls to action, the mark, the card body.
+
+The ramp arrived by rotation rather than by re-authoring. It was previously a
+violet at a constant 277.7° hue, and every step keeps that step's exact
+lightness and saturation with only the hue moved. So the page reads as a
+different brand while the contrast relationships that were tuned against the
+artwork are, number for number, the ones that were tuned.
+
 ## Layout
 
-Two panels. The left one is the 3D stage and a one-line hint; the right one
-carries the header, the 9-step progress bar and the form. Below `lg` they stack,
-the stage takes 46vh and its background fades into the form's.
-
-The markup is rebuilt rather than pasted: the export is absolutely positioned at
-a fixed 1440x1083, and every value pair became a `<dl>` row. Two deliberate
-departures from it — the "Ciudad" label came out of Figma in a different font
-and a near-invisible grey, which is a slip in the file rather than a decision,
-and the logo's fifteen loose rectangles became one wordmark.
+One column. The hero is the whole viewport and the card is the whole hero, and
+that is load-bearing rather than dramatic: opening a layer takes the canvas
+fullscreen, so a canvas that already *is* the viewport makes that swap a no-op.
+When the stage was a 38% column beside the copy, the same swap cost a measured
+29-pixel jump that took a compensation, an aim-point anchor and a flat-plate
+approximation to get down to two. The written half of the pitch runs under the
+hero, and the feature list there is built from the same `specs.ts` data as the
+panels the layers open into, so a name and its panel cannot disagree.
 
 ## The artwork
 

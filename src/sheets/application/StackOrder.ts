@@ -23,8 +23,29 @@ const viewDirection = new Vector3()
  * the stack, and then every layer changes together.
  */
 export class StackOrder {
+  /**
+   * The layer that is OUT IN FRONT of the stack, or null.
+   *
+   * It draws after every other one, and that is not a preference about which
+   * looks better on top — it is the only correct answer. Seven of the eleven
+   * layers are translucent and write no depth, so being genuinely in front of
+   * them buys nothing: whichever is drawn LAST blends over the other. A plate
+   * that has come forward out of the fan and is being read would otherwise be
+   * veiled by the films it left behind.
+   *
+   * Which is why this is not simply "the layer being read". A plate on its way
+   * back is being read right up until the animation ends, and it stops being IN
+   * FRONT well before that — see `STACK_REENTRY`, which is where the caller
+   * lets go of it. Holding it here for the whole return is what produced the
+   * complaint this is written against: the card came home, sat visibly on top
+   * of the stack it belonged in, and then snapped into place a moment later.
+   */
+  focused: SheetObject | null = null
+
   /** 0 until the first update, so the first pass always writes the order. */
   private facing = 0
+  /** What `focused` was when the order was last written. See `update`. */
+  private ordered: SheetObject | null = null
 
   constructor(
     private readonly sheets: readonly SheetObject[],
@@ -48,11 +69,19 @@ export class StackOrder {
     // Positive means depth grows with height, so the top layer is the far one
     // and index order is already back to front. Negative reverses the stack.
     const facing = stackAxis.dot(viewDirection) >= 0 ? 1 : -1
-    if (facing === this.facing) return
+    // Which layer is being read is the second thing that can change the order,
+    // and it has to be checked alongside the facing rather than instead of it:
+    // this pass writes every layer, so skipping it would leave the one that was
+    // last lifted still drawing over the stack after it went back.
+    if (facing === this.facing && this.focused === this.ordered) return
     this.facing = facing
+    this.ordered = this.focused
 
     for (let i = 0; i < this.sheets.length; i++) {
       this.sheets[i]!.mesh.renderOrder = i * facing
     }
+
+    // Clear of the whole range, which runs to ±(length - 1) either way.
+    if (this.focused) this.focused.mesh.renderOrder = this.sheets.length
   }
 }

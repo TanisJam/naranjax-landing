@@ -1,8 +1,10 @@
 import {
+  Euler,
   Group,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  Quaternion,
   Vector3,
   type MeshDepthMaterial,
   type MeshPhysicalMaterial,
@@ -158,6 +160,25 @@ export class SheetObject {
   private readonly assembledPosition: Vector3
   private readonly explodedPosition: Vector3
 
+  /**
+   * The exploded offset as composed, before any layout turn — see
+   * `setLayoutRotation`. Kept so the turn is applied to the AUTHORED layout
+   * every time rather than to whatever the last turn left behind, which would
+   * accumulate across resizes.
+   */
+  private readonly composedOffset: Vector3
+
+  /**
+   * This plate's own twist, at full openness, and its inverse.
+   *
+   * The offset above is read inside the pivot, so the pivot's twist is applied
+   * to it before it reaches the artwork. A layout turn has to be expressed
+   * where the eye sees it — in the artwork — so it is sandwiched: twist in,
+   * turn, twist back out. See `setLayoutRotation`.
+   */
+  private readonly twist: Quaternion
+  private readonly untwist: Quaternion
+
   /** Authored highlight levels, which hover scales rather than replaces. */
   private readonly baseRim: number
   private readonly baseBevelGlow: number
@@ -223,7 +244,10 @@ export class SheetObject {
     this.uniforms = uniforms
 
     this.assembledPosition = new Vector3(...placement.assembledOffset)
-    this.explodedPosition = new Vector3(...placement.offset)
+    this.composedOffset = new Vector3(...placement.offset)
+    this.explodedPosition = this.composedOffset.clone()
+    this.twist = new Quaternion().setFromEuler(new Euler(...placement.fanRotation))
+    this.untwist = this.twist.clone().invert()
     this.baseRim = layer.surface.rimStrength
     this.baseBevelGlow = layer.surface.bevelGlow
     this.flex = layer.surface.flex
@@ -254,7 +278,12 @@ export class SheetObject {
     // Safe from the shadow pass: that path calls `onBeforeShadow` and renders
     // through `renderBufferDirect`, never through the hook used here.
     if (layer.surface.frostsBackdrop) {
-      mesh.onBeforeRender = (renderer) => backdrop.capture(renderer)
+      // The index goes with it because sharing a capture is only sound between
+      // layers that are NEIGHBOURS in the stack, and the count of frosted
+      // layers cannot tell `BackdropCapture` that on its own — an opaque ply
+      // between two frosted ones is invisible to a counter and fatal to the
+      // rule. See `capture`.
+      mesh.onBeforeRender = (renderer) => backdrop.capture(renderer, layerIndex)
     }
 
     this.mesh = mesh
@@ -388,6 +417,51 @@ export class SheetObject {
    */
   faceNormal(target: Vector3): Vector3 {
     return this.hitArea.getWorldDirection(target)
+  }
+
+  /**
+   * Turns the direction the stack spreads in, without turning a single plate.
+   *
+   * `rotation` is about the CAMERA'S OWN AXIS, given in the artwork's frame,
+   * and every useful property of this follows from that one choice:
+   *
+   * - It is a pure rotation of the picture. A layout turned about any other
+   *   axis would swing plates toward and away from the lens, which changes how
+   *   large they are drawn and how much they overlap; about the view axis the
+   *   whole arrangement simply rotates in the plane of the screen.
+   * - Every offset keeps its depth EXACTLY. The component of a vector along
+   *   the axis it is turned about is the one thing a rotation cannot touch, so
+   *   the depth stagger the fan already had survives untouched — which is why
+   *   `StackOrder`, `StackOcclusion` and the backdrop's capture stride need to
+   *   know nothing about this. They sort the same eleven plates in the same
+   *   order they always did.
+   * - Only positions move. Orientation lives in `fanRotation` and in the
+   *   artwork's own pose, and neither is touched here — a card lies the way it
+   *   lies, and the stack merely lays it out somewhere else.
+   *
+   * The twist sandwich is what makes the second and third points true at once.
+   * The offset is read INSIDE the pivot, so whatever is written here comes back
+   * out through the plate's own twist; composing the turn in artwork space and
+   * then undoing the twist is what keeps the eleven spread directions parallel
+   * instead of splaying by up to the twist's own 16 degrees.
+   *
+   * Uses the twist at FULL openness while the pivot runs it at `local *
+   * breathe`, and the residue is not worth the coupling: the two disagree by at
+   * most the breathing's 3.5%, which is 0.009 radians on an offset a unit and a
+   * half long — under a hundredth of a unit. Below that the deploy is closing,
+   * and the exploded offset is being weighted out by the same number that is
+   * shrinking the twist, so the two vanish together.
+   *
+   * Idempotent by construction: the turn is applied to the composed offset, not
+   * to the last one, so resizing a hundred times lands exactly where resizing
+   * once does.
+   */
+  setLayoutRotation(rotation: Quaternion): void {
+    this.explodedPosition
+      .copy(this.composedOffset)
+      .applyQuaternion(this.twist)
+      .applyQuaternion(rotation)
+      .applyQuaternion(this.untwist)
   }
 
   /** 0 collapses the fan onto the back sheet, 1 is the composed layout. */

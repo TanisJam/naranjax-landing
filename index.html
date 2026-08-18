@@ -3,22 +3,41 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Facebank — Formulario W-8BEN</title>
+    <title>MandarinaX — Exprimí cada peso</title>
+    <meta
+      name="description"
+      content="Toda tu plata en una sola app: pagá, transferí, hacé rendir tus pesos y sacá tu tarjeta sin costo."
+    />
     <link rel="icon" href="data:," />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <script type="module" src="/src/main.ts"></script>
   </head>
-  <body class="bg-slate-900 font-sans text-slate-100 antialiased">
-    <main class="flex min-h-screen flex-col lg:h-screen lg:flex-row lg:overflow-hidden">
-      <!-- Left panel: the layered sheets, rendered live instead of the flat export. -->
+  <body class="bg-ink-950 font-sans text-ink-200 antialiased">
+    <main class="flex flex-col">
+      <!-- The hero is the whole viewport, and the card is the whole hero.
+           Rendered live instead of a flat export: the product IS a card that
+           comes apart into what the account can do, so the illustration is the
+           argument rather than a picture of it.
+
+           It used to be a 38% column beside the copy, and the change is not
+           only a matter of size. A column meant that opening a layer had to
+           take the canvas fullscreen and then hand it back, and that swap was a
+           measured 29-pixel jump that took a compensation, an aim-point anchor
+           and a flat-plate approximation to get down to two. At a full-viewport
+           hero the canvas an opened layer wants is the canvas it already has,
+           so the swap is a no-op and the jump has nowhere to live.
+
+           `svh` rather than `vh`: on a phone the URL bar makes `vh` taller than
+           what is actually on screen, and a hero that is exactly the viewport
+           is the entire point of this. -->
       <section
-        class="relative shrink-0 bg-slate-800 h-[46vh] min-h-[320px] lg:h-auto lg:min-h-0 lg:w-[38%] lg:max-w-[545px]"
-        aria-label="Ilustración de tarjetas Facebank"
+        class="relative h-[100svh] min-h-[520px] w-full bg-ink-900"
+        aria-label="Ilustración de la tarjeta MandarinaX"
       >
         <!-- The stage is the control: the card opens into its eleven layers on
              click, so the panel carries the button role and the state. -->
@@ -28,142 +47,196 @@
           role="button"
           tabindex="0"
           aria-expanded="false"
-          aria-label="Ver las capas de la tarjeta"
+          aria-label="Ver todo lo que podés hacer con MandarinaX"
         ></div>
-        <!-- Stacked layout puts the form directly under the panel; fade the two
-             backgrounds into each other so the split reads as one surface. -->
+        <!-- The page runs directly under the hero at every width now, so the
+             fade is unconditional where it used to be small-screen only: it is
+             what keeps the seam between the two backgrounds from reading as a
+             band across the screen. -->
         <div
-          class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-slate-900 lg:hidden"
+          class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-ink-950"
         ></div>
-        <!-- After the fade, not before: on the stacked layout the gradient runs
-             over this corner of the panel and would swallow the label. -->
+        <!-- After the fade in the source, not before: the gradient runs over
+             this strip of the hero and would swallow the label. -->
         <p
           id="sheets-hint"
-          class="pointer-events-none absolute inset-x-0 bottom-5 text-center text-xs tracking-wide text-slate-300/70"
+          class="pointer-events-none absolute inset-x-0 bottom-5 text-center text-xs tracking-wide text-ink-300/70"
         >
-          Toca para ver sus capas
+          Tocá para ver todo lo que podés hacer
         </p>
-      </section>
+        <!-- Over the hero rather than above it. The canvas owns the viewport,
+             so a header stacked on top of it would be a band the card has to
+             start below — and the card starting below the fold is the one thing
+             this layout exists to prevent.
 
-      <section class="flex min-w-0 flex-1 flex-col lg:overflow-y-auto">
-        <header class="shrink-0 pt-7">
-          <div class="flex flex-wrap items-center justify-between gap-4 px-6 pb-6 lg:px-12">
-            <a href="#" class="flex items-center gap-2" aria-label="Facebank — inicio">
-              <span class="grid size-5 grid-cols-2 grid-rows-2 gap-px" aria-hidden="true">
-                <span class="bg-cyan-400"></span>
-                <span class="bg-white"></span>
-                <span class="bg-white"></span>
-                <span class="bg-cyan-400"></span>
+             Transparent to the pointer, and its contents are not: the hero is a
+             click target the size of the screen and the gaps between the mark
+             and the nav have to reach it, or the top strip of the card stops
+             answering to a click for no reason the user can see. -->
+        <header class="pointer-events-none absolute inset-x-0 top-0 z-10 pt-7">
+          <div
+            class="pointer-events-auto mx-auto flex w-full max-w-[80rem] flex-wrap items-center justify-between gap-4 px-6 pb-6 lg:px-12"
+          >
+            <a href="#" class="flex items-center gap-2.5" aria-label="MandarinaX — inicio">
+              <span
+                aria-hidden="true"
+                class="grid size-6 place-items-center rounded-md bg-mx-orange text-sm leading-none font-bold text-ink-950"
+              >
+                X
               </span>
               <span class="text-xl font-semibold tracking-tight">
-                <span class="text-cyan-400">FACE</span><span class="text-white">BANK</span>
+                <span class="text-neutral-50">mandarina</span><span class="text-mx-orange">X</span>
               </span>
             </a>
-            <nav class="flex items-center gap-4 text-xs leading-5 tracking-tight text-slate-500">
-              <p><span>Documentación / </span><span class="font-medium text-slate-400">Información W-8BEN</span></p>
-              <p class="text-right">Paso 8/9</p>
+            <nav class="flex items-center gap-5 text-xs leading-5 tracking-tight text-ink-400">
+              <a href="#funciones" class="transition hover:text-ink-200">Cuenta</a>
+              <a href="#prestamos" class="transition hover:text-ink-200">Préstamos</a>
+              <a href="#beneficios" class="transition hover:text-ink-200">Beneficios</a>
             </nav>
           </div>
-
-          <ol class="flex gap-1 px-1" aria-label="Progreso: paso 8 de 9">
-            <li class="h-[3px] flex-1 bg-cyan-500"></li>
-            <li class="h-[3px] flex-1 bg-cyan-500"></li>
-            <li class="h-[3px] flex-1 bg-cyan-500"></li>
-            <li class="h-[3px] flex-1 bg-cyan-500"></li>
-            <li class="h-[3px] flex-1 bg-cyan-500"></li>
-            <li class="h-[3px] flex-1 bg-cyan-500"></li>
-            <li class="h-[3px] flex-1 bg-cyan-500"></li>
-            <li class="h-[3px] flex-1 bg-cyan-500" aria-current="step"></li>
-            <li class="h-[3px] flex-1 bg-slate-600"></li>
-          </ol>
         </header>
+      </section>
 
-        <div class="mx-auto w-full max-w-[26rem] px-6 pt-14 pb-16 lg:px-0">
-          <div class="flex flex-col gap-10">
-            <div class="flex flex-col gap-2">
-              <div class="flex items-start justify-between gap-4">
-                <h1 class="text-3xl leading-tight font-semibold text-neutral-50 sm:text-4xl sm:leading-[3rem]">
-                  Formulario W-8BEN
-                </h1>
-                <button
-                  type="button"
-                  class="mt-2 flex size-5 shrink-0 items-center justify-center rounded-sm text-blue-400 outline outline-blue-400 transition hover:bg-blue-400/10 focus-visible:outline-2"
-                  aria-label="Más información sobre el formulario W-8BEN"
-                >
-                  <span aria-hidden="true" class="text-xs leading-none font-semibold">i</span>
-                </button>
-              </div>
-              <p class="text-base leading-6 text-slate-300">
-                Verifica que los siguientes datos sean correctos e ingresa el número de identificación
-                fiscal tributario de tu país. Una vez que confirmes, mostraremos tu formulario de
-                W-8BEN completado.
-              </p>
+      <section class="flex w-full flex-col">
+        <div class="mx-auto flex w-full max-w-[34rem] flex-col gap-16 px-6 pt-10 pb-20">
+          <!-- The written half of the pitch. The card above is the hero now, so
+               this opens the page rather than sitting beside it: the headline is
+               the brand's own, and the line under it is the promise the nine
+               layers then itemise one at a time. -->
+          <div class="flex flex-col gap-6">
+            <p
+              class="text-xs leading-5 font-medium tracking-[0.2em] text-mx-orange uppercase"
+            >
+              Cuenta digital gratis
+            </p>
+            <h1
+              class="text-4xl leading-tight font-semibold text-neutral-50 sm:text-5xl sm:leading-[3.5rem]"
+            >
+              Exprimí cada peso
+            </h1>
+            <p class="text-lg leading-7 text-ink-300">
+              Toda tu plata en una sola app. Pagá, transferí y hacé rendir tus pesos todos los días
+              del año.
+            </p>
+
+            <div class="flex flex-col gap-3 sm:flex-row">
+              <a
+                href="#funciones"
+                class="rounded-lg bg-mx-orange px-7 py-4 text-center text-base leading-6 font-medium text-ink-950 transition hover:bg-mx-orange-bright"
+              >
+                Abrir cuenta
+              </a>
+              <a
+                href="#funciones"
+                class="rounded-lg px-7 py-4 text-center text-base leading-6 font-medium text-neutral-50 outline outline-ink-700 transition hover:bg-ink-900"
+              >
+                Descargar la app
+              </a>
             </div>
 
-            <form id="w8ben-form" class="flex flex-col gap-10" novalidate>
-              <div class="flex flex-col gap-4">
-                <dl class="flex flex-col divide-y divide-slate-600">
-                  <div class="flex flex-col p-2">
-                    <dt class="text-xs leading-5 tracking-tight text-slate-300">Nombre</dt>
-                    <dd class="text-base leading-6 text-neutral-50">Juan Carlos Andrada</dd>
-                  </div>
-                  <div class="flex flex-col p-2">
-                    <dt class="text-xs leading-5 tracking-tight text-slate-300">País de residencia</dt>
-                    <dd class="text-base leading-6 text-neutral-50">Argentina</dd>
-                  </div>
-                  <div class="flex flex-col p-2">
-                    <dt class="text-xs leading-5 tracking-tight text-slate-300">País de ciudadanía</dt>
-                    <dd class="text-base leading-6 text-neutral-50">Argentina</dd>
-                  </div>
-                  <div class="flex flex-col p-2">
-                    <dt class="text-xs leading-5 tracking-tight text-slate-300">Dirección</dt>
-                    <dd class="text-base leading-6 text-neutral-50">Manuel Rodriguez 9873</dd>
-                  </div>
-                  <div class="flex flex-col p-2">
-                    <dt class="text-xs leading-5 tracking-tight text-slate-300">Ciudad</dt>
-                    <dd class="text-base leading-6 text-neutral-50">Ciudad de Buenos Aires</dd>
-                  </div>
-                  <div class="flex flex-col p-2">
-                    <dt class="text-xs leading-5 tracking-tight text-slate-300">Estado</dt>
-                    <dd class="text-base leading-6 text-neutral-50">Buenos Aires</dd>
-                  </div>
-                  <div class="flex flex-col p-2">
-                    <dt class="text-xs leading-5 tracking-tight text-slate-300">Código postal</dt>
-                    <dd class="text-base leading-6 text-neutral-50">8372</dd>
-                  </div>
-                </dl>
-
-                <p class="text-xs leading-5 tracking-tight text-slate-500">
-                  ¿Hay algún dato equivocado? Te puedes comunicar con el banco al
-                  <a href="tel:123456789" class="font-medium text-slate-400 hover:text-slate-300">123456789</a>
-                </p>
-
-                <div class="flex flex-col gap-2">
-                  <label for="tax-id" class="text-sm leading-5 font-medium tracking-tight text-neutral-50">
-                    Número de identificación fiscal
-                  </label>
-                  <input
-                    id="tax-id"
-                    name="taxId"
-                    type="text"
-                    inputmode="numeric"
-                    autocomplete="off"
-                    placeholder="Número de identificación fiscal"
-                    class="w-full rounded-lg bg-slate-800 p-4 text-base leading-6 text-neutral-50 outline outline-slate-600 transition placeholder:text-slate-400 focus:outline-2 focus:outline-cyan-500"
-                  />
-                </div>
-              </div>
-
-              <button
-                id="submit-step"
-                type="submit"
-                disabled
-                class="w-full rounded-lg bg-slate-600 py-4 text-center text-base leading-6 font-medium text-slate-400 transition enabled:bg-cyan-500 enabled:text-slate-900 enabled:hover:bg-cyan-400 disabled:cursor-not-allowed"
-              >
-                Siguiente
-              </button>
-            </form>
+            <p class="text-xs leading-5 tracking-tight text-ink-400">
+              Sin costo de apertura ni de mantenimiento. La abrís desde la app en minutos.
+            </p>
           </div>
+
+          <!-- The three numbers the account is actually judged on, before any
+               feature list. Someone deciding whether to open one is asking what
+               it costs and what it pays, and the answer fits on one line. -->
+          <dl class="grid grid-cols-3 gap-x-6 border-y border-ink-800 py-6">
+            <div class="flex flex-col gap-1">
+              <dt class="text-xs leading-5 tracking-tight text-ink-400">Costo</dt>
+              <dd class="text-2xl leading-8 font-semibold text-neutral-50">$0</dd>
+            </div>
+            <div class="flex flex-col gap-1">
+              <dt class="text-xs leading-5 tracking-tight text-ink-400">Rendimiento</dt>
+              <dd class="text-2xl leading-8 font-semibold text-neutral-50">18% TNA</dd>
+            </div>
+            <div class="flex flex-col gap-1">
+              <dt class="text-xs leading-5 tracking-tight text-ink-400">Servicios</dt>
+              <dd class="text-2xl leading-8 font-semibold text-neutral-50">+4.000</dd>
+            </div>
+          </dl>
+
+          <!-- The bridge between the two halves of the page. The card on the
+               left is not decoration and this is where that gets said out loud:
+               every layer of it is one of the things listed here, and the list
+               is the same data the panels are built from. -->
+          <div id="funciones" class="flex flex-col gap-4 scroll-mt-8">
+            <h2 class="text-2xl leading-8 font-semibold text-neutral-50">
+              Todo lo que podés hacer con tu billetera digital
+            </h2>
+            <p class="text-base leading-6 text-ink-300">
+              La tarjeta se abre en capas y cada una es una de estas funciones. Tocá el stack y
+              después tocá la capa que quieras ver.
+            </p>
+            <!-- Built from the same spec data the panels are, so a feature's
+                 name here and the panel it opens can never disagree.
+
+                 This list is also the keyboard's route into those panels, and
+                 that is why it is visible rather than `sr-only`: aiming at one
+                 layer of a floating stack is something a pointer can do and a
+                 keyboard cannot, and a landing needs the feature list on the
+                 page anyway. One list serving both is the whole reason the
+                 hidden one is gone. -->
+            <ul id="feature-list" class="mt-2 flex flex-col divide-y divide-ink-800"></ul>
+          </div>
+
+          <div id="prestamos" class="flex flex-col gap-4 scroll-mt-8">
+            <h2 class="text-2xl leading-8 font-semibold text-neutral-50">
+              Pedí tu préstamo y recibilo en el acto
+            </h2>
+            <p class="text-base leading-6 text-ink-300">
+              Sacalo desde la app, se acredita al instante en tu cuenta y lo devolvés en cuotas
+              fijas. Sabés desde el primer día cuánto vas a pagar.
+            </p>
+          </div>
+
+          <div id="beneficios" class="flex flex-col gap-4 scroll-mt-8">
+            <h2 class="text-2xl leading-8 font-semibold text-neutral-50">
+              Beneficios todos los días
+            </h2>
+            <ul class="flex flex-col gap-3 text-base leading-6 text-ink-300">
+              <li class="flex gap-3">
+                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-mx-orange"></span>
+                <span>2x1 en Cinemark todos los días con tu tarjeta de crédito o débito.</span>
+              </li>
+              <li class="flex gap-3">
+                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-mx-orange"></span>
+                <span>30% de ahorro en McDonald's pagando con el QR de la app.</span>
+              </li>
+              <li class="flex gap-3">
+                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-mx-orange"></span>
+                <span>25% OFF y 5 cuotas sin interés pidiendo tu tarjeta 100% online.</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Closing CTA. Same two actions as the hero and deliberately not a
+               third one: a landing that ends by offering something new is a
+               landing that spent its scroll teaching you to want the wrong
+               thing. -->
+          <div class="flex flex-col gap-5 rounded-2xl bg-ink-900 p-8">
+            <h2 class="text-2xl leading-8 font-semibold text-neutral-50">
+              Abrí tu cuenta y olvidate de la billetera
+            </h2>
+            <p class="text-base leading-6 text-ink-300">
+              Descargá la app y ya tenés tu cuenta gratis para manejar pesos y dólares desde un solo
+              lugar. Sin trámites, sin sucursal y sin letra chica.
+            </p>
+            <a
+              href="#funciones"
+              class="rounded-lg bg-mx-orange px-7 py-4 text-center text-base leading-6 font-medium text-ink-950 transition hover:bg-mx-orange-bright sm:self-start"
+            >
+              Abrir cuenta
+            </a>
+          </div>
+
+          <footer class="flex flex-col gap-2 border-t border-ink-800 pt-6">
+            <p class="text-xs leading-5 tracking-tight text-ink-400">
+              Pieza de demostración. Los datos y las cifras son ilustrativos y no constituyen una
+              oferta comercial.
+            </p>
+          </footer>
         </div>
       </section>
     </main>

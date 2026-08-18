@@ -356,6 +356,7 @@ export type SheetDecal =
   | 'embossed-circles'
   | 'currency-frame'
   | 'border-frame'
+  | 'facet-fold'
   | 'none'
 
 export interface SheetLayer {

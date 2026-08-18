@@ -26,6 +26,16 @@ const PUSH_FULL_SPEED = 1.6
  */
 const MAX_SAMPLES = 24
 
+/**
+ * How far a contact may travel and still count as a tap, in CSS pixels.
+ *
+ * The platform figure, near enough — iOS and Android both draw the line around
+ * ten. Less a gesture threshold than a description of a finger: a thumb pressed
+ * against glass rolls a few pixels on its own while trying to hold still, and a
+ * tap that demanded perfect stillness would be a tap most hands cannot perform.
+ */
+const TAP_SLOP = 10
+
 /** What caused a pick to change, for whoever has to answer it. */
 export interface PickChange {
   /**
@@ -123,10 +133,30 @@ export class LayerPicker {
    */
   onChange: ((layer: SheetObject | null, change: PickChange) => void) | null = null
 
+  /**
+   * Whether the last contact swept rather than tapped.
+   *
+   * For whoever handles the click the browser synthesises when a finger lifts.
+   * That click arrives after a riffle exactly as it arrives after a tap, and
+   * from the outside the two are identical — same target, same coordinates. The
+   * only thing separating them is what the finger did in between, and this is
+   * the record of it.
+   *
+   * Always false for a mouse: a mouse hovers without pressing, so its click is
+   * never the tail of a gesture that already answered itself.
+   */
+  dragged = false
+
   private readonly raycaster = new Raycaster()
   private readonly ndc = new Vector2()
   /** Scratch for the hovered plate's face normal. Reused, never handed out. */
   private readonly faceNormal = new Vector3()
+
+  /**
+   * The camera the last frame picked against. Kept so a click can be resolved
+   * outside the frame loop, which is the only place a click ever arrives.
+   */
+  private camera: Camera | null = null
 
   /** Built once: this is walked several times per frame now, not once. */
   private readonly targets: Object3D[]
@@ -150,19 +180,30 @@ export class LayerPicker {
   private lastY = 0
   private lastTime = 0
 
-  private readonly onPointerMove = (event: PointerEvent): void => {
-    // Mouse only. A touch pointer reports a position while the finger is down
-    // and then leaves it there, so a tap would light a layer up and keep it lit
-    // with nothing on screen explaining why.
-    if (event.pointerType !== 'mouse') return
+  /**
+   * The contact currently down, or -1 when none is.
+   *
+   * Touch and pen only. A finger down IS the hover — there is no other state a
+   * touch can be in — so this is also the whole lifetime of `inside` for one.
+   */
+  private session = -1
+  /** Travel of the current contact, in CSS pixels. Feeds `dragged`. */
+  private travel = 0
+  private lastClientX = 0
+  private lastClientY = 0
+
+  /**
+   * Queues one event's positions.
+   *
+   * The samples the browser buffered, not just the one it chose to deliver.
+   * What it coalesced away is exactly the layer crossings a fast sweep is made
+   * of. Older Safari has no such method; the delivered event is then all there
+   * is, and the queue still beats keeping only the last of them.
+   */
+  private readonly sample = (event: PointerEvent): void => {
     const rect = this.element.getBoundingClientRect()
     if (rect.width === 0 || rect.height === 0) return
-    this.inside = true
 
-    // The samples the browser buffered, not just the one it chose to deliver.
-    // What it coalesced away is exactly the layer crossings a fast sweep is
-    // made of. Older Safari has no such method; the delivered event is then all
-    // there is, and the queue below still beats keeping only the last of them.
     const coalesced =
       typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : []
     const points: readonly { clientX: number; clientY: number; timeStamp: number }[] =
@@ -177,7 +218,70 @@ export class LayerPicker {
     }
   }
 
+  /**
+   * A contact arriving, which for a touch is the hover beginning.
+   *
+   * Ignored for a mouse: one is already being tracked wherever it is, and
+   * pressing its button says nothing new about where that is.
+   */
+  private readonly onPointerDown = (event: PointerEvent): void => {
+    if (event.pointerType === 'mouse') return
+
+    this.session = event.pointerId
+    this.dragged = false
+    this.travel = 0
+    this.lastClientX = event.clientX
+    this.lastClientY = event.clientY
+    // The previous contact's last sample may be half a screen and a minute
+    // away, and the speed of the step between them is what the cues are scaled
+    // by. Clearing the clock makes the first sample of a contact measure
+    // against nothing, which is what it actually has.
+    this.lastTime = 0
+    // So the sweep survives leaving the canvas. A thumb dragged down the deck
+    // routinely runs off an edge, and uncaptured the gesture would simply stop
+    // reporting halfway through — while the finger was still moving.
+    this.element.setPointerCapture(event.pointerId)
+    this.inside = true
+    // Seeded now rather than at the first move: the layer a finger lands on is
+    // already under it, and a pick that waited for movement would light up
+    // after the user had begun.
+    this.sample(event)
+  }
+
+  private readonly onPointerMove = (event: PointerEvent): void => {
+    if (event.pointerType === 'mouse') {
+      this.inside = true
+    } else {
+      // A touch reports only while down, so anything outside the open session
+      // is a second finger or a contact this class never saw arrive.
+      if (event.pointerId !== this.session) return
+      // Path length, not net displacement: a finger that sweeps the deck and
+      // comes back is still not a tap, however close to home it lands.
+      this.travel += Math.hypot(event.clientX - this.lastClientX, event.clientY - this.lastClientY)
+      this.lastClientX = event.clientX
+      this.lastClientY = event.clientY
+      if (this.travel > TAP_SLOP) this.dragged = true
+    }
+
+    this.sample(event)
+  }
+
   private readonly onPointerLeave = (): void => {
+    this.inside = false
+  }
+
+  /**
+   * A contact ending, which for a touch ends the hover with it.
+   *
+   * This is the `pointerleave` a finger never sends. A touch reports a position
+   * while it is down and then simply stops, so without this the last layer of a
+   * sweep stays lit under a finger that is no longer there — a highlight
+   * answering nothing on screen, which is the reason touch was locked out of
+   * this class in the first place rather than the reason it had to stay out.
+   */
+  private readonly onPointerRelease = (event: PointerEvent): void => {
+    if (event.pointerId !== this.session) return
+    this.session = -1
     this.inside = false
   }
 
@@ -188,7 +292,13 @@ export class LayerPicker {
     this.targets = sheets.map((sheet) => sheet.hitArea)
     for (const sheet of sheets) this.byHitArea.set(sheet.hitArea, sheet)
 
+    element.addEventListener('pointerdown', this.onPointerDown, { passive: true })
     element.addEventListener('pointermove', this.onPointerMove, { passive: true })
+    // Both, because a cancel is how the platform takes a gesture away — a call
+    // arriving, the system claiming the drag — and it is the one ending that
+    // never sends a `pointerup` to balance the down.
+    element.addEventListener('pointerup', this.onPointerRelease, { passive: true })
+    element.addEventListener('pointercancel', this.onPointerRelease, { passive: true })
     element.addEventListener('pointerleave', this.onPointerLeave, { passive: true })
   }
 
@@ -197,7 +307,45 @@ export class LayerPicker {
     return this.hovered
   }
 
+  /**
+   * Which layer sits under a point on the panel, in client coordinates.
+   *
+   * Separate from `hovered` on purpose, and still separate now that a finger
+   * feeds this class like a mouse does. A touch hover does not outlive the
+   * touch: the pick is cleared the instant the contact lifts, and the click the
+   * browser synthesises from that same lift arrives afterwards. So by the time
+   * a tap is handled `hovered` is null, by design and not by accident — and a
+   * TAP has a position even where a hover has stopped having one. This is what
+   * reads it: one raycast, on demand, against the transforms the last frame
+   * drew.
+   *
+   * Those transforms are a frame old, which is exactly right: they are the ones
+   * that were on screen when the user aimed.
+   *
+   * Safe to share the scratch vectors with `resolve`, because a click arrives
+   * between frames and never during one.
+   */
+  pickAt(clientX: number, clientY: number): SheetObject | null {
+    const camera = this.camera
+    if (!camera) return null
+
+    const rect = this.element.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return null
+
+    this.ndc.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    this.raycaster.setFromCamera(this.ndc, camera)
+    const hit = this.raycaster.intersectObjects(this.targets, false)[0]
+    return hit ? (this.byHitArea.get(hit.object) ?? null) : null
+  }
+
   update(camera: Camera): void {
+    // Before the guards below: a disabled picker still has to be able to answer
+    // a click, and the camera is the one thing it cannot reconstruct.
+    this.camera = camera
+
     const count = this.pending
     this.pending = 0
 
@@ -269,7 +417,10 @@ export class LayerPicker {
   }
 
   dispose(): void {
+    this.element.removeEventListener('pointerdown', this.onPointerDown)
     this.element.removeEventListener('pointermove', this.onPointerMove)
+    this.element.removeEventListener('pointerup', this.onPointerRelease)
+    this.element.removeEventListener('pointercancel', this.onPointerRelease)
     this.element.removeEventListener('pointerleave', this.onPointerLeave)
   }
 

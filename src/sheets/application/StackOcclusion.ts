@@ -8,16 +8,24 @@ import type { SheetObject } from '../infrastructure/three/SheetObject'
  * How much of the stack's own shadow the direct lights are asked to carry.
  *
  * Not 1, and the reason is structural rather than a matter of taste. Physically
- * a plate lying under another is in that plate's shadow, but the three lights
- * that do the work here — key, rim and bounce — are all `RectAreaLight`, which
- * casts no shadow at any setting. Killing the single directional light in the
- * scene moves the frame by about four luminance points, so shadowing that
- * relied on it alone could never read. This term stands in for the rest.
+ * a plate lying under another is in that plate's shadow, but for most of this
+ * rig's life the lights doing the work — key, rim and bounce — were all
+ * `RectAreaLight`, which casts no shadow at any setting. Killing the single
+ * directional light in the scene moved the frame by about four luminance
+ * points, so shadowing that relied on it alone could never read. This term
+ * stands in for the rest.
  *
- * Partial because those lights are LARGE and reach well in from the sides: a
- * plate under another loses its sky, not its light. Taken to 1 the middle of
- * the stack goes near-black, which is what an enclosed volume would do and not
- * what an open fan of plates does.
+ * `rim` and `bounce` have since been ported to `DirectionalLight` on measured
+ * fragment cost, so `key` is the last panel standing and the premise above has
+ * eroded twice over. It has NOT disappeared: `key` is still 41% of the direct
+ * light and still casts nothing, so there is still a majority-adjacent share of
+ * the frame that no shadow map can account for. See `CAST_SHARE` below, which
+ * tracks the same migration from the other side.
+ *
+ * Partial because a panel is LARGE and reaches well in from the sides: a plate
+ * under another loses its sky, not its light. Taken to 1 the middle of the
+ * stack goes near-black, which is what an enclosed volume would do and not what
+ * an open fan of plates does.
  *
  * Raised from 0.7 because that escape route was narrowed. The whole reason this
  * is not 1 is the width of the panels, and the fill panels have since lost a
@@ -90,9 +98,40 @@ const MIN_LIGHT_ELEVATION = 0.35
  *   key   5.8 -> 26.3      rim  3.4 -> 6.5
  *   spec  5.2 -> 29.5      bounce 1.6 -> 2.0
  *
- * which puts the only source that can throw an edge at 29.5 of a direct total
- * of 64.3. The panels lost a third each and the directional gained, so this
- * came up from the 0.42 the previous rig justified.
+ * which put the only source that could throw an edge at 29.5 of a direct total
+ * of 64.3, or 0.46 — up from the 0.42 the rig before it justified, because the
+ * panels lost a third each and the directional gained.
+ *
+ * And up again to 0.49, for a change that moved no intensity at all. `bounce`
+ * is now a `DirectionalLight` rather than a panel — it cost a third of the
+ * area-light budget for three per cent of the light, and the whole argument is
+ * in `stage.ts`. Its 2.0 therefore changes SIDES: it is delivered by a source
+ * that throws an edge now, so the numerator is 29.5 + 2.0 of the same 64.3
+ * total. The rig is exactly as bright as it was; what moved is which half of
+ * this term is entitled to carry its shadow.
+ *
+ * And to 0.59, for the third time and by the same mechanism: `rim` has made the
+ * same trip for the same reason, so its 6.5 changes sides too. The numerator is
+ * 29.5 + 2.0 + 6.5 = 38.0 of the same 64.3, which is 0.591.
+ *
+ * The denominator has still never moved. That is worth saying out loud because
+ * it is the property that makes this number safe to recompute: `rim` was ported
+ * at matched delivered luminance — 1.15 of directional against 3.4 of panel, on
+ * the 5.67-points-per-unit chain in `stage.ts` — so the rig is exactly as bright
+ * as it has been through all three revisions. Only the split between "thrown by
+ * something with a direction" and "arriving from a panel" has changed, and that
+ * split IS this number. The day somebody changes an intensity instead, the 64.3
+ * moves and every term here has to be re-read rather than re-split.
+ *
+ * That leaves `STACK_SHADOW` with a weaker case again, and now a considerably
+ * weaker one. The share arriving from a source wide enough to reach in
+ * sideways — the entire reason that value is not 1 — has fallen 0.54, 0.51, and
+ * now to 26.3/64.3 = 0.41, because `key` is the last panel in the rig. By its
+ * own reasoning that argues it upward for the third time. Left alone
+ * deliberately and for the third time: it is a FITTED level and not a ratio,
+ * and moving a fitted number by a calculation is how it stops meaning anything.
+ * It wants an eye, not arithmetic. But the gap between what it is and what its
+ * own argument now implies has widened enough to be worth an eye soon.
  *
  * The extrapolation is not exact — the knockouts were read off a tone-mapped
  * frame, which is not quite linear in the light that produced it — but the
@@ -104,7 +143,7 @@ const MIN_LIGHT_ELEVATION = 0.35
  * than the symmetric term it replaced. At 0 the shadow has no direction at all,
  * which is where this started.
  */
-const CAST_SHARE = 0.46
+const CAST_SHARE = 0.59
 
 /**
  * Writes the occlusion field the sheets shade themselves with.
