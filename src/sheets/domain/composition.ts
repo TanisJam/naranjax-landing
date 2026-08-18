@@ -156,6 +156,17 @@ const baseSurface: SheetSurface = {
   // Off by default: the two covers are finished card and scatter nothing. Every
   // layer between them turns it on — that is what they are made of.
   frost: 0,
+  // Tracks `frost` rather than being chosen per layer: anything that scatters
+  // light scatters what is BEHIND it too, and a sheet that frosts its own body
+  // while leaving the stack behind it razor sharp is the tell that it is a tint
+  // and not a material. So every layer with frost above zero turns this on, and
+  // the covers — which have no frost — leave it off.
+  //
+  // It is the expensive flag in the file. Each frosted layer breaks the render
+  // pass to copy the framebuffer, `BackdropCapture.stride` shares one copy
+  // across two of them, and seven frosted layers is four copies where four
+  // frosted layers was two. `BackdropCapture` measures a copy at 0.87 gpu ms,
+  // so this is roughly +1.7 ms on a 7.3 ms frame. Paid deliberately.
   frostsBackdrop: false,
   frostColor: '#fff5ee',
   dotScale: 0,
@@ -354,6 +365,12 @@ const layers: SheetDraft[] = [
       roughness: 0.32,
       opacity: 0.92,
       frost: 0.45,
+      // The least of it in the stack, and that is the alpha talking rather than
+      // the frost: at 0.92 body only 8% of the diffused capture survives the
+      // composite. It reads as the edges of the plies below going soft where
+      // this one covers them, not as glass. Correct for a pigmented core — it is
+      // the most solid film here — and the reason to leave the alpha alone.
+      frostsBackdrop: true,
     },
     placement: {
       pivot: PIVOT,
@@ -395,6 +412,13 @@ const layers: SheetDraft[] = [
       roughness: 0.34,
       opacity: 0.72,
       frost: 0.35,
+      // Where this pays most in the upper half of the stack: 0.72 body leaves
+      // 28% of the diffused capture showing, the widest opening above the foils.
+      // It also gives the matte laminate back the thing it lost when its
+      // roughness went to 0.34 — a sheet with no specular sweep to show now
+      // shows its depth instead, which is the more honest way for a matte ply to
+      // announce itself anyway.
+      frostsBackdrop: true,
       // The tooth the matte finish actually has. Faint enough to be felt rather
       // than seen, which is the difference between a matte laminate and a
       // frosted one.
@@ -566,6 +590,13 @@ const layers: SheetDraft[] = [
       // the normal is where a fold lives — frosting this one to match its
       // neighbours would sand the creases off the only layer that has any.
       frost: 0.3,
+      // The low frost above is a decision about this layer's OWN normal, and it
+      // is left standing — the crease survives. What the backdrop composite
+      // scatters is the frame behind, which has no creases of this sheet in it
+      // to sand off. Two different surfaces, so the argument for holding the
+      // frost down is not an argument for holding this off. The 0.93 body keeps
+      // the result to a softening under the facets rather than a window.
+      frostsBackdrop: true,
     },
     placement: {
       pivot: PIVOT,
