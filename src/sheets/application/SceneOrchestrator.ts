@@ -7,6 +7,7 @@ import {
   CAMERA_TARGET,
   createStage,
   FIT_ASPECT,
+  SUPERSAMPLE,
   type Stage,
 } from '../infrastructure/three/stage'
 import { AnimationTimeline } from './AnimationTimeline'
@@ -318,7 +319,15 @@ export class SceneOrchestrator {
     // After the inspector branch, which sets its own lower ratio: the ceiling
     // is whatever the piece was authored to ask for on this path, not a
     // constant.
-    this.resolution = new ResolutionGovernor(this.stage.renderer.getPixelRatio())
+    //
+    // STARTS at the authored ratio and may climb to the supersample above it,
+    // rather than opening there and walking down. Same reachable quality, and
+    // it is the difference between a machine that cannot afford the supersample
+    // paying seven seconds to find that out on every visit and never paying at
+    // all. Multiplying the CURRENT ratio rather than a constant is what keeps
+    // the inspector's own lower setting intact.
+    const authoredRatio = this.stage.renderer.getPixelRatio()
+    this.resolution = new ResolutionGovernor(authoredRatio * SUPERSAMPLE, 1, authoredRatio)
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize())
     this.resizeObserver.observe(container)

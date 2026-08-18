@@ -278,7 +278,12 @@ export class SheetObject {
     // Safe from the shadow pass: that path calls `onBeforeShadow` and renders
     // through `renderBufferDirect`, never through the hook used here.
     if (layer.surface.frostsBackdrop) {
-      mesh.onBeforeRender = (renderer) => backdrop.capture(renderer)
+      // The index goes with it because sharing a capture is only sound between
+      // layers that are NEIGHBOURS in the stack, and the count of frosted
+      // layers cannot tell `BackdropCapture` that on its own — an opaque ply
+      // between two frosted ones is invisible to a counter and fatal to the
+      // rule. See `capture`.
+      mesh.onBeforeRender = (renderer) => backdrop.capture(renderer, layerIndex)
     }
 
     this.mesh = mesh

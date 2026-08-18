@@ -252,17 +252,99 @@ export const CAMERA_TARGET = new Vector3(0, -0.12, 0)
 const TARGET = CAMERA_TARGET
 const CAMERA_OFFSET = new Vector3(0.18, 0.5, 7.6).sub(TARGET)
 
+/**
+ * Drawing-buffer pixels per pixel the canvas is given, per axis — so the cost
+ * goes with the SQUARE of it.
+ *
+ * This is what the MSAA that `createStage` just gave up was buying, bought a
+ * different way — and 2 is where it was set because that is where the edge came
+ * back, not because it is a round number. Walked against the frozen stack at a
+ * 1.75 device ratio, with the resulting frame beside it:
+ *
+ *   1.0  no supersample   15.6 ms   staircase on the shallow diagonals
+ *   1.2                   18.4 ms
+ *   1.5                   26.7 ms   still stepped under magnification
+ *   1.71                  31.4 ms
+ *   2.0                   40.3 ms   clean, and matches the MSAA edge
+ *
+ * The line to read those against is what SHIPPED: MSAA 4x at the same buffer
+ * measured 51.5 ms. So this is the quality back AND a frame a fifth cheaper,
+ * which is why the trade is not a trade. 1.5 is here if more headroom is ever
+ * wanted — it is half the old frame — but it costs edge quality the piece never
+ * offered to give up.
+ *
+ * Four box samples per output pixel against four coverage samples, and the box
+ * wins on this subject: MSAA runs the fragment shader ONCE per pixel and only
+ * multiplies coverage at geometry edges. The shimmer here comes off eleven
+ * grazing rim terms and a specular sweep across near-flat plates — interior
+ * shading, which MSAA never covered and supersampling does.
+ *
+ * Not FXAA, and that is a choice rather than a shortcut. An edge filter finds
+ * edges by luminance gradient, and this piece is high-frequency detail nearly
+ * everywhere: the substrate's weave at `ribFrequency: 96`, the dot grid at
+ * `dotScale: 200`, the film grain. FXAA cannot tell those from a staircase and
+ * takes them all.
+ *
+ * It is the largest cost knob left now that the resolve is gone, and it is one
+ * the `ResolutionGovernor` already owns: this sets the CEILING it starts from
+ * and gives back first when a machine cannot hold the frame. A slow device
+ * therefore loses the supersample before it loses anything else, which is the
+ * right thing to lose. Worth knowing that it is also the largest MEMORY knob —
+ * the drawing buffer goes with its square, and on a wide desktop the first
+ * frame allocates that before the governor has seen a single interval.
+ */
+export const SUPERSAMPLE = 2
+
 export function createStage(container: HTMLElement): Stage {
   // Transparent: the page owns the backdrop, so the canvas can sit on the panel
   // without a seam at any viewport. The studio backdrop plane this diverges
   // from only existed to feed transmission refraction, and no sheet transmits.
   const renderer = new WebGLRenderer({
-    antialias: true,
+    // OFF, and it is the single most expensive line this file ever held.
+    //
+    // A multisampled default framebuffer makes every `copyFramebufferToTexture`
+    // resolve the WHOLE drawing buffer, and the frosted layers do four of those
+    // a frame. Measured on an M3, four captures of a 2520x1422 buffer, three
+    // brackets each:
+    //
+    //   antialias: true    ~31 ms   (31.4 / 16.6 / 38.6)
+    //   antialias: false   ~0.4 ms  (0.39 / 3.24 / -0.36)
+    //
+    // Eighty times, for the same four copies. And with it on the cost tracks
+    // the buffer: 24.7 ms at 4.03 Mpx against 6.28 ms at 1.17 Mpx, which is
+    // 3.44x the pixels for 3.94x the cost. `BackdropCapture` used to conclude
+    // the opposite — that the copies were per-call overhead and that a smaller
+    // texture "attacks the one term that was never the problem". They are
+    // bandwidth, and the bandwidth is a resolve nobody asked for.
+    //
+    // What replaces the antialiasing is `SUPERSAMPLE` below.
+    antialias: false,
     alpha: true,
     powerPreference: 'high-performance',
   })
   renderer.setClearColor(0x000000, 0)
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
+  // The AUTHORED ratio, with no supersample on it. The supersample is a ceiling
+  // the `ResolutionGovernor` climbs to, not a price of admission — it multiplies
+  // whatever ratio is current when the governor is built, which is also how the
+  // inspector path keeps the lower ratio it sets for itself.
+  //
+  // The mechanism, when it does climb: the drawing buffer is sized in device
+  // pixels while the canvas keeps its CSS box, so a backing store larger than
+  // the box is resampled by the compositor on the way to the screen.
+  // Supersampling with no pass of our own.
+  //
+  // This is deliberately NOT an offscreen render target, which is where this
+  // went first and had to be thrown away. Three switches tone mapping and the
+  // output colour space OFF when the destination is a render target — see the
+  // `_currentRenderTarget === null` test in its renderer — on the assumption
+  // that a post pass will do both. `NeutralToneMapping` at 0.72 exposure simply
+  // stopped applying, and the card came out blown to a flat saturated orange.
+  // Worse than the look: the frosted layers read the buffer back and composite
+  // against it by hand, and `FRAGMENT_BACKDROP_CHUNK` needs those bytes tone
+  // mapped and encoded. A target would hand them linear. The canvas is the one
+  // destination three finishes the frame for, so the frame is drawn there.
+  const authoredRatio = Math.min(window.devicePixelRatio, 1.75)
+  renderer.setPixelRatio(authoredRatio)
   renderer.outputColorSpace = SRGBColorSpace
   // Transmission re-renders the whole scene — heavy vertex shader included —
   // into its own target every frame. At full resolution it measured as two

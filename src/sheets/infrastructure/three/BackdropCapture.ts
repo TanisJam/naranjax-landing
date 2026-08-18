@@ -1,4 +1,4 @@
-import { FramebufferTexture, LinearFilter, Vector2, type IUniform, type WebGLRenderer } from 'three'
+import { LinearFilter, Vector2, WebGLRenderTarget, type IUniform, type Texture, type WebGLRenderer } from 'three'
 
 /**
  * What a frosted layer sees through itself.
@@ -26,6 +26,13 @@ import { FramebufferTexture, LinearFilter, Vector2, type IUniform, type WebGLRen
  * the eleven-tap spiral every frosted fragment walks measured 0.02 ms. The
  * blur is free and the copies are half the frame, which is the reverse of the
  * intuition and the reverse of where an afternoon of optimisation would go.
+ *
+ * SUPERSEDED — see `stage.ts`. The paragraph below is kept because the reasoning
+ * is the instructive part and the conclusion was measured to be exactly wrong:
+ * the cost IS bandwidth, and it is an MSAA resolve that `antialias: true` was
+ * silently forcing on every copy. Four captures went from ~31 gpu ms to ~0.4 ms
+ * when the drawing buffer stopped being multisampled, and the cost tracks the
+ * buffer size at 3.94x for 3.44x the pixels.
  *
  * The reason is that it is not bandwidth. Four copies of a 1.5 M texel buffer
  * is about 6 MB, which an M3 moves in microseconds; 0.87 ms EACH is per-call
@@ -64,6 +71,26 @@ export class BackdropCapture {
    * layer is missing plates it has real separation from, and the measurement
    * above says nothing about that case — it was taken at 2.
    *
+   * STILL 2, AND STILL WORTH IT — but the mechanism under it was wrong and has
+   * been replaced. See `capture`: sharing used to be a COUNT over the layers
+   * that asked, which is only the same as the neighbour rule while every layer
+   * in the draw order captures. Seven frosted layers among eleven broke that and
+   * the count paired two plies with an opaque one between them. The rule is now
+   * checked against stack indices instead of assumed, and it still takes four
+   * captures out of seven here — the same number, the right four.
+   *
+   * The reason to keep sharing at all changed too, and it is not the one written
+   * above. A capture no longer costs 0.87 ms of resolve; `antialias: false` in
+   * `stage.ts` took four of them to ~0.4 ms total. What it costs now is
+   * SERIALISATION: the copy writes the very texture the following draws sample,
+   * so every capture is a read-after-write the driver has to order, and the
+   * layers stop overlapping. Measured by walking this dial with everything else
+   * fixed — 7 captures against 4 cost about 15 ms of a frame that was 11.
+   * Superlinear, and nothing to do with bandwidth.
+   *
+   * So 1 is not "the exact behaviour" worth having: it is four more stalls for a
+   * capture the neighbour rule already makes sound.
+   *
    * THAT NEIGHBOUR RULE IS A PRECONDITION, not a description, and it is the
    * whole reason `beginFrame` can be told to suspend this. It holds only while
    * every layer draws in its place in the stack. A layer being read does not:
@@ -75,57 +102,122 @@ export class BackdropCapture {
    */
   stride = 2
 
+  /**
+   * Capture pixels per drawing-buffer pixel, per axis. The cost goes with the
+   * square, and this is the knob the whole file was missing.
+   *
+   * `knockouts.ts` said all along that this cost "scales with BUFFER SIZE" and
+   * the doc above argued the opposite. The knockout was right, and the
+   * arithmetic is stark once the resolve is gone: with the captures at full
+   * resolution the frame measured 15.6 ms at a 1.75 pixel ratio and 40.3 ms at
+   * 3.5, while everything that is NOT a capture stayed at 6-7 ms in both. The
+   * captures were the entire slope.
+   *
+   * Half per axis is a quarter of the texels. It costs the effect nothing, and
+   * that is not a hope — a frost is a BLUR, so the capture is the one buffer in
+   * the piece whose high frequencies are thrown away by design. What it reads
+   * back is a softer sample at the same UV, which is the effect rather than a
+   * degradation of it.
+   *
+   * IT IS ALSO ONLY POSSIBLE NOW. `copyFramebufferToTexture` is
+   * `copyTexSubImage2D`, which copies a REGION one-to-one and cannot scale — a
+   * smaller destination there captures a corner of the screen, not a
+   * downsample. Scaling needs `blitFramebuffer`, and a scaling blit is illegal
+   * from a MULTISAMPLED read buffer. So dropping `antialias` did not just make
+   * the copies cheaper; it is what unlocked making them smaller.
+   *
+   * Not below a half without checking the filter. The blit resolves with
+   * `LINEAR`, which at exactly one half is the four-texel average you want and
+   * at a quarter is an undersample that would put aliasing INTO the blur.
+   */
+  scale = 0.5
+
   readonly uniforms: {
-    uBackdrop: IUniform<FramebufferTexture>
-    /** 1 / drawing buffer size, so the shader can work in pixels. */
+    uBackdrop: IUniform<Texture>
+    /**
+     * 1 / DRAWING BUFFER size, so the shader can work in pixels.
+     *
+     * The drawing buffer, note, and not the capture — those are no longer the
+     * same thing. Everything the shader does with this is in UV: the backdrop
+     * is addressed as `gl_FragCoord.xy * uBackdropTexel`, which is normalised,
+     * and the blur offsets are the same units again. A capture stored at half
+     * that resolution therefore needs NO shader change at all — the same UV
+     * lands in the same place and simply reads a softer sample, which is what a
+     * frost wants anyway. Setting this from the capture instead would scale the
+     * addressing off the frame and misregister the whole effect.
+     */
     uBackdropTexel: IUniform<Vector2>
   }
 
-  private texture: FramebufferTexture
+  private target: WebGLRenderTarget
+  /** Size of what is being copied FROM. */
+  private sourceWidth = 0
+  private sourceHeight = 0
+  /** Size of what it is copied INTO. */
   private width = 0
   private height = 0
-  /** How many layers have asked to capture since `beginFrame`. */
-  private asked = 0
+  /** Stack index of the layer that took the capture now in the texture. */
+  private capturedIndex: number | null = null
+  /** How many layers have reused it since. */
+  private shared = 0
   /** Whether sharing is allowed this frame. See `beginFrame`. */
   private sharing = true
 
   constructor() {
-    this.texture = BackdropCapture.createTexture(1, 1)
+    this.target = BackdropCapture.createTarget(1, 1)
     this.uniforms = {
-      uBackdrop: { value: this.texture },
+      uBackdrop: { value: this.target.texture },
       uBackdropTexel: { value: new Vector2(1, 1) },
     }
   }
 
-  private static createTexture(width: number, height: number): FramebufferTexture {
-    const texture = new FramebufferTexture(width, height)
-    // Linear, because the kernel samples between texels and a nearest filter
-    // would quantise the blur back into the pixel grid it is meant to dissolve.
-    texture.minFilter = LinearFilter
-    texture.magFilter = LinearFilter
-    // No mipmaps: `copyFramebufferToTexture` writes level 0 alone, so the
-    // remaining levels would be stale from whenever they were last built.
-    texture.generateMipmaps = false
-    return texture
+  private static createTarget(width: number, height: number): WebGLRenderTarget {
+    const target = new WebGLRenderTarget(width, height, {
+      // Linear, because the kernel samples between texels and a nearest filter
+      // would quantise the blur back into the pixel grid it is meant to
+      // dissolve. It is also what the downscaling blit filters WITH.
+      minFilter: LinearFilter,
+      magFilter: LinearFilter,
+      // Nothing is ever drawn into this, only blitted, so there is nothing to
+      // depth-test against.
+      depthBuffer: false,
+      stencilBuffer: false,
+    })
+    // Left in the default (linear) colour space on purpose, which here means
+    // "no transform in either direction". The bytes arriving are a raw copy of
+    // the finished canvas — already tone mapped and already encoded — and the
+    // shader has to read those same bytes back. Declaring sRGB would make three
+    // allocate `SRGB8_ALPHA8` and the sampler would decode them on the way out.
+    target.texture.generateMipmaps = false
+    return target
   }
 
   /**
-   * Sized to the DRAWING BUFFER rather than the CSS box, because that is what
-   * `gl_FragCoord` counts in and what the copy reads from. On a 2x display the
-   * two differ by exactly the factor that would misregister the whole effect.
+   * Measured against the DRAWING BUFFER rather than the CSS box, because that
+   * is what `gl_FragCoord` counts in and what the blit reads from. On a 2x
+   * display the two differ by exactly the factor that would misregister the
+   * whole effect.
+   *
+   * The capture itself is then `scale` of that. See `scale`.
    */
   resize(renderer: WebGLRenderer): void {
     const size = renderer.getDrawingBufferSize(new Vector2())
-    const width = Math.max(1, Math.floor(size.x))
-    const height = Math.max(1, Math.floor(size.y))
+    this.sourceWidth = Math.max(1, Math.floor(size.x))
+    this.sourceHeight = Math.max(1, Math.floor(size.y))
+    const width = Math.max(1, Math.round(this.sourceWidth * this.scale))
+    const height = Math.max(1, Math.round(this.sourceHeight * this.scale))
+
+    // Always, even when the capture lands on the same size: the uniform is in
+    // SOURCE units, so a resize that only moves the drawing buffer still has to
+    // reach it.
+    this.uniforms.uBackdropTexel.value.set(1 / this.sourceWidth, 1 / this.sourceHeight)
     if (width === this.width && height === this.height) return
 
     this.width = width
     this.height = height
-    this.texture.dispose()
-    this.texture = BackdropCapture.createTexture(width, height)
-    this.uniforms.uBackdrop.value = this.texture
-    this.uniforms.uBackdropTexel.value.set(1 / width, 1 / height)
+    this.target.dispose()
+    this.target = BackdropCapture.createTarget(width, height)
+    this.uniforms.uBackdrop.value = this.target.texture
   }
 
   /**
@@ -145,26 +237,105 @@ export class BackdropCapture {
    * seven eighths of the stack is not being drawn anyway.
    */
   beginFrame(sharing = true): void {
-    this.asked = 0
+    this.capturedIndex = null
+    this.shared = 0
     this.sharing = sharing
   }
 
   /**
    * Freezes everything drawn so far. Called immediately before a layer draws.
    *
-   * Counting here rather than deciding at construction time is what keeps this
+   * Decided here rather than at construction time, which is what keeps it
    * correct as the draw order changes — `StackOrder` reverses the stack when it
    * turns and lifts a layer out when one is opened, and the layers that ought
    * to share a capture are whichever ones end up adjacent AFTER that.
+   *
+   * `index` is the layer's place in the stack, and it is what makes the
+   * neighbour rule CHECKABLE instead of merely intended. The old test counted
+   * how many layers had asked and shared every other one, which is the same
+   * thing only while every layer in the draw order captures. It is not: an
+   * OPAQUE ply between two frosted ones is invisible to a counter, so with the
+   * frosted layers at 8,7,6,5,4,2,1 the counter paired 4 with 2 and quietly
+   * handed `glossy-light` a capture missing both `holo-currency` AND `mesh` —
+   * and `mesh` is opaque, so the sheet composited a scene showing plies that an
+   * opaque substrate should have hidden. Adjacent indices are the actual
+   * precondition; a count was a proxy for it that stopped holding the moment
+   * the stack gained a frosted layer.
+   *
+   * Costing nothing to fix, which is the good part: neighbour-checked sharing
+   * still takes four captures out of seven frosted layers here, the same number
+   * the counter took. It just takes the RIGHT four.
    */
-  capture(renderer: WebGLRenderer): void {
+  capture(renderer: WebGLRenderer, index: number): void {
     if (this.width === 0) return
-    const turn = this.asked++
-    if (this.sharing && turn % this.stride !== 0) return
-    renderer.copyFramebufferToTexture(this.texture)
+
+    const shareable =
+      this.sharing &&
+      this.shared < this.stride - 1 &&
+      this.capturedIndex !== null &&
+      // Adjacent in the stack, in either direction, because the draw order
+      // reverses with the camera and the rule is about what lies BETWEEN two
+      // layers rather than about which way round they are.
+      Math.abs(index - this.capturedIndex) === 1
+
+    if (shareable) {
+      this.shared++
+      return
+    }
+
+    this.shared = 0
+    this.capturedIndex = index
+    this.blit(renderer)
+  }
+
+  /**
+   * Copies the canvas into the capture, scaling on the way.
+   *
+   * Raw GL, because three has no scaling copy: `copyFramebufferToTexture` is a
+   * one-to-one `copyTexSubImage2D` and there is no other door. What there is,
+   * in WebGL2, is `blitFramebuffer` — and it will resize between the read and
+   * draw rectangles, filtering with `LINEAR`, provided the READ side is not
+   * multisampled. It is not, since `stage.ts` gave up `antialias`.
+   *
+   * The framebuffer binding goes through three's own state tracker rather than
+   * `gl.bindFramebuffer`, and that is not fussiness — this runs inside
+   * `onBeforeRender`, in the middle of three's render, so a binding it does not
+   * know about is a binding it will not restore. Left back on the default at
+   * the end for the same reason: the very next thing to happen is the layer
+   * that asked for this drawing itself, onto the canvas.
+   */
+  private blit(renderer: WebGLRenderer): void {
+    const gl = renderer.getContext() as WebGL2RenderingContext
+    // Idempotent, and the only way to be sure the framebuffer object exists
+    // before its name is read out of the property cache.
+    renderer.initRenderTarget(this.target)
+    // Cast because three types the property cache as `unknown` — this is the
+    // one place the piece reaches past the public surface, and the reach is
+    // exactly one field wide.
+    const cached = renderer.properties.get(this.target) as {
+      __webglFramebuffer?: WebGLFramebuffer | null
+    }
+    const destination = cached.__webglFramebuffer
+    if (!destination) return
+
+    renderer.state.bindFramebuffer(gl.READ_FRAMEBUFFER, null)
+    renderer.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, destination)
+    gl.blitFramebuffer(
+      0,
+      0,
+      this.sourceWidth,
+      this.sourceHeight,
+      0,
+      0,
+      this.width,
+      this.height,
+      gl.COLOR_BUFFER_BIT,
+      gl.LINEAR,
+    )
+    renderer.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null)
   }
 
   dispose(): void {
-    this.texture.dispose()
+    this.target.dispose()
   }
 }
