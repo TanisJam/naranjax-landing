@@ -287,9 +287,17 @@ orchestrator.picker.onChange = (layer, change) => {
     // Shorter and brighter as the gesture speeds up, plus a per-voice wobble
     // that is there whether the sweep is fast or slow.
     rate: (1 + intensity * 0.42) * (0.96 + Math.random() * 0.08),
-    // Each individual tick softens as they pile up, so the run reads as one
-    // texture instead of twenty separate announcements.
-    gain: 1 - intensity * 0.35,
+    // Each individual tick still softens a little as the sweep speeds up, so a
+    // run of them reads as one texture rather than as twenty announcements —
+    // but only a little. This used to fall to 0.65 at full speed, which fought
+    // the crowding already pulling the same direction and left the fastest
+    // gesture on the page as the quietest thing on it.
+    gain: 1 - intensity * 0.12,
+    // The body goes the other way, because the hand did. A visit is a lighter
+    // knock than authored; a thumb dragged down the edge of the deck is a
+    // harder one. This is the whole difference between feedback that reports
+    // the gesture and feedback that merely notices it happened.
+    force: 0.7 + intensity * 1.05,
   })
 }
 
