@@ -239,6 +239,35 @@ export class SceneOrchestrator {
 
   /** Wall clock of the previous frame, for the governor's interval. */
   private lastFrameAt = 0
+  /**
+   * A resize asked for, and the ratio it was asked for at, waiting to be
+   * applied at the TOP of a frame rather than wherever it was decided.
+   *
+   * This is not tidiness, it is the difference between a frame being shown and
+   * a frame being thrown away. Sizing the drawing buffer assigns
+   * `canvas.width`, and assigning it clears the buffer to transparent black —
+   * unconditionally, even when the value does not change, which is what
+   * `renderer.setSize` does on every call. The browser composites the canvas at
+   * the END of the rendering update, not when `render` returns, so a resize
+   * decided AFTER the draw wipes the frame that was about to be presented. With
+   * `alpha: true` what shows through is the page behind it. One blank frame,
+   * every time the buffer is touched.
+   *
+   * Both of the things that touch it landed on the wrong side of the draw.
+   *
+   * The governor decided after `render` because its whole reading is the
+   * interval that includes the GPU's tail — see the loop. That has to stay
+   * where it is; only the APPLICATION moves.
+   *
+   * And the `ResizeObserver` was worse, because it looks like it runs between
+   * frames and does not: resize observations are delivered after the animation
+   * frame callbacks in the same update, before the paint. So the observer fires
+   * in the narrow window where the frame is drawn and not yet shown. That is
+   * the flicker at load — the container settles over the first few frames and
+   * each settle costs one blank one.
+   */
+  private pendingRatio: number | null = null
+  private pendingResize = false
   private readonly clock = new Clock()
   private readonly resizeObserver: ResizeObserver
   private frameHandle = 0
@@ -329,8 +358,14 @@ export class SceneOrchestrator {
     const authoredRatio = this.stage.renderer.getPixelRatio()
     this.resolution = new ResolutionGovernor(authoredRatio * SUPERSAMPLE, 1, authoredRatio)
 
-    this.resizeObserver = new ResizeObserver(() => this.handleResize())
+    // Marked, not applied. See `pendingResize` — the observer runs after this
+    // frame's draw and before it is shown, so resizing here discards it.
+    this.resizeObserver = new ResizeObserver(() => {
+      this.pendingResize = true
+    })
     this.resizeObserver.observe(container)
+    // Directly, and this one is right where it is: nothing has been drawn yet,
+    // so there is no frame to lose, and the first one needs a sized canvas.
     this.handleResize()
   }
 
@@ -595,6 +630,23 @@ export class SceneOrchestrator {
     if (!this.running) return
     this.frameHandle = requestAnimationFrame(this.loop)
 
+    // Every change to the drawing buffer, applied here and nowhere else, so it
+    // always clears a frame that has not been drawn instead of one that has.
+    // See `pendingResize`. Ahead of the timing below on purpose: the
+    // reallocation is part of this frame's cost and the governor should see it
+    // — it is why `SETTLE_MS` exists.
+    if (this.pendingRatio !== null) {
+      this.stage.renderer.setPixelRatio(this.pendingRatio)
+      this.pendingRatio = null
+      // Never `setPixelRatio` alone: the capture is sized to the drawing buffer
+      // texel for texel, and the two coming apart misregisters the frost.
+      this.pendingResize = true
+    }
+    if (this.pendingResize) {
+      this.pendingResize = false
+      this.handleResize()
+    }
+
     // Requested before the work and read after it, so the reading covers this
     // frame's own cost and not the idle that preceded it.
     const started = this.onFrame ? performance.now() : 0
@@ -646,11 +698,10 @@ export class SceneOrchestrator {
     const interval = this.lastFrameAt === 0 ? 0 : now - this.lastFrameAt
     this.lastFrameAt = now
     if (interval > 0) {
+      // Decided here, where the reading is, and applied at the top of the next
+      // frame, where it costs nothing to look at. See `pendingRatio`.
       const ratio = this.resolution.update(interval, now)
-      if (ratio !== null) {
-        this.stage.renderer.setPixelRatio(ratio)
-        this.handleResize()
-      }
+      if (ratio !== null) this.pendingRatio = ratio
     }
 
     this.onFrame?.(now - started)
