@@ -818,6 +818,49 @@ vec2 decalUv() {
 }
 
 /**
+ * How much of this pixel the plate actually covers, in [0, 1].
+ *
+ * The stack renders with antialias: false, and that is a measurement rather
+ * than an oversight -- MSAA forces a full resolve of the buffer on every
+ * copyFramebufferToTexture, four of them a frame, which is the difference
+ * between 31 ms and 0.4 ms. What stands in for it is SUPERSAMPLE, and
+ * SUPERSAMPLE is the FIRST thing the resolution governor hands back when the
+ * machine cannot keep up. So on a slow machine the silhouette is rasterised
+ * with no antialiasing of any kind and the outline of a card becomes a
+ * staircase. That is not a hypothetical: it is what came back in the screenshot
+ * this was written for.
+ *
+ * Resolved here because the framebuffer will not resolve it. The outline of a
+ * plate is exactly the boundary of the parameter square, so the distance to it
+ * is known in closed form, and the screen-space derivative turns that distance
+ * into pixels. One pixel of ramp, on the one edge that needs it. A post pass is
+ * the other answer and it is the wrong one here -- it would have to soften the
+ * whole frame to reach this edge, undoing the definition the printed motifs
+ * were just given.
+ *
+ * The ramp runs INWARD from the boundary instead of straddling it, because
+ * there is no geometry on the far side to fade out on: the two shells meet at
+ * zero thickness exactly there. The visible edge therefore sits about half a
+ * pixel inside the true one. That is the trade -- half a pixel of shrink, which
+ * no eye resolves, against a staircase, which every eye does. Straddling it
+ * properly means padding the parameter domain, and both bevelAt and
+ * roundedRectParam are defined by closing exactly on [0, 1].
+ *
+ * Per axis and multiplied rather than one min() over both. On a plate seen at
+ * an angle the two axes run at different rates across the screen, and a single
+ * derivative for the pair over-fades the foreshortened one. The product is also
+ * what carries the rounded corner, where both terms are partial at once.
+ */
+float edgeCoverage() {
+  vec2 toEdge = min(vParam, 1.0 - vParam);
+  // Floored rather than trusted: a plate turned edge-on drives the derivative
+  // to zero, and the ratio below is a division.
+  vec2 perPixel = max(fwidth(vParam), vec2(1e-6));
+  vec2 cover = clamp(toEdge / perPixel, 0.0, 1.0);
+  return cover.x * cover.y;
+}
+
+/**
  * Which family of weave this layer wears. Mirrors WeavePattern in the domain.
  *
  * Kept as an int compared against named constants rather than a set of separate
@@ -1187,6 +1230,15 @@ if (uFrost > 0.0) {
   diffuseColor.a = mix(diffuseColor.a, 1.0, depthAlongView);
 }
 
+// The silhouette, and LAST of the alpha terms deliberately.
+//
+// Every term above answers how closed the body of the sheet is. This one
+// answers whether there is a sheet here at all, and the two do not commute:
+// the frost closes a sheet by driving its alpha towards 1, so coverage applied
+// before it is simply undone at the edge -- which is the only place it exists.
+float gEdge = edgeCoverage();
+diffuseColor.a *= gEdge;
+
 float rimFresnel = pow(
   1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0),
   uRimPower
@@ -1272,7 +1324,13 @@ if (uFrostSpread > 0.0) {
   float behindAlpha;
   vec3 behind = frostedBackdrop(
     gl_FragCoord.xy * uBackdropTexel,
-    uFrostSpread / uBackdropTexel.y,
+    // Collapsed to nothing at the outline. A frosted layer REPLACES what it
+    // covers rather than blending into it, so an edge fragment at zero coverage
+    // still writes -- and what it has to write is the destination it found. A
+    // capture read at radius zero is exactly that destination; read at any
+    // other radius it is a blur bleeding one frost radius past the silhouette,
+    // which is a halo around the plate instead of an edge on it.
+    uFrostSpread / uBackdropTexel.y * gEdge,
     behindAlpha
   );
 

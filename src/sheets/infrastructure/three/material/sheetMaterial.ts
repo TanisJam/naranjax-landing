@@ -409,7 +409,19 @@ export function createSheetMaterial(
     specularIntensity: surface.specularIntensity,
     // The shell is closed, so back faces never need to be drawn.
     side: FrontSide,
-    transparent: surface.opacity < 1,
+    // In the transparent queue even at full opacity, and that is what buys the
+    // silhouette its antialiasing. edgeCoverage() in the fragment shader writes
+    // the outline into alpha, and alpha is only read where there is a blend to
+    // read it -- an opaque plate left out of the queue keeps a hard staircase
+    // for an edge. The plates that are opaque are the card's own two faces, so
+    // that would be the one outline nobody misses.
+    //
+    // Safe because the draw order here is never inferred from depth: StackOrder
+    // writes an explicit renderOrder on every sheet, back to front, and three
+    // sorts the transparent queue by that before it looks at anything else. All
+    // that changes is that the opaque layers now take their turn in that order
+    // instead of going first as a group.
+    transparent: true,
     opacity: surface.opacity,
     // A translucent layer never writes depth. Anything drawn after it that
     // sits behind would be rejected by the depth test rather than blended,
