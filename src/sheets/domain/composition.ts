@@ -198,8 +198,7 @@ const baseSurface: SheetSurface = {
  * stand down: white body colour, no absorption, no dot or rib field. What is
  * left is the material response — a satin polish and the lit bullnose — which
  * is what keeps the print on a physical object instead of making it look like
- * a decal floating in space. Relief stays at zero: a card is printed, not
- * embossed, and the numbers on this design are flat.
+ * a decal floating in space.
  */
 const printedCard: SheetSurface = {
   ...baseSurface,
@@ -215,7 +214,22 @@ const printedCard: SheetSurface = {
   specularIntensity: 1.05,
   opacity: 1,
   decalInk: 1,
-  decalRelief: 0,
+  /**
+   * Small, and the smallest number on this surface that is not zero.
+   *
+   * The print itself is flat — this design's numbers are not embossed, and
+   * nothing painted on the face is meant to rise off it. What the relief is
+   * here for is the two things on a card that are not print: the contact plate,
+   * which is milled into the plastic and stands a hair proud of it, and the
+   * wear, which is the opposite sign. Both come from a height field of their
+   * own rather than from the ink, so raising this lifts the hardware without
+   * embossing a single glyph.
+   *
+   * A card is also the one object here the eye already knows by touch, which is
+   * what caps the number. Push it and the chip stops reading as a part seated
+   * in plastic and starts reading as a tile glued on top.
+   */
+  decalRelief: 0.85,
   rimStrength: 0.12,
   bevelGlow: 0.55,
   // The two covers, and the only layers in the stack that are card rather than
