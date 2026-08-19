@@ -8,7 +8,62 @@
       name="description"
       content="Toda tu plata en una sola app: pagá, transferí, hacé rendir tus pesos y sacá tu tarjeta sin costo."
     />
-    <link rel="icon" href="data:," />
+    <link rel="canonical" href="https://mandarina-x.vercel.app/" />
+
+    <!-- The mark the header already draws, and nothing else from the wordmark:
+         at sixteen pixels "mandarina" is a smudge and the X is the only part of
+         the name that survives, which is why the brand puts it there.
+
+         The SVG first and the .ico after it, in that order deliberately — a
+         browser that understands both takes the vector, and the .ico is there
+         for the bare /favicon.ico every browser still asks for whether or not
+         anything points at it. The apple-touch icon is full-bleed on purpose:
+         iOS applies its own squircle, so an icon carrying its own corners gets
+         them rounded twice. -->
+    <link rel="icon" href="./favicon.ico" sizes="32x32" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <meta name="theme-color" content="#220b0a" />
+
+    <!-- The share card is the hero itself, rendered and captured rather than
+         drawn a second time in a design tool — the product IS the card, and a
+         preview that agreed with the page only by hand would stop agreeing the
+         first time either moved.
+
+         Absolute URLs, and they have to be: a scraper fetches the image without
+         a document to resolve a relative path against, so `./og.jpg` reaches
+         nobody. Which is also why the host is written out here rather than
+         inferred — if the site moves, these three lines move with it. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MandarinaX" />
+    <meta property="og:locale" content="es_AR" />
+    <meta property="og:url" content="https://mandarina-x.vercel.app/" />
+    <meta property="og:title" content="MandarinaX — Exprimí cada peso" />
+    <meta
+      property="og:description"
+      content="Toda tu plata en una sola app: pagá, transferí, hacé rendir tus pesos y sacá tu tarjeta sin costo."
+    />
+    <meta property="og:image" content="https://mandarina-x.vercel.app/og.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="La tarjeta de crédito MandarinaX sobre el fondo de la marca, bajo el claim «Exprimí cada peso»."
+    />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="MandarinaX — Exprimí cada peso" />
+    <meta
+      name="twitter:description"
+      content="Toda tu plata en una sola app: pagá, transferí, hacé rendir tus pesos y sacá tu tarjeta sin costo."
+    />
+    <meta name="twitter:image" content="https://mandarina-x.vercel.app/og.jpg" />
+    <meta
+      name="twitter:image:alt"
+      content="La tarjeta de crédito MandarinaX sobre el fondo de la marca, bajo el claim «Exprimí cada peso»."
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

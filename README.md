@@ -358,6 +358,31 @@ Everything else in the engine is untouched. `composition.ts` was rewritten from
 scratch for the card stack — the original four-vault composition is still in
 `../3dclaude` if it is ever wanted back.
 
+## The icon and the share card
+
+Everything in `public/` is derived rather than drawn. The favicon is the mark
+the header already renders — the orange tile with the X cut out of it in the
+page's own ground — and nothing else from the wordmark comes along, because at
+sixteen pixels "mandarina" is a smudge and the X is the only part of the name
+that survives. `apple-touch-icon.png` is the same mark full-bleed: iOS applies
+its own squircle, so an icon carrying its own corners gets them rounded twice.
+The `.ico` exists for the bare `/favicon.ico` every browser still requests
+whether or not anything points at it.
+
+`og.jpg` is the hero, captured. The product is the card, so a share card drawn
+separately in a design tool would agree with the page only by hand and stop
+agreeing the first time either moved. It is a screenshot of the running build at
+1200x630 with the nav hidden and the touch hint swapped for the claim — both
+inline, since the stylesheet is compiled from what the source uses and a class
+invented at capture time has no rule behind it. JPEG rather than PNG: the frame
+is a render with film grain over it, which is what JPEG is for, and it costs
+110KB against 780KB for no visible difference.
+
+**If the hero changes, recapture it** — nothing regenerates it on build. And the
+Open Graph URLs in `index.html` are absolute because they have to be: a scraper
+fetches the image with no document to resolve a relative path against. If the
+site moves off `mandarina-x.vercel.app`, those lines move with it.
+
 ## Gotchas
 
 `pnpm-workspace.yaml` exists to anchor the workspace root here. Without it pnpm
