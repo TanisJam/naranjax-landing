@@ -120,12 +120,81 @@ const SIGNATURE_PATH: readonly (readonly number[])[] = [
 /** Height of the signature's box, in the same units its x runs 0..1000 in. */
 const SIGNATURE_RISE = 269.2
 
+/**
+ * The network mark, as its own outlines.
+ *
+ * Traced off the Visa artwork the same way the signature above was traced off a
+ * photograph — thresholded to sub-pixel contours, simplified, and stored as
+ * geometry. It replaces a `fillText('VISA')` in an italic sans, and the reason
+ * is not fidelity for its own sake: no italic reproduces this mark. The Visa
+ * logotype is drawn lettering, not a typeface set in italic. The V carries a
+ * flag off its top-left that no letterform has, every terminal is sheared flat
+ * on the same angle, and the counter of the A is a hard triangle. Set `VISA` in
+ * whatever the host resolves `sans-serif` to and none of that survives — and
+ * what the host resolves it to is not the same on two machines, so the one
+ * element on the card that legally may not vary was the one element that did.
+ *
+ * White, which is the mark's reverse lockup — the version Visa specifies over a
+ * coloured field, and the only one that belongs on this orange.
+ *
+ * Same storage as the signature: flat x, y pairs in a box 1000 wide, closed
+ * contours filled together under the even-odd rule so the A's counter stays a
+ * hole. Five contours for four letters. A REPEATED point is a hard corner: the
+ * curve renderer takes each stored point as a control point, and a control
+ * point that coincides with its own endpoint degenerates the quadratic into a
+ * straight line, so the vertex comes back sharp. That is what keeps the V's
+ * point and the A's apex from being rounded off by the same smoothing that the
+ * S needs.
+ */
+const NETWORK_PATH: readonly (readonly number[])[] = [
+  [
+    498.1, 236, 498.1, 236, 485.7, 304.8, 485.7, 304.8, 518.9, 316.4, 567.8, 322, 615.3, 317.7,
+    639.3, 311.2, 658, 303.5, 673.5, 294.5, 689, 281.9, 704.5, 261.8, 713.5, 238.7, 716, 211.9,
+    709.6, 184.4, 699.5, 168.1, 683.7, 152.6, 611.6, 107.9, 604.6, 99.7, 602.2, 89.4, 602.2, 89.4,
+    606, 79.1, 614.2, 71.9, 627.1, 66.8, 642.6, 64.4, 681.2, 66.9, 716.1, 78.3, 716.1, 78.3,
+    727.7, 12.4, 727.7, 12.4, 705.7, 5.6, 682.5, 1.6, 655.5, 0, 626.4, 1.7, 600.6, 6.9, 578.8,
+    14.6, 560, 24.8, 544.5, 37.6, 529.1, 58.7, 521.3, 80.4, 519.7, 111.3, 525.2, 132, 534.2,
+    146.6, 551, 163, 607.7, 196.1, 621.9, 206.5, 630.5, 218.4, 631.6, 231.3, 626.5, 241.6, 615.5,
+    250, 600, 255, 580.7, 256.9, 560, 256.3, 536.8, 252.5, 516.2, 246,
+  ],
+  [
+    0, 6.9, 0, 6.9, 53.2, 27, 87.3, 45.6, 87.3, 45.6, 157.8, 316.4, 157.8, 316.4, 242.2, 316.4,
+    242.2, 316.4, 370.5, 4.7, 370.5, 4.7, 284.5, 5.6, 284.5, 5.6, 206.7, 218.6, 206.7, 218.6,
+    169.3, 30.1, 161.5, 15.7, 150.8, 8.2, 134.5, 4.7, 2.9, 4.7, 2.9, 4.7,
+  ],
+  [
+    353.7, 316.5, 353.7, 316.5, 434.1, 316.4, 434.1, 316.4, 483.9, 4.6, 483.9, 4.6, 404.3, 5.6,
+    404.3, 5.6,
+  ],
+  [
+    711.6, 316.4, 711.6, 316.4, 794.7, 316.8, 794.7, 316.8, 812.8, 270.5, 812.8, 270.5, 914.7,
+    270.3, 914.7, 270.3, 917.7, 275.1, 926.3, 316.6, 926.3, 316.6, 1000, 316.4, 1000, 316.4,
+    935.3, 5.4, 935.3, 5.4, 860.5, 5.3, 846.3, 10.7, 836, 20.9,
+  ],
+  [
+    878.5, 90.2, 878.5, 90.2, 903.3, 205.5, 903.3, 205.5, 901.8, 207, 901.8, 207, 837.3, 207,
+    837.3, 207, 836.8, 202.9,
+  ],
+]
+
+/** Height of the mark's box, in the same units its x runs 0..1000 in. */
+const NETWORK_RISE = 322
+
 /** Front: the mark sits low and left, the network mark low and right. */
 const WORDMARK_LEFT = MARGIN + 40
 const WORDMARK_BASELINE = 486
 const SUBBRAND_BASELINE = 544
 const NETWORK_RIGHT = WIDTH - MARGIN - 32
 const NETWORK_BASELINE = 560
+
+/**
+ * Fitted by WIDTH, not by height, and this is the number that decides whether
+ * the card reads as a card: on issued plastic the network mark runs a little
+ * under a fifth of the width, and the eye knows that proportion long before it
+ * reads the letters. Height follows from the artwork's own aspect, so the mark
+ * can never be stretched.
+ */
+const NETWORK_WIDTH = 176
 
 /** Back: one column of data, and the same left margin as the front's mark. */
 const TEXT_LEFT = MARGIN + 40
@@ -671,19 +740,64 @@ function drawWordmark(ctx: CanvasRenderingContext2D, x: number, baseline: number
 }
 
 /**
- * The network mark, set rather than drawn as artwork.
+ * Lays a set of traced contours into the current path, as one even-odd figure.
  *
- * Right-aligned off `NETWORK_RIGHT`, because the thing that has to stay put is
- * its right edge against the card's — a left-aligned mark drifts across the
- * corner the moment the host substitutes a wider italic.
+ * Quadratics through the MIDPOINTS of the polygon: each stored point becomes a
+ * control point rather than a corner, which is what turns a simplified outline
+ * back into the curve it was simplified from. A point stored twice is therefore
+ * a hard corner — its quadratic has its control on its own endpoint, which is a
+ * straight line — so one traversal serves both a signature, which is all curve,
+ * and a logotype, which is mostly not.
+ *
+ * Path only. The caller owns the transform and the fill, because the two marks
+ * that use this are placed differently and inked differently, and a helper that
+ * decided either would have to be told both.
+ */
+function tracePath(
+  ctx: CanvasRenderingContext2D,
+  contours: readonly (readonly number[])[],
+): void {
+  ctx.beginPath()
+  for (const contour of contours) {
+    const count = contour.length / 2
+    const at = (i: number): [number, number] => {
+      const k = (((i % count) + count) % count) * 2
+      return [contour[k] as number, contour[k + 1] as number]
+    }
+    const [lx, ly] = at(-1)
+    const [fx, fy] = at(0)
+    ctx.moveTo((lx + fx) / 2, (ly + fy) / 2)
+    for (let i = 0; i < count; i++) {
+      const [ax, ay] = at(i)
+      const [bx, by] = at(i + 1)
+      ctx.quadraticCurveTo(ax, ay, (ax + bx) / 2, (ay + by) / 2)
+    }
+    ctx.closePath()
+  }
+}
+
+/**
+ * The network mark, drawn as artwork rather than set.
+ *
+ * Right-aligned off `NETWORK_RIGHT` and sat on `NETWORK_BASELINE`, because the
+ * two things that have to stay put are its right edge against the card's and
+ * its feet against the wordmark's line. One uniform scale off `NETWORK_WIDTH`,
+ * so the mark keeps the artwork's own aspect — a network mark is the one
+ * element on a card that may not be condensed to fit.
+ *
+ * The box bottom is the letters' baseline, near enough: the S overshoots it by
+ * under two percent, which is the optical overshoot a round letter is drawn
+ * with and belongs below the line rather than sitting on it.
  */
 function drawNetworkMark(ctx: CanvasRenderingContext2D): void {
+  const scale = NETWORK_WIDTH / 1000
+
   ctx.save()
+  ctx.translate(NETWORK_RIGHT - NETWORK_WIDTH, NETWORK_BASELINE - NETWORK_RISE * scale)
+  ctx.scale(scale, scale)
   ctx.fillStyle = '#ffffff'
-  ctx.font = 'italic 800 62px sans-serif'
-  ctx.textBaseline = 'alphabetic'
-  ctx.textAlign = 'right'
-  ctx.fillText('VISA', NETWORK_RIGHT, NETWORK_BASELINE)
+  tracePath(ctx, NETWORK_PATH)
+  ctx.fill('evenodd')
   ctx.restore()
 }
 
@@ -918,26 +1032,7 @@ function drawSignature(ctx: CanvasRenderingContext2D, panel: Rect): void {
   ctx.scale(scale, scale)
   ctx.fillStyle = 'rgba(28, 34, 68, 0.88)'
 
-  ctx.beginPath()
-  for (const contour of SIGNATURE_PATH) {
-    const count = contour.length / 2
-    // Quadratics through the midpoints of the polygon: each stored point
-    // becomes a control point rather than a corner, which is what turns a
-    // simplified outline back into the curve it was simplified from.
-    const at = (i: number): [number, number] => {
-      const k = (((i % count) + count) % count) * 2
-      return [contour[k] as number, contour[k + 1] as number]
-    }
-    const [lx, ly] = at(-1)
-    const [fx, fy] = at(0)
-    ctx.moveTo((lx + fx) / 2, (ly + fy) / 2)
-    for (let i = 0; i < count; i++) {
-      const [ax, ay] = at(i)
-      const [bx, by] = at(i + 1)
-      ctx.quadraticCurveTo(ax, ay, (ax + bx) / 2, (ay + by) / 2)
-    }
-    ctx.closePath()
-  }
+  tracePath(ctx, SIGNATURE_PATH)
   ctx.fill('evenodd')
 
   ctx.restore()
