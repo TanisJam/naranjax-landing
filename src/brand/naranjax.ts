@@ -30,11 +30,25 @@ export const naranjax: Brand = {
   name: 'Naranja X',
   origin: 'https://naranjax-landing.vercel.app',
 
-  title: 'Naranja X — Exprimí cada peso',
+  title: 'Naranja X — Qué lindo es poder',
   description:
-    'Toda tu plata en una sola app: pagá, transferí, hacé rendir tus pesos y sacá tu tarjeta sin costo.',
+    'Manejá tu platita desde una sola app: pagá, transferí, hacé rendir tus pesos y mucho más.',
   shareImageAlt:
-    'La tarjeta de crédito Naranja X sobre el fondo de la marca, bajo el claim «Exprimí cada peso».',
+    'La tarjeta de crédito Naranja X sobre el fondo de la marca, bajo el claim «Qué lindo es poder».',
+
+  // Restored from this repository's own history, not rewritten. Before the
+  // MandarinaX rebrand this landing carried Naranja X's copy, taken from their
+  // site — "cuotitas fijas", "estar tranqui", "así de simple y fácil". That
+  // register is the brand as much as the violet is, and a demo of somebody's
+  // landing that speaks in a voice they never use is a demo of somebody else's.
+  copy: {
+    headline: 'Qué lindo es poder',
+    lede: 'Manejá tu platita desde una sola app. Pagá, transferí, hacé rendir tus pesos y mucho más.',
+    loans:
+      'Sacalo desde la app, se acredita al instante en tu cuenta y lo devolvés en cuotitas fijas. Ideal para cancelar esa deuda y estar tranqui.',
+    closing:
+      'Descargá la app y automáticamente tenés tu cuenta gratis para manejar tus pesos y dólares desde un solo lugar. Así de simple y fácil.',
+  },
 
   palette: {
     accent: ACCENT,

@@ -115,6 +115,7 @@ function fill(html: string, brand: Brand): string {
     shareImageAlt: brand.shareImageAlt,
     themeColor: brand.palette.ink[950],
     disclaimer: brand.disclaimer,
+    ...brand.copy,
   }
   const filled = html
     // Markup, so it is substituted before the escaping pass and never through it.

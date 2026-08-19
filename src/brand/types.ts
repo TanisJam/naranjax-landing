@@ -4,10 +4,16 @@ import type { Isologo } from './isologo'
  * Everything one deploy of this landing needs in order to be a brand.
  *
  * The list is deliberately short, and what is NOT on it is the point: no
- * layout, no spacing, no copy that does not name the brand, no card geometry.
- * Those were tuned against the artwork and they are the same design in both
- * builds — a brand layer wide enough to change them would be a second site
- * wearing a config file, and the two would drift apart on the first edit.
+ * layout, no spacing, no card geometry, no feature data. Those were tuned
+ * against the artwork and they are the same design in both builds — a brand
+ * layer wide enough to change them would be a second site wearing a config
+ * file, and the two would drift apart on the first edit.
+ *
+ * Copy IS on the list, and only the four blocks that carry a voice. A brand is
+ * not only a colour: "cuotitas fijas" and "cuotas fijas" say the same thing
+ * about the same product and only one of them sounds like Naranja X. The rest
+ * of the page — the headings, the figures, the feature list — is identical in
+ * both builds and stays in `index.html` where it belongs.
  *
  * Read as a set of measurements rather than preferences. Both palettes here
  * were sampled off a published artefact, and the second one is a hue rotation
@@ -32,6 +38,8 @@ export type Brand = {
   readonly title: string
   readonly description: string
   readonly shareImageAlt: string
+
+  readonly copy: Copy
 
   readonly palette: Palette
   readonly card: CardInks
@@ -58,6 +66,25 @@ export type Brand = {
 }
 
 export type BrandId = 'mandarinax' | 'naranjax'
+
+/**
+ * The four blocks of the page written in the brand's own voice.
+ *
+ * Four rather than all of it, and the line is where register lives. Both brands
+ * sell the same account with the same three figures under the same headings; a
+ * diminutive, a reassurance and a rhythm are what tell them apart, so those are
+ * the sentences that travel with the brand and nothing else does.
+ */
+export type Copy = {
+  /** The claim, over the fold. */
+  readonly headline: string
+  /** The line under it. */
+  readonly lede: string
+  /** How the loan is described. */
+  readonly loans: string
+  /** The closing pitch, above the footer. */
+  readonly closing: string
+}
 
 /**
  * Two inks and the ramp one of them is taken down to.

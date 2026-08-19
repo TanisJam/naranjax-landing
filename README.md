@@ -29,11 +29,22 @@ fallback: a typo in a deploy's environment would otherwise publish the wrong
 brand under the right domain, and nothing would look broken enough to notice.
 
 `src/brand/` is deliberately narrow. It carries colours, a name, a mark, the
-origin, the footer's disclaimer, and how the card prints its wordmark. It
-carries no layout, no spacing, no card geometry and no copy that does not name
-the brand — those were tuned against the artwork and they are the same design
-in both builds. A brand layer wide enough to change them would be a second site
-wearing a config file, and the two would drift apart on the first edit.
+origin, the footer's disclaimer, how the card prints its wordmark, and four
+blocks of copy. It carries no layout, no spacing, no card geometry and no
+feature data — those were tuned against the artwork and they are the same
+design in both builds. A brand layer wide enough to change them would be a
+second site wearing a config file, and the two would drift apart on the first
+edit.
+
+Four blocks of copy and not the whole page, because register is where the line
+falls. Both brands sell the same account with the same three figures under the
+same headings; a diminutive, a reassurance and a rhythm are what tell them
+apart. "Cuotitas fijas" and "cuotas fijas" say the same thing about the same
+product and only one of them sounds like Naranja X — and a demo of somebody's
+landing that speaks in a voice they never use is a demo of somebody else's. The
+Naranja X blocks are restored from this repository's own history rather than
+written: before the MandarinaX rebrand this landing carried them, taken from
+that brand's site.
 
 Three mechanisms carry it, and none of them is a second copy of anything:
 

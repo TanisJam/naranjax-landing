@@ -32,6 +32,15 @@ export const mandarinax: Brand = {
   shareImageAlt:
     'La tarjeta de crédito MandarinaX sobre el fondo de la marca, bajo el claim «Exprimí cada peso».',
 
+  copy: {
+    headline: 'Exprimí cada peso',
+    lede: 'Toda tu plata en una sola app. Pagá, transferí y hacé rendir tus pesos todos los días del año.',
+    loans:
+      'Sacalo desde la app, se acredita al instante en tu cuenta y lo devolvés en cuotas fijas. Sabés desde el primer día cuánto vas a pagar.',
+    closing:
+      'Descargá la app y ya tenés tu cuenta gratis para manejar pesos y dólares desde un solo lugar. Sin trámites, sin sucursal y sin letra chica.',
+  },
+
   palette: {
     accent: ACCENT,
     accentBright: '#fa9632',
