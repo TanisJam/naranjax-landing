@@ -1,37 +1,49 @@
 @import 'tailwindcss';
 
-/* The brand, and where the two numbers come from.
+/* The token contract, and who fills it in.
 
-   MandarinaX runs on two inks and the reference card states both of them at
-   full strength: `--color-mx-orange` and `--color-mx-red` are sampled off that
-   render rather than eyeballed from a description of it. Every other value
-   below is derived from one of those two, which is the only reason the page
-   holds together as one identity — there is no third colour that somebody
-   picked because it looked nice next to them.
+   This landing ships as two brands off one `main` — MandarinaX and a Naranja X
+   concept demo — and the entire difference between them is a set of colour
+   values. So the block below is a DECLARATION rather than a palette: it names
+   every token the page is allowed to use and gives each one the default
+   brand's value, and the build restates those same custom properties with the
+   values of whatever `VITE_BRAND` names. See `src/brand/`.
 
-   The two inks are not interchangeable and the page gives each one a job. Red
-   is the ground: the `ink` ramp is that red taken down to near-black at
-   constant hue, so it is what the page is built ON. Orange is everything
-   printed on top — the accent, the calls to action, the mark. That is the same
-   pairing the reference sheet makes when it puts the two cards side by side.
+   The restatement is at higher specificity (`html:root`) rather than simply
+   later in the cascade, because "later" is a promise about where a bundler
+   chooses to inject a stylesheet, and that is not a promise worth resting a
+   brand on.
 
-   The ramp is a rotation, not a re-authoring. It used to be a violet at a
-   constant 277.7° hue, and every step here keeps that step's exact lightness
-   and saturation with the hue moved to 2° — the red's own. So the page reads
-   as a different brand while the contrast relationships that were tuned
-   against the artwork are, number for number, the ones that were tuned.
+   WHY THE TOKENS ARE SHAPED THIS WAY. Each brand runs on two inks and the
+   reference card states both at full strength, so `--color-brand-accent` and
+   `--color-brand-ground` are sampled off a published artefact rather than
+   eyeballed. Every other value is derived from one of those two, which is the
+   only reason a page holds together as one identity — there is no third colour
+   that somebody picked because it looked nice next to them.
+
+   The two inks are not interchangeable and each has a job. The ground is what
+   the page is built ON: the `ink` ramp is that colour taken down to near-black
+   at constant hue. The accent is everything printed on top — the calls to
+   action, the mark. That is the same pairing the reference sheet makes when it
+   puts the two cards side by side.
+
+   And the second palette is a ROTATION of the first, not a re-authoring: the
+   ramps hold each other's lightness and saturation step for step and differ
+   only in hue. That is what buys the second brand for free, because the
+   contrast relationships tuned against the artwork are, number for number, the
+   ones that were tuned.
 
    A near-black with a hue in it rather than a neutral grey is the load-bearing
    choice: a grey page with orange on it is a page with an accent colour, while
-   a red-black page with orange on it is the brand. The difference is only
+   a tinted-black page with orange on it is the brand. The difference is only
    visible against a true neutral, which is exactly why it works — nobody sees
    the tint, everybody sees that the page is not generic. */
 @theme {
   --font-sans: 'Rubik', ui-sans-serif, system-ui, -apple-system, sans-serif;
 
-  --color-mx-orange: #f37d06;
-  --color-mx-orange-bright: #fa9632;
-  --color-mx-red: #db1811;
+  --color-brand-accent: #f37d06;
+  --color-brand-accent-bright: #fa9632;
+  --color-brand-ground: #db1811;
 
   --color-ink-950: #220b0a;
   --color-ink-900: #30100f;
@@ -85,7 +97,7 @@
 /* Inset, because the stage is flush with the panel edges and an outline drawn
    outside them is clipped away by the layout. */
 #sheets-stage:focus-visible {
-  outline: 2px solid var(--color-mx-orange);
+  outline: 2px solid var(--color-brand-accent);
   outline-offset: -4px;
 }
 

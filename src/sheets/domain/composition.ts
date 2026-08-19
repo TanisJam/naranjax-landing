@@ -1,3 +1,4 @@
+import { brand } from '../../brand'
 import type { Composition, SheetLayer, SheetPlacement, SheetSurface } from './types'
 
 /**
@@ -770,9 +771,11 @@ function assemble(drafts: readonly SheetDraft[]): SheetLayer[] {
 }
 
 export const composition: Composition = {
-  // The page's own `ink-900`. The canvas is transparent here so nothing clears
-  // to this, but it is what the composition says it sits on, and a value that
-  // has silently drifted from the page is worse than no value at all.
-  background: '#30100f',
+  // The page's own `ink-900`, read from the brand rather than copied out of
+  // it. The canvas is transparent here so nothing clears to this, but it is
+  // what the composition says it sits on, and a value that has silently
+  // drifted from the page is worse than no value at all — which is exactly
+  // what a second brand would have made of a literal.
+  background: brand.palette.ink[900],
   sheets: assemble(layers),
 }

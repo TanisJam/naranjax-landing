@@ -3,16 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MandarinaX — Exprimí cada peso</title>
+    <title>{{title}}</title>
     <meta
       name="description"
-      content="Toda tu plata en una sola app: pagá, transferí, hacé rendir tus pesos y sacá tu tarjeta sin costo."
+      content="{{description}}"
     />
-    <link rel="canonical" href="https://mandarina-x.vercel.app/" />
+    <link rel="canonical" href="{{origin}}/" />
 
     <!-- The mark the header already draws, and nothing else from the wordmark:
-         at sixteen pixels "mandarina" is a smudge and the X is the only part of
-         the name that survives, which is why the brand puts it there.
+         at sixteen pixels the name is a smudge and the X is the only part of it
+         that survives, which is why both of these brands put it there. The file
+         itself is generated per brand at build time — see `vite.config.ts`.
 
          The SVG first and the .ico after it, in that order deliberately — a
          browser that understands both takes the vector, and the .ico is there
@@ -24,7 +25,7 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <link rel="manifest" href="./site.webmanifest" />
-    <meta name="theme-color" content="#220b0a" />
+    <meta name="theme-color" content="{{themeColor}}" />
 
     <!-- The share card is the hero itself, rendered and captured rather than
          drawn a second time in a design tool — the product IS the card, and a
@@ -36,33 +37,33 @@
          nobody. Which is also why the host is written out here rather than
          inferred — if the site moves, these three lines move with it. -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="MandarinaX" />
+    <meta property="og:site_name" content="{{name}}" />
     <meta property="og:locale" content="es_AR" />
-    <meta property="og:url" content="https://mandarina-x.vercel.app/" />
-    <meta property="og:title" content="MandarinaX — Exprimí cada peso" />
+    <meta property="og:url" content="{{origin}}/" />
+    <meta property="og:title" content="{{title}}" />
     <meta
       property="og:description"
-      content="Toda tu plata en una sola app: pagá, transferí, hacé rendir tus pesos y sacá tu tarjeta sin costo."
+      content="{{description}}"
     />
-    <meta property="og:image" content="https://mandarina-x.vercel.app/og.jpg" />
+    <meta property="og:image" content="{{origin}}/og.jpg" />
     <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="La tarjeta de crédito MandarinaX sobre el fondo de la marca, bajo el claim «Exprimí cada peso»."
+      content="{{shareImageAlt}}"
     />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="MandarinaX — Exprimí cada peso" />
+    <meta name="twitter:title" content="{{title}}" />
     <meta
       name="twitter:description"
-      content="Toda tu plata en una sola app: pagá, transferí, hacé rendir tus pesos y sacá tu tarjeta sin costo."
+      content="{{description}}"
     />
-    <meta name="twitter:image" content="https://mandarina-x.vercel.app/og.jpg" />
+    <meta name="twitter:image" content="{{origin}}/og.jpg" />
     <meta
       name="twitter:image:alt"
-      content="La tarjeta de crédito MandarinaX sobre el fondo de la marca, bajo el claim «Exprimí cada peso»."
+      content="{{shareImageAlt}}"
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -92,7 +93,7 @@
            is the entire point of this. -->
       <section
         class="relative h-[100svh] min-h-[520px] w-full bg-ink-900"
-        aria-label="Ilustración de la tarjeta MandarinaX"
+        aria-label="Ilustración de la tarjeta {{name}}"
       >
         <!-- The stage is the control: the card opens into its eleven layers on
              click, so the panel carries the button role and the state. -->
@@ -102,7 +103,7 @@
           role="button"
           tabindex="0"
           aria-expanded="false"
-          aria-label="Ver todo lo que podés hacer con MandarinaX"
+          aria-label="Ver todo lo que podés hacer con {{name}}"
         ></div>
         <!-- The page runs directly under the hero at every width now, so the
              fade is unconditional where it used to be small-screen only: it is
@@ -132,16 +133,7 @@
           <div
             class="pointer-events-auto mx-auto flex w-full max-w-[80rem] flex-wrap items-center justify-between gap-4 px-6 pb-6 lg:px-12"
           >
-            <a href="#" class="flex items-center gap-2.5" aria-label="MandarinaX — inicio">
-              <span
-                aria-hidden="true"
-                class="grid size-6 place-items-center rounded-md bg-mx-orange text-sm leading-none font-bold text-ink-950"
-              >
-                X
-              </span>
-              <span class="text-xl font-semibold tracking-tight">
-                <span class="text-neutral-50">mandarina</span><span class="text-mx-orange">X</span>
-              </span>
+            <a href="#" class="flex items-center gap-2.5" aria-label="{{name}} — inicio">{{lockup}}
             </a>
             <nav class="flex items-center gap-5 text-xs leading-5 tracking-tight text-ink-400">
               <a href="#funciones" class="transition hover:text-ink-200">Cuenta</a>
@@ -160,7 +152,7 @@
                layers then itemise one at a time. -->
           <div class="flex flex-col gap-6">
             <p
-              class="text-xs leading-5 font-medium tracking-[0.2em] text-mx-orange uppercase"
+              class="text-xs leading-5 font-medium tracking-[0.2em] text-brand-accent uppercase"
             >
               Cuenta digital gratis
             </p>
@@ -177,7 +169,7 @@
             <div class="flex flex-col gap-3 sm:flex-row">
               <a
                 href="#funciones"
-                class="rounded-lg bg-mx-orange px-7 py-4 text-center text-base leading-6 font-medium text-ink-950 transition hover:bg-mx-orange-bright"
+                class="rounded-lg bg-brand-accent px-7 py-4 text-center text-base leading-6 font-medium text-ink-950 transition hover:bg-brand-accent-bright"
               >
                 Abrir cuenta
               </a>
@@ -252,15 +244,15 @@
             </h2>
             <ul class="flex flex-col gap-3 text-base leading-6 text-ink-300">
               <li class="flex gap-3">
-                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-mx-orange"></span>
+                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-brand-accent"></span>
                 <span>2x1 en Cinemark todos los días con tu tarjeta de crédito o débito.</span>
               </li>
               <li class="flex gap-3">
-                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-mx-orange"></span>
+                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-brand-accent"></span>
                 <span>30% de ahorro en McDonald's pagando con el QR de la app.</span>
               </li>
               <li class="flex gap-3">
-                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-mx-orange"></span>
+                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-brand-accent"></span>
                 <span>25% OFF y 5 cuotas sin interés pidiendo tu tarjeta 100% online.</span>
               </li>
             </ul>
@@ -280,17 +272,14 @@
             </p>
             <a
               href="#funciones"
-              class="rounded-lg bg-mx-orange px-7 py-4 text-center text-base leading-6 font-medium text-ink-950 transition hover:bg-mx-orange-bright sm:self-start"
+              class="rounded-lg bg-brand-accent px-7 py-4 text-center text-base leading-6 font-medium text-ink-950 transition hover:bg-brand-accent-bright sm:self-start"
             >
               Abrir cuenta
             </a>
           </div>
 
           <footer class="flex flex-col gap-2 border-t border-ink-800 pt-6">
-            <p class="text-xs leading-5 tracking-tight text-ink-400">
-              Pieza de demostración. Los datos y las cifras son ilustrativos y no constituyen una
-              oferta comercial.
-            </p>
+            <p class="text-xs leading-5 tracking-tight text-ink-400">{{disclaimer}}</p>
           </footer>
         </div>
       </section>

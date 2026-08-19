@@ -1,4 +1,5 @@
 import { CanvasTexture, SRGBColorSpace } from 'three'
+import { brand } from '../../../../brand'
 
 export type CardFace = 'front' | 'back'
 
@@ -10,20 +11,21 @@ const HEIGHT = 646
 const MARGIN = 48
 
 /**
- * The card body, sampled off the MandarinaX reference render pixel for pixel.
+ * The card body, sampled off the reference render pixel for pixel.
  *
- * It agrees with `--color-mx-orange` here, and that agreement is a fact about
- * this brand rather than a rule: MandarinaX states its orange ON a card, so the
- * ink and the body are the same measurement taken from the same artefact. Where
- * a brand publishes the two separately they are two different things — an ink
- * and a pigmented PVC body photographed under light — and this constant is
- * still the one that governs the object.
+ * It happens to agree with `--color-brand-accent` in both brands here, and that
+ * agreement is a fact rather than a rule: each of these brands states its
+ * orange ON a card, so the ink and the body are the same measurement taken from
+ * the same artefact. Where a brand publishes the two separately they are two
+ * different things — an ink and a pigmented PVC body photographed under light —
+ * which is why the brand carries them as separate fields anyway.
  *
- * The reference sheet also shows a red card beside this one. The red is not a
- * second body here: it is the page's ground, and a card the colour of the page
- * behind it would disappear into the one thing it has to stand out from.
+ * Each reference sheet also shows a second card, in the brand's second ink. It
+ * is not a second body here: that ink is the page's ground, and a card the
+ * colour of the page behind it would disappear into the one thing it has to
+ * stand out from.
  */
-const BODY_ORANGE = '#f37d06'
+const BODY_ORANGE = brand.card.front
 
 /**
  * The front carries no account data at all — no number, no expiry, no name.
@@ -516,15 +518,6 @@ function fillTracked(
   }
 }
 
-/** The advance `fillTracked` consumes, needed to place the next group. */
-function trackedWidth(ctx: CanvasRenderingContext2D, text: string, tracking: number): number {
-  let total = 0
-  for (const glyph of text) {
-    total += ctx.measureText(glyph).width + tracking
-  }
-  return total
-}
-
 /**
  * The matte body: a flat brand orange, a fine woven tooth, and a vignette.
  *
@@ -717,26 +710,58 @@ function drawContactless(ctx: CanvasRenderingContext2D, options: ContactlessOpti
 }
 
 /**
- * The wordmark, in the brand's own two-part construction.
+ * The wordmark, however this brand's mark actually exists.
  *
- * "Mandarina" and "X" are one word set in one weight and one colour — the split
- * the page header makes, tinting the X, is a UI affordance and not the logo.
- * The reference card sets the whole thing in white, and a card is where a brand
- * is least free to improvise.
+ * Two ways, because there are two honest answers. A brand with no vector
+ * original sets its name in type and the card carries a word. A brand with
+ * traced outlines prints the outlines — and a card is the one surface where a
+ * brand is least free to improvise, so where the real mark exists it is the
+ * real mark that goes on, at whatever it costs to carry the geometry.
  *
- * Returns the advance it consumed so the sub-brand line beneath can be placed
- * against the mark rather than against a number copied from here.
+ * The outline branch is also the only surface in this repository that can state
+ * a two-ink mark in both its inks. A dark page cannot: the second ink vanishes
+ * into it. An orange card can, which is why the brand inks the mark per surface
+ * rather than once. See `src/brand/isologo.ts`.
+ *
+ * `x` is the mark's left edge and `baseline` is the foot of its capitals in
+ * both branches, so the sub-brand line beneath sits against the same two
+ * numbers no matter which one drew.
  */
-function drawWordmark(ctx: CanvasRenderingContext2D, x: number, baseline: number): number {
+function drawWordmark(ctx: CanvasRenderingContext2D, x: number, baseline: number): void {
+  const mark = brand.card.wordmark
   ctx.save()
-  ctx.fillStyle = '#ffffff'
-  ctx.font = '600 76px sans-serif'
-  ctx.textBaseline = 'alphabetic'
-  ctx.textAlign = 'left'
-  fillTracked(ctx, 'MandarinaX', x, baseline, -1)
-  const advance = trackedWidth(ctx, 'MandarinaX', -1)
+  if (mark.kind === 'type') {
+    ctx.fillStyle = '#ffffff'
+    ctx.font = mark.font
+    ctx.textBaseline = 'alphabetic'
+    ctx.textAlign = 'left'
+    fillTracked(ctx, mark.text, x, baseline, mark.tracking)
+  } else {
+    const boxX = mark.logo.viewBox[0]
+    // Fitted by CAP HEIGHT, not by the box: the box includes a descender, and a
+    // mark scaled so its descender matches type's cap height reads a size small
+    // beside the very letters it is supposed to be the same size as.
+    const scale = mark.capHeight / mark.logo.capHeight
+    ctx.translate(x - boxX * scale, baseline - mark.logo.capHeight * scale)
+    ctx.scale(scale, scale)
+    // In this order, because the last group OVERPRINTS the one before it: the
+    // violet strokes go on top of a solid X rather than into a hole left for
+    // them. See `src/brand/isologo.ts`.
+    const groups: [readonly string[], string | undefined][] = [
+      [mark.logo.letters, mark.inks.letters],
+      [mark.logo.mark, mark.inks.mark],
+      [mark.logo.counter, mark.inks.counter],
+    ]
+    for (const [contours, ink] of groups) {
+      if (contours.length === 0 || ink === undefined) continue
+      ctx.fillStyle = ink
+      // One Path2D per ink rather than per contour. The traced contours already
+      // wind their holes against their outlines, so nonzero fill cuts the
+      // counters out on its own and a joined path is one fill instead of nine.
+      ctx.fill(new Path2D(contours.join('')))
+    }
+  }
   ctx.restore()
-  return advance
 }
 
 /**
@@ -1000,7 +1025,7 @@ function drawFront(ctx: CanvasRenderingContext2D): void {
   ctx.font = '400 40px sans-serif'
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
-  fillTracked(ctx, 'Crédito', WORDMARK_LEFT + 4, SUBBRAND_BASELINE, 0.5)
+  fillTracked(ctx, brand.card.wordmark.subBrand, WORDMARK_LEFT + 4, SUBBRAND_BASELINE, 0.5)
   ctx.restore()
 
   drawNetworkMark(ctx)
@@ -1048,7 +1073,7 @@ function drawSignature(ctx: CanvasRenderingContext2D, panel: Rect): void {
  * where white on orange has to be legible rather than merely branded.
  */
 function drawBack(ctx: CanvasRenderingContext2D): void {
-  fillMatteBody(ctx, '#d76302')
+  fillMatteBody(ctx, brand.card.back)
 
   // The signature panel, the only light field on either face. Kept because the
   // number sits above it and needs the eye to have somewhere to stop.

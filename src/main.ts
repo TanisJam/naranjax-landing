@@ -2,6 +2,7 @@ import './style.css'
 import closeSound from '../sound-effects/close.mp3?url'
 import openSound from '../sound-effects/open.mp3?url'
 import pickSound from '../sound-effects/pick.mp3?url'
+import { brand } from './brand'
 import { FrameCounter } from './diagnostics/FrameCounter'
 import { createKnockouts } from './diagnostics/knockouts'
 import { SceneOrchestrator } from './sheets/application/SceneOrchestrator'
@@ -175,7 +176,7 @@ const setDeployed = (deployed: boolean, silent = false): void => {
   stage.setAttribute('aria-expanded', String(deployed))
   stage.setAttribute(
     'aria-label',
-    deployed ? 'Armar la tarjeta' : 'Ver todo lo que podés hacer con MandarinaX',
+    deployed ? 'Armar la tarjeta' : `Ver todo lo que podés hacer con ${brand.name}`,
   )
   if (hint) {
     hint.textContent = deployed

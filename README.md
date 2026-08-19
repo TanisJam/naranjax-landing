@@ -1,28 +1,104 @@
-# MandarinaX — landing
+# Landing — MandarinaX and Naranja X
 
 A product landing whose hero is not a picture of the card but the card itself,
 rendered live in Three.js and coming apart into the nine things the account can
 do. The engine is the sheets renderer vendored from `../3dclaude`.
 
+It ships as two brands off one `main`: **MandarinaX**, which it was designed
+against, and a **Naranja X** concept demo. Same design, same card, same copy —
+the difference is a set of colours and a mark.
+
 ```bash
 pnpm install
-pnpm dev        # http://localhost:5173
-pnpm build      # tsc --noEmit && vite build
+pnpm dev                        # http://localhost:5173
+pnpm build                      # tsc --noEmit && vite build
+VITE_BRAND=naranjax pnpm build  # the other one
 ```
 
-## The brand
+## Two brands, one build
 
-Two inks, both sampled off the MandarinaX reference card rather than eyeballed:
-orange `#f37d06` and red `#db1811`. They are not interchangeable and each has a
-job. Red is the ground — the `ink` ramp in `src/style.css` is that red taken
-down to near-black at a constant 2° hue — and orange is everything printed on
-it: the accent, the calls to action, the mark, the card body.
+`VITE_BRAND` picks a brand at BUILD time, never at run time, and that is the
+whole design rather than a convenience. A share card is read by a scraper that
+fetches the markup and leaves without running anything, so a title, a canonical
+URL and an `og:image` filled in by a script are — to the only audience that
+reads them — absent. And a page that paints itself the default brand before
+correcting has shipped a flash of the wrong company's colours to every visitor.
 
-The ramp arrived by rotation rather than by re-authoring. It was previously a
-violet at a constant 277.7° hue, and every step keeps that step's exact
-lightness and saturation with only the hue moved. So the page reads as a
-different brand while the contrast relationships that were tuned against the
-artwork are, number for number, the ones that were tuned.
+Absent means the default. An unknown value is a build error rather than a
+fallback: a typo in a deploy's environment would otherwise publish the wrong
+brand under the right domain, and nothing would look broken enough to notice.
+
+`src/brand/` is deliberately narrow. It carries colours, a name, a mark, the
+origin, the footer's disclaimer, and how the card prints its wordmark. It
+carries no layout, no spacing, no card geometry and no copy that does not name
+the brand — those were tuned against the artwork and they are the same design
+in both builds. A brand layer wide enough to change them would be a second site
+wearing a config file, and the two would drift apart on the first edit.
+
+Three mechanisms carry it, and none of them is a second copy of anything:
+
+**Colour** goes through Tailwind's own tokens. `@theme` in `src/style.css`
+declares the contract — every token the page may use — with the default brand's
+values, and the build restates those same custom properties in the active
+brand's. Every utility already compiles to a `var()` of one of them, so
+restating the properties reskins the page, opacity modifiers included, with no
+second class and no second stylesheet. The restatement lands at `html:root`
+rather than `:root`: relying on arriving later in the cascade would make the
+page's colours a function of where a bundler chooses to inject a `<link>`.
+
+**Markup** goes through `{{token}}` placeholders in `index.html`, substituted by
+the plugin in `vite.config.ts`. A token left unsubstituted throws the build,
+because a brand name rendered as literal braces on a live page breaks nothing a
+type check or a smoke test would catch.
+
+**The module** goes through `virtual:brand`, an alias resolved to one brand
+file. Selecting out of a registry at run time would keep every brand reachable,
+so both palettes and both marks — twenty kilobytes of traced path data among
+them — would ship in each build as dead strings. Only `vite.config.ts` reaches
+the registry, because only the build has to know every brand in order to
+validate the one it was asked for.
+
+### The two palettes
+
+Each brand runs on two inks sampled off a published artefact rather than
+eyeballed. MandarinaX: orange `#f37d06`, red `#db1811`. Naranja X: orange
+`#ff5000`, violet `#50007f` — that one is exact, because the published isologo
+is an 8-bit colormapped PNG and its PLTE chunk states the inks outright.
+
+They are not interchangeable and each has a job. The second ink is the ground —
+the `ink` ramp is it taken down to near-black at constant hue — and the first is
+everything printed on top: the accent, the calls to action, the mark, the card
+body.
+
+The second ramp is a ROTATION of the first, not a re-authoring. Measured across
+its eight steps the violet holds 277.7° while L runs 8.6% to 90% and S runs
+0.545 to 0.294; the red ramp keeps every step's exact lightness and saturation
+and moves only the hue, to 2°. That is what buys the second brand for free: the
+contrast relationships tuned against the artwork are, number for number, the
+ones that were tuned. Verified at 6.92:1 for the calls to action, 10.7:1 for
+body copy and 7.16:1 for the small print.
+
+### The Naranja X mark
+
+`src/brand/isologo.ts` is the isologo as outlines, recovered from the published
+155x36 bitmap because no vector original is in circulation. The header could
+have used the PNG; the card could not — its face is drawn into a 1024px texture
+and a 155px source blown up to that is mush, and the card is the piece the whole
+page is built around. Measured back against the source, the trace is within
+2.7% of the mark's area, which is the width of the original's antialiasing.
+
+The contours are grouped by ROLE — letters, the whole X, the X's violet strokes
+— and not by ink. Storing it as "the orange paths" and "the violet paths" would
+bake a ground colour into the geometry, and the published colours only work on
+white: on this violet-black page the violet stroke of the X is a hole. Split by
+role, every surface inks the mark in the version it can carry off one copy of
+the geometry. The header reverses to white letters and a solid orange X; the
+card, which is orange, states the real two-ink split.
+
+The violet group OVERPRINTS the X rather than tiling with it, so a surface that
+omits it gets a solid X instead of a gap. And the gaps between the X's three
+strokes are the mark, not a tracing artefact — the two inks never touch anywhere
+in the artwork. Closing them would be inventing a logo Naranja X does not use.
 
 ## Layout
 
@@ -360,28 +436,40 @@ scratch for the card stack — the original four-vault composition is still in
 
 ## The icon and the share card
 
-Everything in `public/` is derived rather than drawn. The favicon is the mark
-the header already renders — the orange tile with the X cut out of it in the
-page's own ground — and nothing else from the wordmark comes along, because at
-sixteen pixels "mandarina" is a smudge and the X is the only part of the name
-that survives. `apple-touch-icon.png` is the same mark full-bleed: iOS applies
-its own squircle, so an icon carrying its own corners gets them rounded twice.
-The `.ico` exists for the bare `/favicon.ico` every browser still requests
-whether or not anything points at it.
+Nothing here is drawn twice. `public/` is gone: every file in it stated a brand
+— an icon is a mark and a share card is a photograph of the product — and
+`public/` is copied wholesale into every build, so one brand's deploy would have
+served the other's favicon and the other's card with nothing objecting.
+
+Two of them are GENERATED per build by the plugin in `vite.config.ts`.
+`favicon.svg` is the mark the header already renders, and `site.webmanifest` is
+the brand's name and colours; both are functions of the brand and neither is a
+file anyone has to keep in sync.
+
+The rest live in `brand-assets/<brand>/`, and the build refuses to start if one
+is missing. That check earns its place: a share card that fails to copy does not
+break a page, it breaks every link to it, somewhere else, later, in a preview
+nobody is looking at.
+
+`apple-touch-icon.png` is the mark full-bleed — iOS applies its own squircle, so
+an icon carrying its own corners gets them rounded twice — and the two manifest
+icons are the same, declared `maskable` for the same reason. The `.ico` exists
+for the bare `/favicon.ico` every browser still requests whether or not anything
+points at it.
 
 `og.jpg` is the hero, captured. The product is the card, so a share card drawn
 separately in a design tool would agree with the page only by hand and stop
 agreeing the first time either moved. It is a screenshot of the running build at
-1200x630 with the nav hidden and the touch hint swapped for the claim — both
-inline, since the stylesheet is compiled from what the source uses and a class
-invented at capture time has no rule behind it. JPEG rather than PNG: the frame
-is a render with film grain over it, which is what JPEG is for, and it costs
-110KB against 780KB for no visible difference.
+1200x630 with the touch hint swapped for the claim — inline, since the
+stylesheet is compiled from what the source uses and a class invented at capture
+time has no rule behind it. JPEG rather than PNG: the frame is a render with
+film grain over it, which is what JPEG is for, and it costs about a seventh of
+the PNG for no visible difference.
 
-**If the hero changes, recapture it** — nothing regenerates it on build. And the
-Open Graph URLs in `index.html` are absolute because they have to be: a scraper
-fetches the image with no document to resolve a relative path against. If the
-site moves off `mandarina-x.vercel.app`, those lines move with it.
+**If the hero changes, recapture it for both brands** — nothing regenerates it
+on build. The Open Graph URLs are absolute because they have to be, a scraper
+having no document to resolve a relative path against; they are built from each
+brand's `origin`, so a site that moves changes one line in `src/brand/`.
 
 ## Gotchas
 
