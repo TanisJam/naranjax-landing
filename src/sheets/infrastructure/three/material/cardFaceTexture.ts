@@ -38,7 +38,87 @@ const BODY_ORANGE = '#f37d06'
  */
 const CARD_NUMBER = '5412 7512 3412 3456'
 const EXPIRY = '12/28'
-const CARDHOLDER = 'Lee M. Cardholder'
+const CARDHOLDER = 'Mauricio N. Romero'
+
+/**
+ * The signature, as the outlines of its own ink.
+ *
+ * Traced from a photograph of the mark actually written by hand, thresholded
+ * and reduced to closed contours — not set in a script face. That distinction
+ * is the whole point of the panel. A typeface named `cursive` produces the same
+ * shapes for everybody, which is precisely what a signature is not, and what a
+ * host resolves that keyword to is anyone's guess: on Windows it is Comic Sans.
+ * This is one person's hand, and it renders identically everywhere because it
+ * is geometry rather than a font lookup.
+ *
+ * Contours rather than strokes, so the pen's own width variation survives — the
+ * downstrokes are heavier than the upstrokes and the long flourish tapers at
+ * both ends, and none of that can be recovered from a centre line stroked at a
+ * constant width.
+ *
+ * Coordinates are flat x, y pairs in a box 1000 wide; `SIGNATURE_RISE` is how
+ * tall that box is in the same units. Six contours: the ink itself and the
+ * counters enclosed by the loops, filled together under the even-odd rule so
+ * the holes stay holes without anyone having to track winding.
+ *
+ * Smoothed along each contour before simplifying, because a threshold boundary
+ * carries the paper's grain and a simplifier preserves noise exactly as
+ * faithfully as it preserves shape. What is left is 218 points for the whole
+ * mark, drawn as quadratics through the midpoints of the polygon so the curves
+ * come back rounded rather than faceted.
+ */
+const SIGNATURE_PATH: readonly (readonly number[])[] = [
+  [
+    609.9, 2.3, 620.3, 2.1, 630.3, 4.6, 639.8, 10.6, 640.9, 14.6, 635.9, 17.3, 623.6, 14.5,
+    601.4, 16.4, 582.9, 24.3, 561.2, 38.4, 536.8, 63.8, 523.8, 84.2, 509.9, 114.7, 504.4, 118.5,
+    499.9, 117.8, 495.8, 114.2, 494.9, 107.6, 485.2, 113.3, 479.7, 114.5, 474.5, 113, 467.3,
+    105.4, 467.4, 96.3, 475.4, 60, 475, 55.8, 452.7, 80.1, 420.9, 127.6, 412.7, 128.1, 407.7,
+    120.9, 419.8, 90.8, 408.2, 100.9, 380.5, 119.1, 372.9, 121.7, 365.9, 121.2, 359.4, 116.8,
+    355.6, 109.5, 357.5, 98.5, 367, 69.8, 367.2, 64.3, 333.1, 95.8, 297.5, 135, 292.7, 136.9,
+    287.8, 136.3, 282.4, 130.8, 282.1, 127.2, 304.8, 73, 308.7, 61.4, 307.6, 59.6, 282.2, 83.1,
+    252.7, 115.8, 182.1, 205.5, 177.4, 207.8, 169.4, 206.4, 166.6, 202.3, 167.2, 198.4, 200.9,
+    133.2, 232.6, 79.5, 108.1, 109.7, 13.4, 137.9, 4.2, 137.4, 0, 130.2, 1.2, 126.5, 4.7, 124.6,
+    108.7, 95.5, 242.3, 64.2, 269.8, 24.8, 274.1, 21.3, 282.1, 18.5, 286.9, 21.7, 284.3, 30.7,
+    262.4, 61.7, 218.3, 135.1, 250, 97.5, 284.5, 61.3, 284, 58.4, 288.1, 57.8, 301, 46.7, 315,
+    38.3, 320.1, 39.4, 324.6, 43.5, 326.3, 51.7, 322.9, 67.7, 311.8, 97.1, 349.2, 60.6, 368.3,
+    47, 374.4, 45.8, 379.4, 47.8, 382.8, 52.1, 383.9, 61.9, 381.1, 76.2, 372, 102.9, 372, 105.7,
+    373.8, 106.1, 426.1, 72.6, 423, 77.5, 426.5, 76.4, 447, 37, 451.4, 32.8, 456.3, 31.2, 461,
+    33.1, 463.1, 38.5, 455.4, 54, 469.7, 41.9, 476.8, 38, 484.4, 38.5, 490.9, 45.2, 491.9, 55.5,
+    482.8, 94.6, 484, 97.8, 508.4, 77.4, 527.5, 25.7, 532.1, 24.5, 537.9, 27.8, 540, 32.5,
+    539.4, 39.5, 552.3, 28, 572, 15, 595.4, 4.9
+  ],
+  [
+    985.7, 81.7, 993.8, 81.5, 997.6, 83.1, 1000, 86.9, 998.8, 92.4, 979.8, 98.3, 971.4, 95.4,
+    944.3, 97.8, 808.1, 116.5, 558.6, 160.3, 468.3, 178.9, 364.1, 203.8, 280.4, 226.7, 211.6,
+    248.1, 282.6, 236.7, 414.5, 212.3, 514, 199, 413.3, 222.7, 237.3, 258.4, 176.8, 268.6,
+    150.1, 269.2, 145.3, 266.3, 142.2, 260, 142.5, 256.1, 145.3, 253.5, 255.9, 220.9, 377.6,
+    188.6, 482.8, 164.7, 600.6, 141.6, 742.8, 116.6, 874.2, 96.2
+  ],
+  [
+    733.6, 14, 745.8, 15.1, 751.7, 20.1, 754.1, 25.5, 753.8, 39.6, 747.1, 51.5, 743.7, 62.2,
+    743.4, 78.8, 749.1, 78.5, 757.6, 74.6, 787, 55.8, 782.2, 65.5, 782, 70.2, 766.1, 85.3,
+    752.7, 92.2, 744, 93.1, 734, 88.5, 729.4, 82.9, 726.3, 72.1, 696.2, 97.1, 685.8, 101.6,
+    676.1, 99.7, 669.4, 92.3, 669, 87.8, 674.9, 73.6, 684, 59.2, 695.4, 44.2, 712.1, 27.5,
+    725.1, 17.9
+  ],
+  [
+    867.5, 0, 881, 0.5, 889.5, 3.7, 896.4, 10, 896.8, 14.5, 892.2, 16.5, 881.7, 12.3, 871.2,
+    12.3, 858.9, 15.5, 846.9, 21.5, 833.5, 31.4, 820.8, 45.1, 813.4, 56.4, 800.8, 83.5, 795.5,
+    85.9, 789.4, 83.5, 786.7, 80.1, 786.6, 75.5, 809.5, 12.8, 814.4, 10, 818.5, 10.9, 822.2, 15,
+    823.2, 21.4, 846.1, 6.7
+  ],
+  [
+    738.3, 27.2, 741.1, 27.6, 741.5, 30.4, 729, 47.5, 704.3, 72.5, 686.7, 84.6, 694.9, 68.6,
+    712.1, 46.9, 728.5, 32.2
+  ],
+  [
+    616.2, 97.3, 621.6, 97.3, 625.6, 99.5, 627.1, 104.6, 625.2, 108.6, 619, 110, 614.1, 107.1,
+    612.2, 101
+  ],
+]
+
+/** Height of the signature's box, in the same units its x runs 0..1000 in. */
+const SIGNATURE_RISE = 269.2
 
 /** Front: the mark sits low and left, the network mark low and right. */
 const WORDMARK_LEFT = MARGIN + 40
@@ -346,6 +426,55 @@ function drawFront(ctx: CanvasRenderingContext2D): void {
 }
 
 /**
+ * The one hand-made mark on the card.
+ *
+ * Laid into the panel rather than onto the body, because that is what a
+ * signature panel is: a receptive strip over a surface that ink will not take.
+ *
+ * Fitted by HEIGHT and left-aligned, not stretched to the strip. The mark is
+ * roughly four times as wide as it is tall and the panel is twelve, so filling
+ * the panel would mean distorting a person's hand to suit a rectangle — and a
+ * signature that reaches both ends of its box is the one thing no real one
+ * does. What sets the scale is the panel's height, which is why the panel grew:
+ * a strip too shallow to hold a signature is a decoration, not a panel.
+ *
+ * Ink rather than black. A pen on a pale panel is never neutral — it is blue or
+ * it is brown-black — and pure black over this cream reads as toner.
+ */
+function drawSignature(ctx: CanvasRenderingContext2D, panel: Rect): void {
+  const scale = (panel.height * 0.86) / SIGNATURE_RISE
+
+  ctx.save()
+  ctx.translate(panel.x + 38, panel.y + panel.height * 0.09)
+  ctx.scale(scale, scale)
+  ctx.fillStyle = 'rgba(28, 34, 68, 0.88)'
+
+  ctx.beginPath()
+  for (const contour of SIGNATURE_PATH) {
+    const count = contour.length / 2
+    // Quadratics through the midpoints of the polygon: each stored point
+    // becomes a control point rather than a corner, which is what turns a
+    // simplified outline back into the curve it was simplified from.
+    const at = (i: number): [number, number] => {
+      const k = (((i % count) + count) % count) * 2
+      return [contour[k] as number, contour[k + 1] as number]
+    }
+    const [lx, ly] = at(-1)
+    const [fx, fy] = at(0)
+    ctx.moveTo((lx + fx) / 2, (ly + fy) / 2)
+    for (let i = 0; i < count; i++) {
+      const [ax, ay] = at(i)
+      const [bx, by] = at(i + 1)
+      ctx.quadraticCurveTo(ax, ay, (ax + bx) / 2, (ay + by) / 2)
+    }
+    ctx.closePath()
+  }
+  ctx.fill('evenodd')
+
+  ctx.restore()
+}
+
+/**
  * The reverse, which is where the account data went.
  *
  * A deeper orange than the front and the same tooth over it. Deeper because the
@@ -359,12 +488,20 @@ function drawBack(ctx: CanvasRenderingContext2D): void {
 
   // The signature panel, the only light field on either face. Kept because the
   // number sits above it and needs the eye to have somewhere to stop.
+  // Not the full width, which is both what a real panel does and what this one
+  // needs. A strip running edge to edge leaves two thirds of itself empty
+  // beside a signature the size a hand actually writes — and the emptiness
+  // reads as a missing element rather than as space. Ended where the mark ends
+  // and the body takes the rest, the way the CVV box does on a printed card.
+  const panel = { x: MARGIN, y: 104, width: (WIDTH - MARGIN * 2) * 0.66, height: 118 }
   ctx.save()
   ctx.fillStyle = 'rgba(255, 248, 240, 0.92)'
   ctx.beginPath()
-  ctx.roundRect(MARGIN, 120, WIDTH - MARGIN * 2, 76, 6)
+  ctx.roundRect(panel.x, panel.y, panel.width, panel.height, 6)
   ctx.fill()
   ctx.restore()
+
+  drawSignature(ctx, panel)
 
   drawCardNumber(ctx, TEXT_LEFT, NUMBER_BASELINE, {
     font: 'bold 54px sans-serif',
