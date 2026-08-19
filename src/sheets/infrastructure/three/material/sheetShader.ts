@@ -753,6 +753,7 @@ uniform sampler2D uBackdrop;
 uniform vec2 uBackdropTexel;
 uniform float uFrostSpread;
 uniform sampler2D uDecalMap;
+uniform sampler2D uDecalHeightMap;
 uniform float uDecalInk;
 uniform float uDecalRelief;
 
@@ -903,9 +904,11 @@ if (uRibContrast > 0.0) {
   diffuseColor.rgb *= 1.0 + gRib * gRibFade * uRibContrast;
 }
 
-// Decal ink. Coverage lives in the alpha channel, which is also the height
-// field the normal chunk reads — one texture, two independent uses, so a
-// pressed shape and a printed one can share the same drawing.
+// Decal ink. Coverage lives in the alpha channel, which is USUALLY also the
+// height field the normal chunk reads — one texture, two independent uses, so a
+// pressed shape and a printed one can share the same drawing. A layer whose
+// print has to cover its whole rect is the case where they collide, and that
+// layer hands the normal chunk a map of its own instead.
 if (uDecalInk > 0.0) {
   vec4 decal = texture2D(uDecalMap, decalUv());
   float ink = decal.a * uDecalInk;
@@ -940,13 +943,21 @@ if (uDotScale > 0.0) {
 // light. Sampled at a deliberately wide offset: these are soft die-pressed
 // forms, and a texel-width difference would turn every one of them into a
 // wire outline instead of a swell.
+//
+// Read from uDecalHeightMap, which is the decal itself on every layer that
+// can afford to share it — that is what the material binds when a layer offers
+// nothing else. The printed cards are the exception and the reason the sampler
+// exists: their ink covers the rect edge to edge, so their alpha is a constant
+// and a constant has no gradient. Their chip and their wear come from a second
+// map drawn in the same frame, which is why nothing here needs to know which
+// kind of layer it is running on.
 if (uDecalRelief > 0.0) {
   vec2 uv = decalUv();
   const float reach = 0.006;
-  float dx = texture2D(uDecalMap, uv + vec2(reach, 0.0)).a
-           - texture2D(uDecalMap, uv - vec2(reach, 0.0)).a;
-  float dy = texture2D(uDecalMap, uv + vec2(0.0, reach)).a
-           - texture2D(uDecalMap, uv - vec2(0.0, reach)).a;
+  float dx = texture2D(uDecalHeightMap, uv + vec2(reach, 0.0)).a
+           - texture2D(uDecalHeightMap, uv - vec2(reach, 0.0)).a;
+  float dy = texture2D(uDecalHeightMap, uv + vec2(0.0, reach)).a
+           - texture2D(uDecalHeightMap, uv - vec2(0.0, reach)).a;
   // Both gradients are measured in the decal's own uv, and the perturbation is
   // written in the plate's parameter frame, so each axis carries the sign of
   // the map between them. v is flipped on every shell, which is the minus on

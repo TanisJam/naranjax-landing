@@ -149,6 +149,12 @@ export interface SheetUniforms extends StackOcclusionUniforms, BackdropUniforms,
    * resolution independent — the same frost at 1x and at 2x. */
   uFrostSpread: IUniform<number>
   uDecalMap: IUniform<Texture>
+  /**
+   * Where the relief is differentiated from. The decal itself on every layer
+   * that can spare its alpha for two jobs at once, and a separate drawing on
+   * the ones that cannot — see the emboss branch in the normal chunk.
+   */
+  uDecalHeightMap: IUniform<Texture>
   /** 0 leaves the computed albedo alone, 1 replaces it with the decal's ink. */
   uDecalInk: IUniform<number>
   /** 0 is a flat print, higher values press the decal into the surface. */
@@ -293,6 +299,7 @@ export function createSheetMaterial(
   shape: SheetShape,
   surface: SheetSurface,
   decalMap: Texture | null,
+  reliefMap: Texture | null,
   occlusion: StackOcclusionUniforms,
   backdrop: BackdropUniforms,
   grain: FilmGrainUniforms,
@@ -355,6 +362,10 @@ export function createSheetMaterial(
     // switches the composite off — see the branch in FRAGMENT_BACKDROP_CHUNK.
     uFrostSpread: { value: surface.frostsBackdrop ? surface.frost * FROST_MAX_SPREAD : 0 },
     uDecalMap: { value: decalMap ?? BLANK_DECAL },
+    // Falls back to the decal, which is what every layer authored before this
+    // sampler existed already meant by relief. The blank is flat in alpha, so a
+    // layer with neither map differentiates to nothing rather than to noise.
+    uDecalHeightMap: { value: reliefMap ?? decalMap ?? BLANK_DECAL },
     uDecalInk: { value: decalMap ? surface.decalInk : 0 },
     uDecalRelief: { value: decalMap ? surface.decalRelief : 0 },
   }

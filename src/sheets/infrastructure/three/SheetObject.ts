@@ -13,7 +13,7 @@ import {
 import { clamp, lerp } from '../../domain/easing'
 import type { SheetDecal, SheetLayer } from '../../domain/types'
 import { createShellGeometry } from './geometry/shellGeometry'
-import { createCardFaceTexture } from './material/cardFaceTexture'
+import { createCardFaceTexture, createCardReliefTexture } from './material/cardFaceTexture'
 import { createLayerMotifTexture } from './material/layerMotifTexture'
 import type { BackdropCapture } from './BackdropCapture'
 import {
@@ -39,6 +39,26 @@ function createDecalTexture(decal: SheetDecal): Texture | null {
       return createCardFaceTexture('back')
     default:
       return createLayerMotifTexture(decal)
+  }
+}
+
+/**
+ * The height field a decal cannot supply for itself.
+ *
+ * Only the printed cards have one. Every other motif in this stack carries its
+ * relief in its own alpha, because every other motif leaves some of the sheet
+ * unprinted; a card face covers its rect and has no alpha left to vary. Null
+ * everywhere else is not a gap — it is the material falling back to the decal,
+ * which is where those layers' relief has always come from.
+ */
+function createDecalRelief(decal: SheetDecal): Texture | null {
+  switch (decal) {
+    case 'card-front':
+      return createCardReliefTexture('front')
+    case 'card-back':
+      return createCardReliefTexture('back')
+    default:
+      return null
   }
 }
 
@@ -149,6 +169,7 @@ export class SheetObject {
   readonly hitArea: Mesh
 
   private readonly decalMap: Texture | null
+  private readonly reliefMap: Texture | null
 
   /**
    * Only the caster carries one; see `createSheetDepthMaterial`. Held so it can
@@ -230,11 +251,13 @@ export class SheetObject {
     })
 
     this.decalMap = createDecalTexture(layer.decal)
+    this.reliefMap = createDecalRelief(layer.decal)
 
     const { material, uniforms } = createSheetMaterial(
       shape,
       layer.surface,
       this.decalMap,
+      this.reliefMap,
       occlusion,
       backdrop.uniforms,
       grain,
@@ -476,5 +499,6 @@ export class SheetObject {
     this.material.dispose()
     this.depthMaterial?.dispose()
     this.decalMap?.dispose()
+    this.reliefMap?.dispose()
   }
 }

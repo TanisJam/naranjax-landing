@@ -137,6 +137,21 @@ const NAME_BASELINE = 520
 const CHIP: Rect = { x: 96, y: 168, width: 128, height: 98 }
 const CONTACTLESS = { x: 300, y: 217, radius: 62 }
 
+/**
+ * The signature panel, hoisted out of the drawing that used to own it.
+ *
+ * It is here because the height field needs the same rectangle: an applied
+ * strip stands very slightly off the body, and a panel that is a lighter colour
+ * and nothing else reads as a printed patch. Two copies of the numbers would be
+ * two chances to drift apart.
+ */
+const SIGNATURE_PANEL: Rect = {
+  x: MARGIN,
+  y: 104,
+  width: (WIDTH - MARGIN * 2) * 0.66,
+  height: 118,
+}
+
 interface Rect {
   x: number
   y: number
@@ -263,6 +278,56 @@ function fillMatteBody(ctx: CanvasRenderingContext2D, body: string): void {
 }
 
 /**
+ * The plate's outline. Shared, because the print and the height field both need
+ * it and a chip whose ink and whose relief disagree by a pixel reads as a
+ * misregistered sticker.
+ */
+function chipPlatePath(ctx: CanvasRenderingContext2D, rect: Rect, grow = 0): void {
+  ctx.beginPath()
+  ctx.roundRect(
+    rect.x - grow,
+    rect.y - grow,
+    rect.width + grow * 2,
+    rect.height + grow * 2,
+    12 + grow,
+  )
+}
+
+/**
+ * The pad gaps: two horizontal splits into three bands, one vertical split
+ * through the outer bands. The middle band keeps its own island.
+ */
+function chipGapPath(ctx: CanvasRenderingContext2D, rect: Rect): void {
+  const { x, y, width, height } = rect
+  const thirdY = height / 3
+  ctx.beginPath()
+  ctx.moveTo(x, y + thirdY)
+  ctx.lineTo(x + width, y + thirdY)
+  ctx.moveTo(x, y + thirdY * 2)
+  ctx.lineTo(x + width, y + thirdY * 2)
+  ctx.moveTo(x + width / 2, y)
+  ctx.lineTo(x + width / 2, y + thirdY)
+  ctx.moveTo(x + width / 2, y + thirdY * 2)
+  ctx.lineTo(x + width / 2, y + height)
+}
+
+/**
+ * The module — a rounded island in the middle band, and the one feature that
+ * separates a chip from a grid of squares.
+ */
+function chipModulePath(ctx: CanvasRenderingContext2D, rect: Rect): void {
+  const thirdY = rect.height / 3
+  ctx.beginPath()
+  ctx.roundRect(
+    rect.x + rect.width * 0.24,
+    rect.y + thirdY + rect.height * 0.06,
+    rect.width * 0.52,
+    thirdY - rect.height * 0.12,
+    5,
+  )
+}
+
+/**
  * The EMV contact plate.
  *
  * Eight pads around a central module, which is the layout on the reference and
@@ -274,6 +339,14 @@ function fillMatteBody(ctx: CanvasRenderingContext2D, body: string): void {
  * filled pads, so the chip stays fully opaque for the ink-coverage mask — the
  * material reads this texture's alpha, and a hole here punches through the
  * print.
+ *
+ * What is painted here is the plate's COLOUR and its occlusion, and nothing
+ * that pretends to be light. The seam is a contact shadow — a milled pocket
+ * traps light at its wall no matter where the light is — and the brushing is
+ * the plating's own finish. The highlight that makes the plate sit proud comes
+ * from the height field instead, because this card can be turned over and spun
+ * in the hand, and a highlight baked into the artwork is a lie the moment the
+ * card faces anywhere but the way it was painted for.
  */
 function drawChip(ctx: CanvasRenderingContext2D, rect: Rect): void {
   const { x, y, width, height } = rect
@@ -284,33 +357,40 @@ function drawChip(ctx: CanvasRenderingContext2D, rect: Rect): void {
   gold.addColorStop(1, '#b2914c')
 
   ctx.save()
-  ctx.beginPath()
-  ctx.roundRect(x, y, width, height, 12)
+
+  // The seat. Three passes rather than one stroke, so the shadow falls off
+  // instead of ending in a drawn line — the pocket's wall is a slope.
+  for (let pass = 3; pass >= 1; pass--) {
+    chipPlatePath(ctx, rect, pass)
+    ctx.strokeStyle = `rgba(92, 38, 2, ${0.1 / pass})`
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
+
+  chipPlatePath(ctx, rect)
   ctx.fillStyle = gold
   ctx.fill()
 
   ctx.clip()
+
+  // The plating's finish: fine lines across the plate, well under the contrast
+  // of the pad gaps. Contact plates are not mirrors — they are lightly brushed,
+  // and a perfectly smooth gold gradient is the tell that this is a drawing.
+  ctx.lineWidth = 1
+  for (let line = 0; line < height; line += 3) {
+    ctx.strokeStyle = line % 6 === 0 ? 'rgba(255, 248, 224, 0.09)' : 'rgba(88, 66, 22, 0.07)'
+    ctx.beginPath()
+    ctx.moveTo(x, y + line + 0.5)
+    ctx.lineTo(x + width, y + line + 0.5)
+    ctx.stroke()
+  }
+
   ctx.strokeStyle = 'rgba(74, 56, 20, 0.55)'
   ctx.lineWidth = 3.5
-
-  // Two horizontal gaps split the plate into three bands, and one vertical gap
-  // splits the outer bands into pads. The middle band keeps its own island.
-  const thirdY = height / 3
-  ctx.beginPath()
-  ctx.moveTo(x, y + thirdY)
-  ctx.lineTo(x + width, y + thirdY)
-  ctx.moveTo(x, y + thirdY * 2)
-  ctx.lineTo(x + width, y + thirdY * 2)
-  ctx.moveTo(x + width / 2, y)
-  ctx.lineTo(x + width / 2, y + thirdY)
-  ctx.moveTo(x + width / 2, y + thirdY * 2)
-  ctx.lineTo(x + width / 2, y + height)
+  chipGapPath(ctx, rect)
   ctx.stroke()
 
-  // The module: a rounded island in the middle band, the one feature that
-  // separates a chip from a grid of squares.
-  ctx.beginPath()
-  ctx.roundRect(x + width * 0.24, y + thirdY + height * 0.06, width * 0.52, thirdY - height * 0.12, 5)
+  chipModulePath(ctx, rect)
   ctx.stroke()
   ctx.restore()
 }
@@ -423,6 +503,7 @@ function drawFront(ctx: CanvasRenderingContext2D): void {
   ctx.restore()
 
   drawNetworkMark(ctx)
+
 }
 
 /**
@@ -493,7 +574,7 @@ function drawBack(ctx: CanvasRenderingContext2D): void {
   // beside a signature the size a hand actually writes — and the emptiness
   // reads as a missing element rather than as space. Ended where the mark ends
   // and the body takes the rest, the way the CVV box does on a printed card.
-  const panel = { x: MARGIN, y: 104, width: (WIDTH - MARGIN * 2) * 0.66, height: 118 }
+  const panel = SIGNATURE_PANEL
   ctx.save()
   ctx.fillStyle = 'rgba(255, 248, 240, 0.92)'
   ctx.beginPath()
@@ -526,6 +607,7 @@ function drawBack(ctx: CanvasRenderingContext2D): void {
   ctx.restore()
 
   drawNetworkMark(ctx)
+
 }
 
 /**
@@ -552,4 +634,152 @@ export function createCardFaceTexture(face: CardFace): CanvasTexture {
   texture.colorSpace = SRGBColorSpace
 
   return texture
+}
+
+
+/**
+ * Grey levels in the height field, 0..255. Mid grey is the card's own surface,
+ * so a mark can cut BELOW it as well as stand above — which is the whole reason
+ * the base is not black.
+ *
+ * The numbers are chosen for the tilt they end up producing, not for how tall
+ * anything is in millimetres. The shader differentiates this field over a fixed
+ * ±0.006 of uv — about six texels across — and multiplies the difference by
+ * `decalRelief`. The plate's 56 levels are 0.22 of the range, so at the 0.85
+ * this card runs the shoulder turns the normal by roughly eleven degrees: a
+ * step you can see the light break over, and nothing like the wall that 0.22
+ * unscaled would have built.
+ *
+ * The scuffs are a fourteenth of that. They are meant to catch the highlight as
+ * it sweeps past and to be invisible the rest of the time, which is what a
+ * scratch on a card in your hand actually does.
+ */
+const RELIEF_BASE = 128
+const RELIEF_PLATE = 184
+const RELIEF_MODULE = 198
+const RELIEF_GAP = 150
+const RELIEF_PANEL = 143
+
+/** How many texels the plate takes to climb out of its pocket. */
+const RELIEF_SHOULDER = 4
+
+function grey(level: number): string {
+  const value = Math.round(level)
+  return `rgb(${value}, ${value}, ${value})`
+}
+
+/**
+ * The chip, as height.
+ *
+ * A contact plate is milled into the card and sits a hair proud of it, and that
+ * hair is the entire difference between hardware and a gold rectangle printed
+ * on plastic. The pad gaps go the other way — they are cut INTO the plate, not
+ * through it — so they stop above the body rather than returning to it.
+ */
+function drawChipRelief(ctx: CanvasRenderingContext2D, rect: Rect): void {
+  // The pocket wall as a short ramp instead of a cliff. A cliff is not more
+  // correct, it is just narrower than the shader's sampling window, and what
+  // comes back is a wire outline around the chip.
+  //
+  // The ramp climbs INWARD, entirely inside the plate's own footprint. Run
+  // outward instead — which is what the first pass did — and the raised strip
+  // lands on the orange body, where it takes a specular the plate should have
+  // taken and reads as a pink halo bleeding off the chip. The wall belongs to
+  // the edge of the metal, not to the card around it.
+  for (let step = RELIEF_SHOULDER; step >= 0; step--) {
+    const climbed = 1 - step / RELIEF_SHOULDER
+    ctx.fillStyle = grey(RELIEF_BASE + (RELIEF_PLATE - RELIEF_BASE) * climbed)
+    chipPlatePath(ctx, rect, -step)
+    ctx.fill()
+  }
+
+  ctx.save()
+  chipPlatePath(ctx, rect)
+  ctx.clip()
+
+  ctx.strokeStyle = grey(RELIEF_GAP)
+  ctx.lineWidth = 4
+  chipGapPath(ctx, rect)
+  ctx.stroke()
+
+  // The module stands proud of the pads around it, over its own one-texel
+  // shoulder — it is a separate part seated in the plate, not an etched line.
+  ctx.strokeStyle = grey((RELIEF_PLATE + RELIEF_MODULE) / 2)
+  ctx.lineWidth = 3
+  chipModulePath(ctx, rect)
+  ctx.stroke()
+  ctx.fillStyle = grey(RELIEF_MODULE)
+  chipModulePath(ctx, rect)
+  ctx.fill()
+  ctx.restore()
+}
+
+/** The signature panel: an applied strip, so it stands very slightly off. */
+function drawPanelRelief(ctx: CanvasRenderingContext2D, panel: Rect): void {
+  ctx.save()
+  ctx.strokeStyle = grey((RELIEF_BASE + RELIEF_PANEL) / 2)
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.roundRect(panel.x, panel.y, panel.width, panel.height, 6)
+  ctx.stroke()
+  ctx.fillStyle = grey(RELIEF_PANEL)
+  ctx.fill()
+  ctx.restore()
+}
+
+/**
+ * Moves the height field into the alpha channel it is read from.
+ *
+ * The field has to ARRIVE in alpha — that is where the shader looks — but it
+ * cannot be PAINTED there. Canvas composites alpha rather than assigning it, so
+ * a groove crossing the chip would add to the plate instead of cutting into it,
+ * and every overlap would climb towards opaque. So the whole field is drawn in
+ * opaque grey, where overlapping strokes simply replace what is under them, and
+ * moved across in one pass at the end.
+ *
+ * The colour channels are flattened to white on the way. Nothing samples them,
+ * and leaving the greys behind would only invite someone to.
+ */
+function bakeHeightIntoAlpha(ctx: CanvasRenderingContext2D): void {
+  const image = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+  const { data } = image
+  for (let index = 0; index < data.length; index += 4) {
+    data[index + 3] = data[index] as number
+    data[index] = 255
+    data[index + 1] = 255
+    data[index + 2] = 255
+  }
+  ctx.putImageData(image, 0, 0)
+}
+
+/**
+ * The same card, as the surface it is rather than the picture it carries.
+ *
+ * A second map and not a second channel of the first, and that is forced: the
+ * printed faces cover their rect opaquely because the material reads the
+ * decal's alpha as ink coverage, and an alpha that never varies has no gradient
+ * for the emboss chunk to differentiate. The two uses genuinely collide on a
+ * card, where every other layer in this stack gets to share them.
+ *
+ * Everything on it is drawn from the same constants and the same seeds as the
+ * print, so the relief and the ink are two readings of one object.
+ */
+export function createCardReliefTexture(face: CardFace): CanvasTexture {
+  const ctx = createSurface(WIDTH, HEIGHT)
+
+  ctx.fillStyle = grey(RELIEF_BASE)
+  ctx.fillRect(0, 0, WIDTH, HEIGHT)
+
+  if (face === 'front') {
+    drawChipRelief(ctx, CHIP)
+  } else {
+    drawPanelRelief(ctx, SIGNATURE_PANEL)
+  }
+
+  bakeHeightIntoAlpha(ctx)
+
+  // No colour space is declared, unlike the printed face. Only alpha is read
+  // here and no transfer function touches alpha, so tagging this sRGB would
+  // describe a decode that never happens.
+  return new CanvasTexture(ctx.canvas)
 }
