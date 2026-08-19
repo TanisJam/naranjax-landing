@@ -78,6 +78,7 @@ varying float vBevel;
 varying float vOcclusion;
 varying float vStackShadow;
 varying float vImperfection;
+varying float vShell;
 
 const float SHEET_PI = 3.141592653589793;
 const float SHEET_HALF_PI = 1.5707963267948966;
@@ -567,6 +568,10 @@ vec3 objectNormal = gNormal;
 export const VERTEX_POSITION_CHUNK = /* glsl */ `
 vec3 transformed = gPosition;
 vParam = aParam;
+// Which of the two shells this point belongs to, carried through so the print
+// can be read from the side it is actually on. Constant across a shell, so the
+// interpolation is exact and the fragment stage gets a clean +1 or -1.
+vShell = aShell;
 vBevel = gBevel;
 vWorldPos = (modelMatrix * vec4(gPosition, 1.0)).xyz;
 vTangentU = normalize(normalMatrix * gTangentU);
@@ -766,6 +771,7 @@ varying float vBevel;
 varying float vOcclusion;
 varying float vStackShadow;
 varying float vImperfection;
+varying float vShell;
 
 const float SHEET_TWO_PI = 6.283185307179586;
 
@@ -788,9 +794,23 @@ const float SHEET_GRAIN_DENSITY = 900.0;
  * silhouette, and pushing the artwork through it would drag the layout into
  * the corners with it. The v axis is flipped because the canvas is authored
  * with +y running down.
+ *
+ * And the u axis is flipped on the back shell, which is the whole of what makes
+ * a printed face readable from the side it is printed on. Both shells carry the
+ * same (u, v) — they are the same parameter surface, offset along the normal —
+ * so u runs the same way in the plate's own frame on either side. Seen from
+ * behind, that direction points the other way ACROSS THE SCREEN, and a layout
+ * sampled straight comes out in a mirror. The card's back was the face that
+ * said so: an account number reading right to left.
+ *
+ * Not a property of the card-back artwork, which is why the fix is here and not
+ * in the canvas that paints it. Every plate has two faces and any of them can
+ * be turned towards the lens now — through the fan, or by turning the closed
+ * card over — and a mirrored one is wrong wherever it appears.
  */
 vec2 decalUv() {
-  return vec2(vParam.x, 1.0 - vParam.y);
+  float u = vShell > 0.0 ? vParam.x : 1.0 - vParam.x;
+  return vec2(u, 1.0 - vParam.y);
 }
 
 // Shared by the albedo and the normal so both stay in lockstep. Measuring the
@@ -927,9 +947,15 @@ if (uDecalRelief > 0.0) {
            - texture2D(uDecalMap, uv - vec2(reach, 0.0)).a;
   float dy = texture2D(uDecalMap, uv + vec2(0.0, reach)).a
            - texture2D(uDecalMap, uv - vec2(0.0, reach)).a;
-  // dy is measured along the flipped v of decalUv(), so it re-enters the
-  // surface frame with the opposite sign to dx.
-  normal = normalize(normal - (vTangentU * dx - vTangentV * dy) * uDecalRelief);
+  // Both gradients are measured in the decal's own uv, and the perturbation is
+  // written in the plate's parameter frame, so each axis carries the sign of
+  // the map between them. v is flipped on every shell, which is the minus on
+  // vTangentV. u is flipped on the back one alone — so the relief mirrors with
+  // the ink it belongs to, instead of leaving a raised form lit from the side
+  // its own artwork no longer sits on.
+  normal = normalize(
+    normal - (vTangentU * dx * vShell - vTangentV * dy) * uDecalRelief
+  );
 }
 `
 
