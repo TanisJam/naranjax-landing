@@ -29,7 +29,7 @@ import {
  * painter draws it. Keeping the mapping here is what lets `composition.ts`
  * stay free of Three.js entirely.
  */
-function createDecalTexture(decal: SheetDecal): Texture | null {
+function paintDecalTexture(decal: SheetDecal): Texture | null {
   switch (decal) {
     case 'none':
       return null
@@ -40,6 +40,51 @@ function createDecalTexture(decal: SheetDecal): Texture | null {
     default:
       return createLayerMotifTexture(decal)
   }
+}
+
+/**
+ * One texture per kind of artwork, however many layers wear it.
+ *
+ * Three motifs appear on two plates each, and every plate was painting its own
+ * copy — harmless while a decal was 3.5 MB, and no longer so now that the
+ * authored art carries four times the texels. The bytes were the reason to look;
+ * the reason it is right regardless is that two layers showing the same motif
+ * are showing the same motif, and nothing downstream ever wanted them to differ.
+ *
+ * Refcounted rather than leaked, because `dispose` is a real path — the
+ * inspector rebuilds the stack — and a shared texture freed by the first layer
+ * to let go of it would take the artwork off the others with it.
+ */
+interface SharedTexture {
+  texture: Texture
+  holders: number
+}
+
+const DECAL_CACHE = new Map<SheetDecal, SharedTexture>()
+
+function acquireDecalTexture(decal: SheetDecal): Texture | null {
+  const cached = DECAL_CACHE.get(decal)
+  if (cached !== undefined) {
+    cached.holders += 1
+    return cached.texture
+  }
+
+  const texture = paintDecalTexture(decal)
+  if (texture === null) return null
+
+  DECAL_CACHE.set(decal, { texture, holders: 1 })
+  return texture
+}
+
+function releaseDecalTexture(decal: SheetDecal): void {
+  const cached = DECAL_CACHE.get(decal)
+  if (cached === undefined) return
+
+  cached.holders -= 1
+  if (cached.holders > 0) return
+
+  cached.texture.dispose()
+  DECAL_CACHE.delete(decal)
 }
 
 /**
@@ -250,7 +295,7 @@ export class SheetObject {
       boundingRadius: Math.max(shape.length, shape.width) * 1.2,
     })
 
-    this.decalMap = createDecalTexture(layer.decal)
+    this.decalMap = acquireDecalTexture(layer.decal)
     this.reliefMap = createDecalRelief(layer.decal)
 
     const { material, uniforms } = createSheetMaterial(
@@ -498,7 +543,7 @@ export class SheetObject {
     this.hitArea.geometry.dispose()
     this.material.dispose()
     this.depthMaterial?.dispose()
-    this.decalMap?.dispose()
+    releaseDecalTexture(this.layer.decal)
     this.reliefMap?.dispose()
   }
 }

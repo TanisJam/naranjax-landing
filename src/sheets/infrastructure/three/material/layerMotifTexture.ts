@@ -6,6 +6,28 @@ export type LayerMotif = 'embossed-circles' | 'currency-frame' | 'border-frame' 
 const WIDTH = 1024
 const HEIGHT = 646
 
+/**
+ * Device pixels per authored pixel.
+ *
+ * The authored grid is a coordinate system, not a resolution, and it was being
+ * used as both. A layer opened in the detail view spans the whole viewport:
+ * 1600 CSS px on a laptop is 3200 device px at a 2 device ratio and 6400 in the
+ * drawing buffer once `SUPERSAMPLE` is on — a 1024 px plate magnified six
+ * times. That is the "poco definido" in the feedback, and no filtering setting
+ * fixes it, because the detail simply is not in the texture.
+ *
+ * Everything below still draws in the 1024x646 space; `createSurface` scales
+ * the context so the numbers keep meaning what they meant, and only the pixel
+ * count under them changes.
+ *
+ * Narrow viewports stay at 1, and that is not a compromise: the plate is a few
+ * hundred CSS px there, so the extra texels would never be sampled — while the
+ * memory very much would be. Each motif costs 4 bytes a texel plus a third
+ * again for its mip chain, so 2 turns a 3.5 MB decal into 14 MB, and there are
+ * four of them.
+ */
+const RESOLUTION = typeof window !== 'undefined' && window.innerWidth >= 900 ? 2 : 1
+
 const TAU = Math.PI * 2
 
 /** Relief pressed into the layer's own plastic, so the ink is near-colourless. */
@@ -13,6 +35,22 @@ const EMBOSS_INK = '#f2f6f8'
 
 /** Engraved line art, where the ink actually contributes to the albedo. */
 const PRINT_INK = '#eef7fa'
+
+/**
+ * Shoulder on the engraved motifs, in authored pixels.
+ *
+ * Halved from the 2.5 it sat at, which was the OTHER half of the "poco
+ * definido". A shoulder authored against a plate two hundred pixels wide on
+ * screen is fifteen device pixels of ramp on one that fills the viewport, and
+ * a line whose ramp is fifteen pixels wide is not a line.
+ *
+ * It cannot go to zero — a hard alpha step differentiates into a razor crease
+ * in the height field — but it has far more room than it was taking. The relief
+ * is read at `reach = 0.006` in uv, about six authored pixels, so the gradient
+ * the emboss actually uses is set there and not here. This only has to be wide
+ * enough that the step is not a step.
+ */
+const PRINT_SHOULDER = 1.2
 
 const CENTER_X = WIDTH / 2
 const CENTER_Y = HEIGHT / 2
@@ -49,15 +87,17 @@ interface Corner {
   towardsY: number
 }
 
-function createSurface(width: number, height: number): CanvasRenderingContext2D {
+function createSurface(): CanvasRenderingContext2D {
   const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
+  canvas.width = WIDTH * RESOLUTION
+  canvas.height = HEIGHT * RESOLUTION
 
   const context = canvas.getContext('2d')
   if (context === null) {
     throw new Error('layerMotifTexture: 2D canvas context is unavailable, cannot draw the motif')
   }
+
+  context.setTransform(RESOLUTION, 0, 0, RESOLUTION, 0, 0)
 
   return context
 }
@@ -76,15 +116,20 @@ function paintRelief(
   relief: Relief,
   paint: (scratch: CanvasRenderingContext2D) => void,
 ): void {
-  const scratch = createSurface(WIDTH, HEIGHT)
+  const scratch = createSurface()
   scratch.strokeStyle = relief.ink
   scratch.fillStyle = relief.ink
   scratch.lineCap = 'round'
   scratch.lineJoin = 'round'
   paint(scratch)
 
+  // Composited with the transform reset, so the scratch lands texel for texel
+  // and the blur radius can be stated in device pixels. `ctx.filter` is the one
+  // canvas operation whose relationship to the current transform is not worth
+  // relying on, and the scale is already known here.
   ctx.save()
-  ctx.filter = `blur(${relief.blur}px)`
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.filter = `blur(${relief.blur * RESOLUTION}px)`
   ctx.globalAlpha = relief.alpha
   ctx.drawImage(scratch.canvas, 0, 0)
   ctx.restore()
@@ -233,9 +278,9 @@ function drawEmbossedCircles(ctx: CanvasRenderingContext2D): void {
 }
 
 function drawCurrencyFrame(ctx: CanvasRenderingContext2D): void {
-  paintRelief(ctx, { ink: PRINT_INK, alpha: 0.72, blur: 2.5 }, drawBanknoteBorder)
+  paintRelief(ctx, { ink: PRINT_INK, alpha: 0.72, blur: PRINT_SHOULDER }, drawBanknoteBorder)
 
-  paintRelief(ctx, { ink: PRINT_INK, alpha: 0.78, blur: 2.5 }, (scratch) => {
+  paintRelief(ctx, { ink: PRINT_INK, alpha: 0.78, blur: PRINT_SHOULDER }, (scratch) => {
     scratch.lineWidth = 8
     strokeCircle(scratch, CENTER_X, CENTER_Y, 125)
 
@@ -248,7 +293,7 @@ function drawCurrencyFrame(ctx: CanvasRenderingContext2D): void {
     scratch.strokeText('$', CENTER_X, CENTER_Y + 4)
   })
 
-  paintRelief(ctx, { ink: PRINT_INK, alpha: 0.62, blur: 2.5 }, (scratch) => {
+  paintRelief(ctx, { ink: PRINT_INK, alpha: 0.62, blur: PRINT_SHOULDER }, (scratch) => {
     scratch.lineWidth = 7
     strokeCircle(scratch, CENTER_X - 210, CENTER_Y, 35)
     strokeCircle(scratch, CENTER_X + 210, CENTER_Y, 35)
@@ -256,9 +301,9 @@ function drawCurrencyFrame(ctx: CanvasRenderingContext2D): void {
 }
 
 function drawBorderFrame(ctx: CanvasRenderingContext2D): void {
-  paintRelief(ctx, { ink: PRINT_INK, alpha: 0.72, blur: 2.5 }, drawBanknoteBorder)
+  paintRelief(ctx, { ink: PRINT_INK, alpha: 0.72, blur: PRINT_SHOULDER }, drawBanknoteBorder)
 
-  paintRelief(ctx, { ink: PRINT_INK, alpha: 0.7, blur: 2.5 }, (scratch) => {
+  paintRelief(ctx, { ink: PRINT_INK, alpha: 0.7, blur: PRINT_SHOULDER }, (scratch) => {
     scratch.lineWidth = 7
     strokeCircle(scratch, CENTER_X, CENTER_Y, 40)
   })
@@ -390,7 +435,7 @@ const MOTIF_PAINTERS: Record<LayerMotif, (ctx: CanvasRenderingContext2D) => void
  * flattening the relief it is supposed to produce.
  */
 export function createLayerMotifTexture(motif: LayerMotif): CanvasTexture {
-  const ctx = createSurface(WIDTH, HEIGHT)
+  const ctx = createSurface()
   ctx.clearRect(0, 0, WIDTH, HEIGHT)
 
   MOTIF_PAINTERS[motif](ctx)
