@@ -732,10 +732,12 @@ export const FRAGMENT_PRELUDE = /* glsl */ `
 uniform vec3 uColorA;
 uniform vec3 uColorB;
 uniform vec4 uGradient;
-uniform float uDotScale;
-uniform float uDotDepth;
-uniform float uDotContrast;
-uniform vec3 uDotTint;
+uniform int uWeave;
+uniform float uWeaveScale;
+uniform float uWeaveStretch;
+uniform float uWeaveDepth;
+uniform float uWeaveContrast;
+uniform vec3 uWeaveTint;
 uniform float uRibFrequency;
 uniform float uRibPhase;
 uniform float uRibShading;
@@ -775,6 +777,7 @@ varying float vImperfection;
 varying float vShell;
 
 const float SHEET_TWO_PI = 6.283185307179586;
+const float SHEET_PI = 3.141592653589793;
 
 /**
  * How many grain cells span the height of the frame.
@@ -814,22 +817,178 @@ vec2 decalUv() {
   return vec2(u, 1.0 - vParam.y);
 }
 
-// Shared by the albedo and the normal so both stay in lockstep. Measuring the
-// reference showed the dots sitting 6 lightness points below the sheet body and
-// 15 points more saturated — they are a real change of surface, not just a
-// bump. Perturbing the normal alone made them vanish entirely.
-void dotField(out float mask, out vec2 slope, out float fade) {
-  vec2 cell = vec2(vParam.x * uDotScale * 0.55, vParam.y * uDotScale);
-  cell.x += 0.5 * step(1.0, mod(floor(cell.y), 2.0));
+/**
+ * Which family of weave this layer wears. Mirrors WeavePattern in the domain.
+ *
+ * Kept as an int compared against named constants rather than a set of separate
+ * strength uniforms, because the families are ALTERNATIVES — a sheet is woven
+ * one way — and because the comparison is then uniform across the draw call.
+ * Every fragment of a plate takes the same branch, so the cost of a family is
+ * the cost of that family alone and never the sum of all six.
+ */
+const int SHEET_WEAVE_MICRO_DOT = 1;
+const int SHEET_WEAVE_PLAIN = 2;
+const int SHEET_WEAVE_TWILL = 3;
+const int SHEET_WEAVE_HERRINGBONE = 4;
+const int SHEET_WEAVE_WAFFLE = 5;
+const int SHEET_WEAVE_GUILLOCHE = 6;
+
+/**
+ * Cells across the chevron before a herringbone reverses its diagonal.
+ *
+ * Three, and the first pass at five is why this is written down. A herringbone
+ * is read from the V where the two diagonals MEET; at five cells the eye gets
+ * to the reversal too late and the pattern reads as vertical bands of stripe
+ * with a seam between them. The chevron has to be about as wide as it is tall.
+ */
+const float SHEET_CHEVRON_RUN = 3.0;
+
+/**
+ * How far the second ruling of a guilloche leans against the first.
+ *
+ * Not a right angle, and that is the entire effect. Two rulings crossed square
+ * make a grid; crossed slightly off, their crests drift in and out of step and
+ * the beat between them draws the rosette. Rational-looking values are the ones
+ * to avoid — at 0.5 the two families share a period and the beat never happens.
+ */
+const float SHEET_GUILLOCHE_SKEW = 0.62;
+
+/**
+ * Cells of the weave under this fragment.
+ *
+ * uWeaveStretch is not a second scale, it is the ASPECT of one cell. The
+ * plate is about 1.586 long to 1 wide, so a stretch of 1.586 draws square cells
+ * and anything under it elongates them along the sweep — which is what a thread
+ * running the length of a sheet actually looks like. The polyester's 0.55 was
+ * measured off the reference and predates every other family here; it is why
+ * this is a knob and not a constant.
+ */
+vec2 weaveCell() {
+  return vec2(vParam.x * uWeaveStretch, vParam.y) * uWeaveScale;
+}
+
+/**
+ * One weave, as coverage and as slope.
+ *
+ * Shared by the albedo and the normal so both stay in lockstep. Measuring the
+ * reference showed the polyester's dots sitting 6 lightness points below the
+ * sheet body and 15 points more saturated — a weave is a real change of
+ * surface, not just a bump, and perturbing the normal alone made the pattern
+ * disappear entirely. Every family added since answers to the same finding.
+ *
+ * The five families that are not the dot grid are all built from cosines of the
+ * cell, for two reasons. They are cheap, which matters on eleven translucent
+ * plates. And a cosine is its own antialiasing: it carries no edge to stair-
+ * step, so what is left to defend against is moire alone, which fade handles
+ * for all six at once because all six are authored in the same cell space.
+ *
+ * mask is the pattern's own coverage — for a woven family that is the trough
+ * between the threads, which is where cloth is darker. slope is the gradient
+ * of the height, divided through by the period so every family arrives at the
+ * same magnitude and uWeaveDepth means one thing across the set.
+ */
+void weaveField(out float mask, out vec2 slope, out float fade) {
+  vec2 cell = weaveCell();
 
   // Procedural normals cannot mipmap, so fade the pattern out once a pixel
   // spans half a cell or it turns into moire.
   fade = 1.0 - smoothstep(0.2, 0.45, max(fwidth(cell.x), fwidth(cell.y)));
 
-  vec2 local = fract(cell) - 0.5;
-  float dist = length(local);
-  mask = smoothstep(0.36, 0.14, dist);
-  slope = dist > 1e-4 ? (local / dist) * mask * (1.0 - mask) * 4.0 : vec2(0.0);
+  // An early-out on a fully faded weave was tried here and MEASURED WORSE: the
+  // governor settled two steps down instead of one. Everything past this point
+  // is sines, so skipping them looks free, but fade varies per fragment and
+  // the branch is therefore divergent — the warp pays for both sides wherever
+  // the fade sits part way across it, which on a fanned plate is most of it.
+  // Do not put it back without measuring the settled buffer width again.
+
+  if (uWeave == SHEET_WEAVE_MICRO_DOT) {
+    // The halftone the polyester ply has always worn. Rows offset by half a
+    // cell, which is what keeps a grid of dots from reading as a grid of lines.
+    cell.x += 0.5 * step(1.0, mod(floor(cell.y), 2.0));
+
+    vec2 local = fract(cell) - 0.5;
+    float dist = length(local);
+    mask = smoothstep(0.36, 0.14, dist);
+    slope = dist > 1e-4 ? (local / dist) * mask * (1.0 - mask) * 4.0 : vec2(0.0);
+    return;
+  }
+
+  vec2 t = cell * SHEET_TWO_PI;
+  float height = 0.0;
+  vec2 gradient = vec2(0.0);
+
+  if (uWeave == SHEET_WEAVE_PLAIN) {
+    // Warp and weft, with the two taking turns on top. That alternation is the
+    // whole difference between a weave and two rulings laid across each other:
+    // drop it and the pattern reads as a screen door.
+    //
+    // The PRODUCT of two half-rate cosines, not the cosine of the sum. Both are
+    // checkerboards on paper and only one of them is a plain weave: the sum
+    // holds its parity along the diagonal, so the crossovers line up into runs
+    // and the cloth comes out a zigzag — a herringbone by accident, and this
+    // set already has one of those on purpose.
+    //
+    // The dominance term is deliberately left out of the gradient. It turns
+    // over once every two cells while the threads turn over every cell, so its
+    // slope is a quarter of theirs and pointed the wrong way — it would tilt
+    // the surface along the crossover rather than along the thread.
+    float over = 0.5 + 0.5 * cos(cell.x * SHEET_PI) * cos(cell.y * SHEET_PI);
+    height = mix(cos(t.y), cos(t.x), over);
+    gradient = vec2(-sin(t.x) * over, -sin(t.y) * (1.0 - over));
+  } else if (uWeave == SHEET_WEAVE_TWILL || uWeave == SHEET_WEAVE_HERRINGBONE) {
+    // A twill is a rib running on the diagonal. A herringbone is the same rib
+    // with the diagonal reversed every few cells, so the two share everything
+    // but which way direction points — writing them apart would have been two
+    // copies of one pattern.
+    float direction = uWeave == SHEET_WEAVE_TWILL
+      ? 1.0
+      : 1.0 - 2.0 * step(1.0, mod(floor(cell.x / SHEET_CHEVRON_RUN), 2.0));
+
+    float diagonal = (cell.x * direction + cell.y) * SHEET_TWO_PI;
+    // Breaks the rib into the run of floats a real twill is made of, instead of
+    // leaving it a continuous ridge. Slow against the rib, so it stays out of
+    // the gradient for the same reason the plain weave's dominance does.
+    //
+    // A twill only. Reversing the diagonal also reverses this term's phase, so
+    // on a herringbone consecutive chevrons landed on its crest and its trough
+    // alternately: the pattern came out as vertical stripes of dark and light
+    // cloth, which is a stripe and not a chevron. A herringbone is read from
+    // the reversal, and the reversal has to be the ONLY thing that changes
+    // across the seam.
+    float floats = uWeave == SHEET_WEAVE_TWILL
+      ? 0.7 + 0.3 * cos((cell.x - cell.y) * SHEET_PI)
+      : 1.0;
+
+    height = cos(diagonal) * floats;
+    gradient = vec2(-direction, -1.0) * sin(diagonal) * floats;
+  } else if (uWeave == SHEET_WEAVE_WAFFLE) {
+    // Pique: a field of raised cells with a groove around each of them.
+    //
+    // The SUM of the two cosines and not their product, which is the whole
+    // difference between a waffle and a checkerboard. A product peaks where
+    // both cosines peak and dips where either one does, so its highs and lows
+    // alternate on a chequer and the eye joins them into diagonals — that is
+    // what the first pass drew. A sum holds a ridge along every gridline and
+    // leaves a pillow in each cell, which is what pique is.
+    height = 0.5 * (cos(t.x) + cos(t.y));
+    gradient = 0.5 * vec2(-sin(t.x), -sin(t.y));
+  } else if (uWeave == SHEET_WEAVE_GUILLOCHE) {
+    // Engine turning, the security-print family. See SHEET_GUILLOCHE_SKEW.
+    float first = (cell.x + cell.y * SHEET_GUILLOCHE_SKEW) * SHEET_TWO_PI;
+    float second = (cell.x * SHEET_GUILLOCHE_SKEW - cell.y) * SHEET_TWO_PI;
+
+    height = 0.5 * (cos(first) + cos(second));
+    gradient = 0.5 * vec2(
+      -sin(first) - SHEET_GUILLOCHE_SKEW * sin(second),
+      -SHEET_GUILLOCHE_SKEW * sin(first) + sin(second)
+    );
+  }
+
+  // Crest to 0, trough to 1: the tint belongs in the interstice, not on the
+  // thread. The gradient arrives scaled by the period, so it is handed back at
+  // the same magnitude the dot grid produces.
+  mask = 0.5 - 0.5 * height;
+  slope = gradient;
 }
 
 /**
@@ -879,11 +1038,11 @@ if (uRibShading > 0.0 || uRibContrast > 0.0) {
   gRib = ribField(gRibFade);
 }
 
-float gDotMask = 0.0;
-float gDotFade = 0.0;
-vec2 gDotSlope = vec2(0.0);
-if (uDotScale > 0.0) {
-  dotField(gDotMask, gDotSlope, gDotFade);
+float gWeaveMask = 0.0;
+float gWeaveFade = 0.0;
+vec2 gWeaveSlope = vec2(0.0);
+if (uWeave > 0) {
+  weaveField(gWeaveMask, gWeaveSlope, gWeaveFade);
 }
 
 float gradientT = clamp(
@@ -896,8 +1055,8 @@ float gradientT = clamp(
 );
 diffuseColor.rgb *= mix(uColorA, uColorB, gradientT);
 
-if (uDotContrast > 0.0) {
-  diffuseColor.rgb *= mix(vec3(1.0), uDotTint, gDotMask * gDotFade * uDotContrast);
+if (uWeaveContrast > 0.0) {
+  diffuseColor.rgb *= mix(vec3(1.0), uWeaveTint, gWeaveMask * gWeaveFade * uWeaveContrast);
 }
 
 if (uRibContrast > 0.0) {
@@ -932,9 +1091,9 @@ if (uRibShading > 0.0) {
   normal = normalize(normal + vTangentV * gRib * uRibShading * gRibFade);
 }
 
-if (uDotScale > 0.0) {
+if (uWeave > 0) {
   normal = normalize(
-    normal + (vTangentU * gDotSlope.x + vTangentV * gDotSlope.y) * uDotDepth * gDotFade
+    normal + (vTangentU * gWeaveSlope.x + vTangentV * gWeaveSlope.y) * uWeaveDepth * gWeaveFade
   );
 }
 
@@ -1241,7 +1400,7 @@ if (uImperfection > 0.0) {
 // Detail that shrinks below a pixel must not vanish — it has to become
 // roughness.
 //
-// Fading the rib and dot normals out on their own left a broad soft band
+// Fading the rib and weave normals out on their own left a broad soft band
 // wherever the fade sat halfway across the surface: "textured" and "smooth"
 // shade to different averages, so the eye reads the boundary as a channel
 // pressed into the plate. Feeding the lost normal variance back in as roughness
@@ -1251,8 +1410,8 @@ if (uRibShading > 0.0) {
   roughnessFactor = sqrt(min(roughnessFactor * roughnessFactor + lost * lost, 1.0));
 }
 
-if (uDotScale > 0.0) {
-  float lost = (1.0 - gDotFade) * uDotDepth * 0.4;
+if (uWeave > 0) {
+  float lost = (1.0 - gWeaveFade) * uWeaveDepth * 0.4;
   roughnessFactor = sqrt(min(roughnessFactor * roughnessFactor + lost * lost, 1.0));
 }
 `

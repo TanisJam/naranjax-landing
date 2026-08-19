@@ -91,6 +91,43 @@ export interface SheetShape {
   tessellation: { u: number; v: number }
 }
 
+/**
+ * The families of structure a ply can be woven or printed with.
+ *
+ * A set rather than a pile of independent switches, because a sheet is woven
+ * ONE way — these are alternatives, and naming them as alternatives is what
+ * keeps a layer from being handed two contradictory structures at once.
+ *
+ * They are not six arbitrary patterns either. Three are textile and read as a
+ * ladder of coarseness — `plain` is the simplest cloth there is, `twill` puts
+ * the same threads on a diagonal, `herringbone` reverses that diagonal into a
+ * chevron. `waffle` is the pique that carries relief rather than pattern.
+ * `guilloche` is the odd one out on purpose: it is not cloth at all but engine
+ * turning, the ruling a banknote or a share certificate is printed with, and it
+ * belongs to the foils for the same reason the engraved borders do.
+ * `micro-dot` is the halftone the polyester ply already wore.
+ *
+ * All six are procedural. That is the point of doing this here rather than in a
+ * canvas: a weave drawn into a texture is a weave with a resolution, and the
+ * detail view magnifies a plate roughly six times.
+ */
+export type WeavePattern =
+  | 'none'
+  | 'micro-dot'
+  | 'plain'
+  | 'twill'
+  | 'herringbone'
+  | 'waffle'
+  | 'guilloche'
+
+/**
+ * Cell aspect that comes out square, i.e. the plate's own proportion.
+ *
+ * ID-1 is 85.6 by 53.98 mm. A `weaveStretch` at this value gives a cell as wide
+ * as it is tall; below it the cell stretches along the sweep.
+ */
+export const PLATE_ASPECT = 1.586
+
 /** How the shell scatters light. Colors are hex strings in sRGB. */
 export interface SheetSurface {
   colorA: string
@@ -147,18 +184,29 @@ export interface SheetSurface {
    * explicit back-to-front order. See `StackOrder`.
    */
   opacity: number
-  /** Cells per unit of the micro dot pattern. 0 disables it. */
-  dotScale: number
-  /** Normal perturbation strength of the dot pattern. */
-  dotDepth: number
+  /** How this ply is woven, or `none` for a ply with no structure of its own. */
+  weave: WeavePattern
+  /** Cells of the weave across the arc (v). 0 disables it. */
+  weaveScale: number
   /**
-   * How much the dots darken the albedo, 0..1. Sampling the reference put the
-   * dots 6 lightness points below the sheet body; with normal perturbation
-   * alone that difference measured zero and the pattern disappeared.
+   * Aspect of one cell, not a second scale.
+   *
+   * The plate is about 1.586 long to 1 wide, so `PLATE_ASPECT` draws square
+   * cells and anything under it elongates them along the sweep — which is what
+   * a thread running the length of a sheet looks like.
    */
-  dotContrast: number
-  /** Colour the dots multiply into. Cooler and darker than the body. */
-  dotTint: string
+  weaveStretch: number
+  /** Normal perturbation strength of the weave. */
+  weaveDepth: number
+  /**
+   * How much the weave darkens the albedo, 0..1. Sampling the reference put the
+   * polyester's dots 6 lightness points below the sheet body; with normal
+   * perturbation alone that difference measured zero and the pattern
+   * disappeared. Every family since answers to the same finding.
+   */
+  weaveContrast: number
+  /** Colour the weave multiplies into. Cooler and darker than the body. */
+  weaveTint: string
   /**
    * Rib normal perturbation in the fragment shader. The geometry only carries a
    * low-amplitude version of the corrugation for the silhouette; this is what

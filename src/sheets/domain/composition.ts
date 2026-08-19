@@ -1,4 +1,5 @@
 import { brand } from '../../brand'
+import { PLATE_ASPECT } from './types'
 import type { Composition, SheetLayer, SheetPlacement, SheetSurface } from './types'
 
 /**
@@ -170,10 +171,33 @@ const baseSurface: SheetSurface = {
   // so this is roughly +1.7 ms on a 7.3 ms frame. Paid deliberately.
   frostsBackdrop: false,
   frostColor: '#fff5ee',
-  dotScale: 0,
-  dotDepth: 0,
-  dotContrast: 0,
-  dotTint: '#bb977f',
+  // Off by default, and every ply between the two covers turns it on. The
+  // covers do not: their print covers the rect edge to edge at full ink, so a
+  // weave under it would be paid for per fragment and never seen.
+  //
+  // Which family each ply wears is not decoration picked at random — it is what
+  // that ply is supposed to BE. The two holographic foils share `guilloche`
+  // because engine turning is what a security foil is ruled with, and they wear
+  // it at different scales so the pair reads as two sheets of one material
+  // rather than one sheet twice. The films take the textile ladder. The
+  // polyester keeps the halftone that was measured off the reference.
+  //
+  // Contrast stays between 0.08 and 0.13 across all of them against the
+  // polyester's 0.24, because the polyester is the one ply that is genuinely
+  // cloth. On the rest this is a substrate seen through film, and a weave you
+  // NOTICE on eleven stacked plates is eleven patterns competing for the same
+  // pixels.
+  weave: 'none',
+  weaveScale: 0,
+  weaveStretch: PLATE_ASPECT,
+  weaveDepth: 0,
+  weaveContrast: 0,
+  // Every ply below overrides this with its own `coreColor`, which is not a
+  // shortcut: the trough of a weave is the body seen through more of itself,
+  // and `coreColor` is already exactly that colour on every layer here. Nine
+  // new hex values would have been nine chances to drift from the ply they
+  // belong to.
+  weaveTint: '#bb977f',
   ribShading: 0,
   ribContrast: 0,
   decalInk: 0,
@@ -375,6 +399,12 @@ const layers: SheetDraft[] = [
       colorA: '#f0800f',
       colorB: '#f79a35',
       coreColor: '#c25f06',
+      weave: 'twill',
+      weaveScale: 150,
+      weaveStretch: PLATE_ASPECT,
+      weaveDepth: 0.55,
+      weaveContrast: 0.1,
+      weaveTint: '#c25f06',
       // Pigmented PVC, not a polished film: the reference's core is the same
       // matte body the printed face is, seen without its laminate.
       roughness: 0.32,
@@ -412,6 +442,12 @@ const layers: SheetDraft[] = [
       colorA: '#f7e9dc',
       colorB: '#fdf6ee',
       coreColor: '#e3cfbc',
+      weave: 'plain',
+      weaveScale: 170,
+      weaveStretch: PLATE_ASPECT,
+      weaveDepth: 0.5,
+      weaveContrast: 0.09,
+      weaveTint: '#e3cfbc',
       // The matte protective laminate, and it used to be the glossiest layer in
       // the stack. The reference is explicit — "laminado protector MATE" — so
       // the roughness went from 0.07 to 0.34 and the sheet stopped being the
@@ -479,10 +515,18 @@ const layers: SheetDraft[] = [
       roughness: 0.36,
       ribShading: 0.42,
       ribContrast: 0.28,
-      dotScale: 200,
-      dotDepth: 1.5,
-      dotContrast: 0.24,
-      dotTint: '#b8ad9c',
+      // Untouched by the weave set, and that is the point of it being a set:
+      // this ply is the one whose pattern was measured off the reference rather
+      // than designed, so it keeps its own numbers while the families around it
+      // are chosen. The stretch is the 0.55 it always had, which is why that is
+      // a knob — a square cell would draw round dots where the reference has
+      // dashes lying along the sweep.
+      weave: 'micro-dot',
+      weaveScale: 200,
+      weaveStretch: 0.55,
+      weaveDepth: 1.5,
+      weaveContrast: 0.24,
+      weaveTint: '#b8ad9c',
       opacity: 1,
     },
     placement: {
@@ -516,6 +560,12 @@ const layers: SheetDraft[] = [
       colorA: '#f3c8a8',
       colorB: '#f8dcc6',
       coreColor: '#d9a37e',
+      weave: 'guilloche',
+      weaveScale: 64,
+      weaveStretch: PLATE_ASPECT,
+      weaveDepth: 0.5,
+      weaveContrast: 0.1,
+      weaveTint: '#d9a37e',
       absorption: 0.14,
       roughness: 0.18,
       // The one place iridescence earns its cost: on a holographic foil it is
@@ -557,6 +607,19 @@ const layers: SheetDraft[] = [
       colorA: '#f2ece2',
       colorB: '#fbf7f0',
       coreColor: '#d8d0c2',
+      // The one ply whose split between depth and contrast is not a taste call.
+      // A herringbone's two diagonals tilt the surface opposite ways, so the
+      // normal term answers to the key light in opposite directions too: at the
+      // 0.5 depth the other plies carry, one chevron caught the light and the
+      // next all but vanished, and the cloth read as vertical stripes. Contrast
+      // is blind to direction. Weighting this ply towards the albedo is what
+      // makes the reversal — which is the whole pattern — actually visible.
+      weave: 'herringbone',
+      weaveScale: 130,
+      weaveStretch: PLATE_ASPECT,
+      weaveDepth: 0.18,
+      weaveContrast: 0.22,
+      weaveTint: '#d8d0c2',
       roughness: 0.22,
       opacity: 0.74,
       frost: 0.62,
@@ -597,6 +660,12 @@ const layers: SheetDraft[] = [
       colorA: '#ef8417',
       colorB: '#f7a244',
       coreColor: '#c26208',
+      weave: 'waffle',
+      weaveScale: 52,
+      weaveStretch: PLATE_ASPECT,
+      weaveDepth: 0.7,
+      weaveContrast: 0.1,
+      weaveTint: '#c26208',
       roughness: 0.18,
       opacity: 0.93,
       ribShading: 0.11,
@@ -637,6 +706,12 @@ const layers: SheetDraft[] = [
       colorA: '#b184c9',
       colorB: '#d3b3e2',
       coreColor: '#8a5aa8',
+      weave: 'guilloche',
+      weaveScale: 84,
+      weaveStretch: PLATE_ASPECT,
+      weaveDepth: 0.5,
+      weaveContrast: 0.09,
+      weaveTint: '#8a5aa8',
       absorption: 0.14,
       roughness: 0.26,
       iridescence: 0.7,
@@ -673,6 +748,12 @@ const layers: SheetDraft[] = [
       colorA: '#f18a1e',
       colorB: '#f8a852',
       coreColor: '#c66a09',
+      weave: 'plain',
+      weaveScale: 210,
+      weaveStretch: PLATE_ASPECT,
+      weaveDepth: 0.45,
+      weaveContrast: 0.08,
+      weaveTint: '#c66a09',
       roughness: 0.21,
       opacity: 0.82,
       frost: 0.66,
@@ -701,6 +782,12 @@ const layers: SheetDraft[] = [
       colorA: '#e0e0dc',
       colorB: '#eeeee9',
       coreColor: '#c2c2bc',
+      weave: 'twill',
+      weaveScale: 96,
+      weaveStretch: PLATE_ASPECT,
+      weaveDepth: 0.7,
+      weaveContrast: 0.13,
+      weaveTint: '#c2c2bc',
       roughness: 0.14,
       opacity: 1,
     },

@@ -15,7 +15,7 @@ import {
   type Texture,
   type WebGLProgramParametersWithUniforms,
 } from 'three'
-import type { SheetShape, SheetSurface } from '../../../domain/types'
+import type { SheetShape, SheetSurface, WeavePattern } from '../../../domain/types'
 import {
   DEPTH_SHARED_PRELUDE,
   FRAGMENT_AO_CHUNK,
@@ -131,10 +131,12 @@ export interface SheetUniforms extends StackOcclusionUniforms, BackdropUniforms,
   uColorA: IUniform<Color>
   uColorB: IUniform<Color>
   uGradient: IUniform<Vector4>
-  uDotScale: IUniform<number>
-  uDotDepth: IUniform<number>
-  uDotContrast: IUniform<number>
-  uDotTint: IUniform<Color>
+  uWeave: IUniform<number>
+  uWeaveScale: IUniform<number>
+  uWeaveStretch: IUniform<number>
+  uWeaveDepth: IUniform<number>
+  uWeaveContrast: IUniform<number>
+  uWeaveTint: IUniform<Color>
   uRibContrast: IUniform<number>
   uRimColor: IUniform<Color>
   uRimStrength: IUniform<number>
@@ -159,6 +161,24 @@ export interface SheetUniforms extends StackOcclusionUniforms, BackdropUniforms,
   uDecalInk: IUniform<number>
   /** 0 is a flat print, higher values press the decal into the surface. */
   uDecalRelief: IUniform<number>
+}
+
+/**
+ * The domain's weave names, as the shader's own integers.
+ *
+ * A hand-written map and not an index into the union, because the two sides are
+ * compiled separately and nothing would catch them drifting apart. Written out,
+ * `SHEET_WEAVE_*` in `sheetShader.ts` and this table are one edit away from
+ * each other and TypeScript makes adding a family here mandatory.
+ */
+const WEAVE_IDS: Record<WeavePattern, number> = {
+  none: 0,
+  'micro-dot': 1,
+  plain: 2,
+  twill: 3,
+  herringbone: 4,
+  waffle: 5,
+  guilloche: 6,
 }
 
 /**
@@ -344,10 +364,12 @@ export function createSheetMaterial(
         surface.gradient.alongY,
       ),
     },
-    uDotScale: { value: surface.dotScale },
-    uDotDepth: { value: surface.dotDepth },
-    uDotContrast: { value: surface.dotContrast },
-    uDotTint: { value: new Color(surface.dotTint) },
+    uWeave: { value: surface.weaveScale > 0 ? WEAVE_IDS[surface.weave] : WEAVE_IDS.none },
+    uWeaveScale: { value: surface.weaveScale },
+    uWeaveStretch: { value: surface.weaveStretch },
+    uWeaveDepth: { value: surface.weaveDepth },
+    uWeaveContrast: { value: surface.weaveContrast },
+    uWeaveTint: { value: new Color(surface.weaveTint) },
     uRibContrast: { value: surface.ribContrast },
     uRimColor: { value: new Color(surface.rimColor) },
     uRimStrength: { value: surface.rimStrength },
