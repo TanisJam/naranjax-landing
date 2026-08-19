@@ -152,6 +152,242 @@ const SIGNATURE_PANEL: Rect = {
   height: 118,
 }
 
+/**
+ * Wear, read off a photograph of a card that has actually been carried.
+ *
+ * Three things in that photograph, and they are three different populations
+ * rather than one effect turned up:
+ *
+ * HAIRLINES are the bulk of it. A hundred and more per face, thinner than a
+ * texel, running every which way with only a lean towards the travel axis, and
+ * so faint that no single one is findable — what you see is that the surface
+ * has stopped being perfect. This is the population that was got wrong first
+ * time: a few wide marks with a groove under them, which is not a used card but
+ * a clean card with scratches DRAWN on it.
+ *
+ * NICKS live on the rim and pile into the corners, because that is what a card
+ * lands on. They are the only marks in the photograph you can point at
+ * individually, and the only ones that took material off.
+ *
+ * HAZE is not a mark at all. It is the varnish having gone unevenly dull, and
+ * it is what stops the other two reading as dirt on an otherwise showroom
+ * surface.
+ *
+ * Seeded, and per face, because two things have to be true at once: the marks
+ * must be identical on every load — they are geometry of this object, not an
+ * effect — and the two faces must not carry the same ones, which is what a
+ * shared generator would produce.
+ */
+const WEAR_SEED: Record<CardFace, number> = { front: 0x5c1ff3, back: 0x9ea127 }
+
+/**
+ * Ten, down from the ninety-five this was first tuned at.
+ *
+ * The count is not a dial on the same thing at both ends. Near a hundred the
+ * marks are a TEXTURE — a field the eye reads as a surface finish, and a card
+ * finished that way is a scuffed panel, not a carried one. At ten they are
+ * EVENTS: few enough to notice one at a time, far enough apart that the card
+ * between them is plainly intact, and rare enough that none of them claims to
+ * be the point.
+ *
+ * Ten rather than five because the marks are tapered now, and a taper costs
+ * about half of each mark's visible area — five full-width strokes and five
+ * tapered ones are not the same amount of wear on the face. The count came back
+ * up to pay for the shape, not to add damage.
+ *
+ * The contrast per mark deliberately stayed where the measurement put it.
+ * Fewer marks must not become fainter ones: under roughly three texels of width
+ * and five levels of lift a mark falls beneath this sheet's animated grain and
+ * stops existing at all, which is the hole this was dug out of once already.
+ */
+const HAIRLINES = 10
+const NICKS = 52
+const HAZE_PATCHES = 16
+
+/** A scratch, as a quadratic — a hair does not travel in a straight line. */
+interface Hairline {
+  x0: number
+  y0: number
+  /** Control point, offset off the chord so the mark bows. */
+  cx: number
+  cy: number
+  x1: number
+  y1: number
+  /** Width in px at the mark's deepest point. Everywhere else is less. */
+  width: number
+  /** Where along the run the mark is deepest, 0..1. */
+  peak: number
+  /** Which end the tool bit at. The other end is the one it lifted off. */
+  biteFirst: boolean
+  /** 0..1, weighted so most are barely there and a few are not. */
+  strength: number
+}
+
+/** Material taken off an edge or a corner. */
+interface Nick {
+  x: number
+  y: number
+  /** Reach into the face from the rim. */
+  length: number
+  angle: number
+  width: number
+  strength: number
+}
+
+/** A patch of varnish gone dull. Soft, large, and never an edge. */
+interface Haze {
+  x: number
+  y: number
+  radius: number
+  strength: number
+}
+
+interface Wear {
+  hairlines: Hairline[]
+  nicks: Nick[]
+  haze: Haze[]
+}
+
+/**
+ * mulberry32 — small, fast, and above all repeatable.
+ *
+ * `Math.random` would give a different card on every reload, and this file's
+ * whole contract is that it paints the same object every time, offline and on
+ * first frame.
+ */
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let t = state
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * Everything that has happened to one face, in the order it happened.
+ *
+ * Called separately by the print and by the height field rather than shared
+ * through a cached list: same seed, same sequence, same marks. The two passes
+ * do not draw the same populations — hairlines never reach the height field —
+ * but where they do overlap they overlap exactly, which is the only reason a
+ * nick reads as one event rather than as a smudge beside a dent.
+ */
+function createWear(seed: number): Wear {
+  const random = seededRandom(seed)
+  const hairlines: Hairline[] = []
+  const nicks: Nick[] = []
+  const haze: Haze[] = []
+
+  // Pushes a uniform 0..1 towards whichever end it is nearer. Half the marks
+  // go through it, which is what gives the face a worn rim and a comparatively
+  // untouched middle instead of an even field of scratches — the even field is
+  // what makes a card read as scratched acrylic rather than as carried.
+  const towardsEdge = (t: number): number =>
+    t < 0.5 ? 0.5 - (1 - t * 2) ** 0.6 / 2 : 0.5 + (t * 2 - 1) ** 0.6 / 2
+
+  for (let index = 0; index < HAIRLINES; index++) {
+    const crowded = random() < 0.5
+    const x0 = WIDTH * (crowded ? towardsEdge(random()) : random())
+    const y0 = HEIGHT * (crowded ? towardsEdge(random()) : random())
+    // A lean rather than a rule. Most of the marks in the photograph do follow
+    // the way the card travels, but plenty do not, and a field where every mark
+    // agrees reads as brushed metal instead of as handling.
+    const angle = random() < 0.58 ? (random() - 0.5) * 0.8 : (random() - 0.5) * Math.PI * 2
+    // Long enough to read as a stroke, short enough to end inside the face. At
+    // 300 they crossed the whole card and the eye stopped seeing damage and
+    // started seeing a crazed panel.
+    const length = 30 + random() ** 1.9 * 145
+    const x1 = x0 + Math.cos(angle) * length
+    const y1 = y0 + Math.sin(angle) * length
+    // Bow the midpoint off the chord by a few percent of the run. Small enough
+    // that no mark looks curved, large enough that no two look parallel.
+    const bow = (random() - 0.5) * length * 0.07
+    hairlines.push({
+      x0,
+      y0,
+      cx: (x0 + x1) / 2 - Math.sin(angle) * bow,
+      cy: (y0 + y1) / 2 + Math.cos(angle) * bow,
+      x1,
+      y1,
+      // Two to four texels, which is wider than a scratch really is and is not
+      // a mistake. The sheet carries an animated film grain measured at ~9.5
+      // levels of per-pixel deviation, at roughly one and a half pixels a cell.
+      // A one-texel mark is the SAME SIZE as that noise and a couple of levels
+      // beneath it, so it does not read as faint — it does not read at all, and
+      // a render with it and a render without it measure identical. What
+      // separates a mark from grain is scale: over three or four pixels the
+      // noise averages towards nothing while the mark keeps all of its
+      // contrast, and the eye picks the line out of the boil.
+      width: 1.2 + random() ** 2 * 1.6,
+      // Never the middle. A scratch deepest at its exact centre is a shape
+      // nothing makes; the contact point is wherever the pressure happened to
+      // be, and putting it there is most of what stops the mark reading drawn.
+      peak: 0.18 + random() * 0.5,
+      biteFirst: random() < 0.5,
+      strength: 0.22 + random() ** 2.2 * 0.78,
+    })
+  }
+
+  for (let index = 0; index < NICKS; index++) {
+    // Along the rim, pushed towards the ends of whichever edge it landed on:
+    // a card is dropped on its corners far more often than on its middle.
+    const edge = Math.floor(random() * 4)
+    const raw = random()
+    const along = raw < 0.5 ? raw * raw * 2 : 1 - (1 - raw) ** 2 * 2
+    const inset = random() * 5
+
+    let x = 0
+    let y = 0
+    let inward = 0
+    if (edge === 0) {
+      x = WIDTH * along
+      y = inset
+      inward = Math.PI / 2
+    } else if (edge === 1) {
+      x = WIDTH * along
+      y = HEIGHT - inset
+      inward = -Math.PI / 2
+    } else if (edge === 2) {
+      x = inset
+      y = HEIGHT * along
+      inward = 0
+    } else {
+      x = WIDTH - inset
+      y = HEIGHT * along
+      inward = Math.PI
+    }
+
+    nicks.push({
+      x,
+      y,
+      // Mostly into the face, but skewed, because an impact rarely lands square
+      // and a rim of marks all at ninety degrees reads as a printed dashed line.
+      angle: inward + (random() - 0.5) * 1.5,
+      length: 3 + random() ** 1.6 * 16,
+      width: 1.4 + random() * 2.6,
+      strength: 0.35 + random() ** 1.6 * 0.65,
+    })
+  }
+
+  for (let index = 0; index < HAZE_PATCHES; index++) {
+    haze.push({
+      x: WIDTH * random(),
+      y: HEIGHT * random(),
+      // Mottling, not a wash. The first version spread six patches over three
+      // hundred texels each, which is a change of a level or two across half the
+      // card — under every threshold there is. Smaller and more of them puts the
+      // variation at a scale the eye actually samples.
+      radius: 70 + random() * 150,
+      strength: 0.35 + random() * 0.65,
+    })
+  }
+
+  return { hairlines, nicks, haze }
+}
+
 interface Rect {
   x: number
   y: number
@@ -470,6 +706,157 @@ function drawCardNumber(
   ctx.restore()
 }
 
+/** The point on a mark's curve at t. */
+function hairlinePoint(mark: Hairline, t: number): [number, number] {
+  const u = 1 - t
+  return [
+    u * u * mark.x0 + 2 * u * t * mark.cx + t * t * mark.x1,
+    u * u * mark.y0 + 2 * u * t * mark.cy + t * t * mark.y1,
+  ]
+}
+
+/** Its direction there, analytically — a quadratic's derivative is free. */
+function hairlineTangent(mark: Hairline, t: number): [number, number] {
+  const u = 1 - t
+  return [
+    2 * u * (mark.cx - mark.x0) + 2 * t * (mark.x1 - mark.cx),
+    2 * u * (mark.cy - mark.y0) + 2 * t * (mark.y1 - mark.cy),
+  ]
+}
+
+/**
+ * How much of the mark's full width survives at t. Zero at both ends, one at
+ * the peak.
+ *
+ * Asymmetric, and that is the whole point of having a profile at all. A scratch
+ * is not a spindle: something catches, which happens over almost no distance,
+ * and then lifts away, which happens over a lot of it. Rise and fall are the
+ * same two exponents in whichever order the mark was made — one under 1 for the
+ * end that bit, one over 1 for the end that let go. Give both ends the same
+ * curve and the mark comes back looking machined.
+ */
+function hairlineProfile(mark: Hairline, t: number): number {
+  const rise = mark.biteFirst ? 0.5 : 1.8
+  const fall = mark.biteFirst ? 1.8 : 0.5
+  return t < mark.peak
+    ? (t / mark.peak) ** rise
+    : ((1 - t) / (1 - mark.peak)) ** fall
+}
+
+/**
+ * One mark, as a shape rather than as a stroke.
+ *
+ * A stroke has one width for its whole length, and a constant-width line is the
+ * tell that separates a drawn scratch from a real one — the eye reads uniform
+ * thickness as a tool that was told to draw, not one that slipped. So the
+ * outline is built by walking the curve and offsetting it by the profile.
+ *
+ * ONE filled path, not a run of segments at stepped widths. Segments would need
+ * round caps to close the joins, every join would then be drawn twice, and at
+ * these alphas twice is visible: the mark comes back beaded, which trades one
+ * artificial look for another. A single fill composites exactly once.
+ *
+ * The fade along the length rides in a gradient rather than in the geometry,
+ * because a scratch loses BOTH depth and bite towards its ends and only one of
+ * those is a width. Square-rooted so the two do not compound into a mark that
+ * is invisible everywhere except one point in the middle.
+ */
+function fillHairline(ctx: CanvasRenderingContext2D, mark: Hairline, alpha: number): void {
+  const STEPS = 26
+  const near: [number, number][] = []
+  const far: [number, number][] = []
+
+  for (let step = 0; step <= STEPS; step++) {
+    const t = step / STEPS
+    const [x, y] = hairlinePoint(mark, t)
+    const [dx, dy] = hairlineTangent(mark, t)
+    const run = Math.hypot(dx, dy) || 1
+    const half = (mark.width * hairlineProfile(mark, t)) / 2
+    const nx = (-dy / run) * half
+    const ny = (dx / run) * half
+    near.push([x + nx, y + ny])
+    far.push([x - nx, y - ny])
+  }
+
+  const [headX, headY] = hairlinePoint(mark, 0)
+  const [tailX, tailY] = hairlinePoint(mark, 1)
+  const ink = ctx.createLinearGradient(headX, headY, tailX, tailY)
+  for (let stop = 0; stop <= 10; stop++) {
+    const t = stop / 10
+    ink.addColorStop(t, `rgba(255, 247, 238, ${alpha * Math.sqrt(hairlineProfile(mark, t))})`)
+  }
+
+  ctx.beginPath()
+  const [firstX, firstY] = near[0] as [number, number]
+  ctx.moveTo(firstX, firstY)
+  for (let index = 1; index < near.length; index++) {
+    const [x, y] = near[index] as [number, number]
+    ctx.lineTo(x, y)
+  }
+  for (let index = far.length - 1; index >= 0; index--) {
+    const [x, y] = far[index] as [number, number]
+    ctx.lineTo(x, y)
+  }
+  ctx.closePath()
+  ctx.fillStyle = ink
+  ctx.fill()
+}
+
+/**
+ * The wear, in the print.
+ *
+ * Lighter than the body and never darker, which is the part that is easy to get
+ * backwards: a scuff on a varnished card is not dirt sitting on the surface, it
+ * is varnish taken OFF it, and a micro-abraded patch scatters more light than
+ * the polish it replaced. Drawn dark it reads as a smudge on the screen; drawn
+ * light it reads as a card that has been somewhere.
+ *
+ * Haze first, then hairlines, then nicks — dullest and largest to sharpest and
+ * smallest, which is also the order they happen in. And all of it last, over
+ * the type as well as the body, because none of this respects the artwork
+ * underneath it.
+ *
+ * The alphas are small to the point of looking like typos. They are not: at a
+ * hundred and forty marks a face what is being built is a STATISTIC, and any
+ * single mark strong enough to find on its own is a mark strong enough to make
+ * the card look damaged rather than used.
+ */
+function drawWear(ctx: CanvasRenderingContext2D, wear: Wear): void {
+  ctx.save()
+
+  for (const patch of wear.haze) {
+    const bloom = ctx.createRadialGradient(patch.x, patch.y, 0, patch.x, patch.y, patch.radius)
+    bloom.addColorStop(0, `rgba(255, 246, 236, ${0.11 * patch.strength})`)
+    bloom.addColorStop(1, 'rgba(255, 246, 236, 0)')
+    ctx.fillStyle = bloom
+    ctx.fillRect(patch.x - patch.radius, patch.y - patch.radius, patch.radius * 2, patch.radius * 2)
+  }
+
+  for (const mark of wear.hairlines) {
+    fillHairline(ctx, mark, 0.22 * mark.strength)
+  }
+
+  ctx.lineCap = 'round'
+
+  // The rim, pale before any individual nick is placed. Irregular by being
+  // drawn per nick rather than as a ring: a card does not wear evenly around
+  // its edge, and a clean gradient border is the single most synthetic thing
+  // that can be put on one.
+  for (const nick of wear.nicks) {
+    ctx.strokeStyle = `rgba(255, 242, 230, ${0.22 * nick.strength})`
+    ctx.lineWidth = nick.width
+    ctx.beginPath()
+    ctx.moveTo(nick.x, nick.y)
+    ctx.lineTo(
+      nick.x + Math.cos(nick.angle) * nick.length,
+      nick.y + Math.sin(nick.angle) * nick.length,
+    )
+    ctx.stroke()
+  }
+
+  ctx.restore()
+}
+
 /**
  * The face the card is recognised by: flat orange, the mark, the network, and
  * the two pieces of hardware. Nothing else.
@@ -504,6 +891,7 @@ function drawFront(ctx: CanvasRenderingContext2D): void {
 
   drawNetworkMark(ctx)
 
+  drawWear(ctx, createWear(WEAR_SEED.front))
 }
 
 /**
@@ -608,6 +996,7 @@ function drawBack(ctx: CanvasRenderingContext2D): void {
 
   drawNetworkMark(ctx)
 
+  drawWear(ctx, createWear(WEAR_SEED.back))
 }
 
 /**
@@ -728,6 +1117,39 @@ function drawPanelRelief(ctx: CanvasRenderingContext2D, panel: Rect): void {
 }
 
 /**
+ * Of all that wear, the part that actually took material off.
+ *
+ * The nicks alone. The hairlines are deliberately absent, and their absence is
+ * the correction that mattered most: given a groove they catch the specular,
+ * and a fine mark that catches the specular stops being a fine mark — it
+ * becomes a lit band, which is exactly how a hundred hairlines turned into a
+ * handful of harsh streaks the first time round. On a real card a scratch that
+ * shallow changes what the surface SCATTERS, not which way it faces.
+ *
+ * Shallow even here. A chipped rim is a fraction of the step the chip stands
+ * at, and the whole point of a shared height field is that the two stay in
+ * proportion to each other.
+ */
+function drawWearRelief(ctx: CanvasRenderingContext2D, wear: Wear): void {
+  ctx.save()
+  ctx.lineCap = 'round'
+  for (const nick of wear.nicks) {
+    ctx.strokeStyle = grey(RELIEF_BASE - 10 * nick.strength)
+    // A shade wider than the ink. A pit has walls and the ink does not, and a
+    // stroke narrower than the shader's sampling window loses depth to it.
+    ctx.lineWidth = nick.width + 1.4
+    ctx.beginPath()
+    ctx.moveTo(nick.x, nick.y)
+    ctx.lineTo(
+      nick.x + Math.cos(nick.angle) * nick.length,
+      nick.y + Math.sin(nick.angle) * nick.length,
+    )
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+/**
  * Moves the height field into the alpha channel it is read from.
  *
  * The field has to ARRIVE in alpha — that is where the shader looks — but it
@@ -776,6 +1198,7 @@ export function createCardReliefTexture(face: CardFace): CanvasTexture {
     drawPanelRelief(ctx, SIGNATURE_PANEL)
   }
 
+  drawWearRelief(ctx, createWear(WEAR_SEED[face]))
   bakeHeightIntoAlpha(ctx)
 
   // No colour space is declared, unlike the printed face. Only alpha is read
