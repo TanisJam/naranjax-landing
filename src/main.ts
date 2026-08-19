@@ -180,7 +180,7 @@ const setDeployed = (deployed: boolean, silent = false): void => {
   if (hint) {
     hint.textContent = deployed
       ? 'Tocá una capa para ver esa función'
-      : 'Tocá para ver todo lo que podés hacer'
+      : 'Arrastrá para girarla · Tocá para ver todo lo que podés hacer'
   }
   if (!silent) sound.play(deployed ? 'open' : 'close')
 }
@@ -246,6 +246,13 @@ stage.addEventListener('click', (event) => {
   // not a second gesture, and opening whatever happened to be under the last
   // millimetre of a riffle would be answering a question nobody asked.
   if (orchestrator.picker.dragged) return
+
+  // And the same thing for a mouse, which the picker deliberately does not
+  // answer for: it never sees a mouse press, because a mouse hovers without
+  // pressing and its click is never the tail of a sweep. Turning the card is
+  // the one gesture that makes a mouse press mean something on its own, so it
+  // is the one that has to say whether the click after it was a click.
+  if (orchestrator.tumble?.dragged) return
 
   // A closed card is one object. Whichever layer the ray happens to land on
   // inside it, the only thing the user can be asking for is to open the card —

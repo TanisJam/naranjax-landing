@@ -61,7 +61,25 @@
 #sheets-stage {
   touch-action: none;
   cursor: pointer;
+  /* A drag across the hero is turning the card, and a browser's default answer
+     to a drag over a page is to start selecting it. Nothing here is text, so
+     what that produces is the ghost-blue flicker of a selection reaching into
+     the copy below every time the card is turned. */
+  user-select: none;
   transition: background-color var(--framed-out, 420ms) ease;
+}
+
+/* Written by `CardTumble` and only while the card is shut, because that is the
+   only time a drag turns anything. Both states are named rather than one:
+   `grab` says the object can be picked up and `grabbing` says it HAS been, and
+   a hand that gets no answer at the moment it presses is the whole reason
+   direct manipulation ever reads as indirect. */
+#sheets-stage[data-grab='free'] {
+  cursor: grab;
+}
+
+#sheets-stage[data-grab='held'] {
+  cursor: grabbing;
 }
 
 /* Inset, because the stage is flush with the panel edges and an outline drawn

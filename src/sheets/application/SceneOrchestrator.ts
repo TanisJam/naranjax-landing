@@ -12,6 +12,7 @@ import {
 } from '../infrastructure/three/stage'
 import { AnimationTimeline } from './AnimationTimeline'
 import { CameraInspector } from './CameraInspector'
+import { CardTumble } from './CardTumble'
 import { FilmGrain } from './FilmGrain'
 import { LayerPicker } from './LayerPicker'
 import { PointerParallax } from './PointerParallax'
@@ -176,6 +177,30 @@ const EXPLODED_FRAME = new Quaternion().setFromEuler(new Euler(...EXPLODED_POSE)
  */
 const CLOSED_COVERAGE = 0.81
 
+/**
+ * The widest the closed card may be drawn, in CSS pixels.
+ *
+ * `CLOSED_COVERAGE` is a share of the frame, and a share is the wrong kind of
+ * number for the thing it now sits in front of. It was recovered from a 38%
+ * column; the canvas is the whole viewport, so on a 1440-wide laptop that share
+ * draws the card about 1150 pixels across — which is not a card being handed to
+ * you, it is a card the size of a table. The bigger the display, the further it
+ * goes, because there is nothing in a percentage that knows how large a card is.
+ *
+ * So the coverage keeps the small end and this takes the large one, and the two
+ * meet without a breakpoint anywhere: a phone frames the card at about 320
+ * pixels and never reaches this, a laptop hits it and stops, and a 27-inch
+ * display draws exactly the same object as the laptop instead of a poster of
+ * it. The cap is the one that reads as a physical size, which is the whole
+ * claim a closed card is making.
+ *
+ * Only the CLOSED state is capped. The click is what asks for the piece at the
+ * scale the composition was drawn at, and the growth from here to there is the
+ * gesture — it used to be a card the size of the screen becoming a fan the size
+ * of the screen, which is a shape change with no arrival in it.
+ */
+const CLOSED_MAX_WIDTH = 640
+
 /** Scratch for the framing measurement. Reused, never handed out. */
 const FOCUS_TRAVEL = new Vector3()
 
@@ -206,11 +231,23 @@ export class SceneOrchestrator {
   private readonly film: FilmGrain
 
   private readonly parallaxGroup = new Group()
+  /**
+   * Where a drag lands while the card is shut. Between the parallax and the
+   * float, and it only turns — see `CardTumble` for why a translating group
+   * could not go here.
+   */
+  private readonly tumbleGroup = new Group()
   private readonly floatGroup = new Group()
   // Mode-specific interaction helpers, kept small and read by the swatch-card
   // toggle (parallax enable flag, inspector orbit target).
   readonly parallax: PointerParallax | null
   readonly inspector: CameraInspector | null
+  /**
+   * Drag-to-turn for the closed card. Public for the same reason the picker is:
+   * the click a turn ends with arrives outside this class, and only this knows
+   * whether it was a click at all.
+   */
+  readonly tumble: CardTumble | null
   /** Which layer the pointer is on. Public: a click handler will want it. */
   readonly picker: LayerPicker
 
@@ -320,7 +357,8 @@ export class SceneOrchestrator {
     )
 
     this.floatGroup.add(this.artwork)
-    this.parallaxGroup.add(this.floatGroup)
+    this.tumbleGroup.add(this.floatGroup)
+    this.parallaxGroup.add(this.tumbleGroup)
     this.stage.scene.add(this.parallaxGroup)
 
     this.timeline = new AnimationTimeline(this.sheets, this.floatGroup, this.artwork, CLOSED_POSE)
@@ -330,6 +368,10 @@ export class SceneOrchestrator {
     if (inspect) {
       this.inspector = new CameraInspector(this.stage.camera, container)
       this.parallax = null
+      // Three things cannot share one drag. The orbit is the inspection tool
+      // and it takes the camera as well as the pointer, so the two that move
+      // the artwork instead both stand down.
+      this.tumble = null
       // Inspection is fill-rate bound: flat slabs seen face-on cover most of the
       // viewport and stack four translucent layers of a heavy PBR shader, so
       // cost scales with pixels, not geometry. Trading resolution for a
@@ -343,6 +385,7 @@ export class SceneOrchestrator {
     } else {
       this.inspector = null
       this.parallax = new PointerParallax(container, this.parallaxGroup)
+      this.tumble = new CardTumble(container, this.tumbleGroup)
     }
 
     // After the inspector branch, which sets its own lower ratio: the ceiling
@@ -387,6 +430,7 @@ export class SceneOrchestrator {
     this.resizeObserver.disconnect()
     this.picker.dispose()
     this.parallax?.dispose()
+    this.tumble?.dispose()
     this.inspector?.dispose()
     for (const sheet of this.sheets) sheet.dispose()
     this.backdrop.dispose()
@@ -541,8 +585,15 @@ export class SceneOrchestrator {
     const height = 2 * distance * Math.tan((camera.fov * Math.PI) / 360)
     const width = height * camera.aspect
 
-    this.timeline.closedZoom =
-      Math.min(width / this.cardSpan, height / this.cardRise) * CLOSED_COVERAGE
+    // Pixels per world unit at that same plane, which is the only place the two
+    // rules can be compared — one is a share of the frame and the other is a
+    // length on the glass, and this is the exchange rate between them.
+    const perUnit = this.container.clientWidth / width
+
+    this.timeline.closedZoom = Math.min(
+      Math.min(width / this.cardSpan, height / this.cardRise) * CLOSED_COVERAGE,
+      CLOSED_MAX_WIDTH / perUnit / this.cardSpan,
+    )
   }
 
   /**
@@ -661,6 +712,16 @@ export class SceneOrchestrator {
     this.timeline.hoveredAt = this.picker.hoveredAt
     this.timeline.hoverPush = this.picker.hoveredPush
     this.timeline.update(delta)
+    // Before the parallax, which has to know whether this frame's drag is
+    // already spoken for. Gated on the TARGET rather than on how far the stack
+    // has actually opened: the click is the moment the gesture changes meaning,
+    // and a drag begun halfway through the deploy is riffling a deck that is
+    // coming apart, not turning a card that no longer exists.
+    if (this.tumble) {
+      this.tumble.engaged = !this.timeline.deployed
+      this.tumble.update(delta)
+      if (this.parallax) this.parallax.suppressed = this.tumble.dragging
+    }
     this.parallax?.update(delta)
     this.inspector?.update()
     // After the timeline, which is what decides — and releases — the layer

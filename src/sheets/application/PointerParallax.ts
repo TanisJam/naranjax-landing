@@ -16,6 +16,19 @@ export class PointerParallax {
    */
   enabled = true
 
+  /**
+   * Held off for the length of a gesture that owns the pointer — turning the
+   * card, in practice. Separate from `enabled` because the two answer to
+   * different callers: `enabled` is the motion preference, which is the user's
+   * standing choice, and this is a frame-by-frame claim on the same drag. One
+   * flag would mean whichever wrote last decided, and the preference would come
+   * back on by itself the moment a hand let go of the card.
+   *
+   * Neutral rather than frozen while it holds. A tilt that answers where the
+   * pointer happens to be is a lie about a card the same pointer is turning.
+   */
+  suppressed = false
+
   private targetX = 0
   private targetY = 0
   private currentX = 0
@@ -42,8 +55,9 @@ export class PointerParallax {
   }
 
   update(delta: number): void {
-    const targetX = this.enabled ? this.targetX : 0
-    const targetY = this.enabled ? this.targetY : 0
+    const live = this.enabled && !this.suppressed
+    const targetX = live ? this.targetX : 0
+    const targetY = live ? this.targetY : 0
     this.currentX = damp(this.currentX, targetX, 4, delta)
     this.currentY = damp(this.currentY, targetY, 4, delta)
     this.group.rotation.y = this.currentX * this.strengthX
