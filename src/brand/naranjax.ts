@@ -17,24 +17,46 @@ const SOFT = '#f2ecf6'
 const TEXT = '#252525'
 
 /**
- * The face itself, off the licensee's own CDN. See `font` below for why.
+ * The face itself, served off this origin, under the licence this project
+ * holds. Gibson is Rod McDonald's, published by Canada Type.
  *
- * `swap` rather than `block`: these are .otf files at a few hundred kilobytes
- * each on a third-party host, and a page that holds its text hostage to
- * somebody else's server is a page that can be made blank by somebody else's
- * outage. The fallback is metrically close enough that the swap is a change of
- * texture rather than a reflow of the layout.
+ * IT USED TO BE LINKED STRAIGHT OFF THAT COMPANY'S CDN, and that one line was
+ * two faults.
+ *
+ * Cloudflare sits in front of `static.naranjax.com` and answers a request that
+ * does not look like a browser's with a 403 and eight hundred kilobytes of
+ * challenge page. The font parser reads the first four bytes of that page as a
+ * version number and rejects it: `invalid sfntVersion: 1008813135`, which is
+ * 0x3C21444F, which is `<!DO`.
+ *
+ * And the fourth weight never existed. `Gibson-Heavy.otf` answers 200 with a
+ * 164-byte empty document, and so do Bold, Book and Light — three files are all
+ * that host has ever carried, and their own stylesheet declares a face that is
+ * not among them. The `900` here was inherited along with it.
+ *
+ * So: three faces, converted to woff2 — 226KB of .otf down to 73KB — sitting in
+ * `brand-assets/naranjax/`, which is per brand, so the other build never
+ * carries a byte of them.
+ *
+ * SEMIBOLD COVERS 600 THROUGH 900 rather than 600 alone. The page asks for 700
+ * six times and there is no 700 to answer with. A range lands those on real
+ * SemiBold outlines; without it the request either falls out of the family
+ * altogether or the browser smears a synthetic bold over the top, and both of
+ * those are visible next to the weights that did resolve.
+ *
+ * `swap` still, and it costs nothing now: the files are on this origin, so all
+ * it covers is the first paint before they arrive. Figtree stays underneath as
+ * the metric fallback.
  */
 const GIBSON = [
-  ['Gibson', 400, 'Gibson-Regular'],
-  ['Gibson', 500, 'Gibson-Medium'],
-  ['Gibson', 600, 'Gibson-SemiBold'],
-  ['Gibson', 900, 'Gibson-Heavy'],
+  ['Gibson', '400', 'Gibson-Regular'],
+  ['Gibson', '500', 'Gibson-Medium'],
+  ['Gibson', '600 900', 'Gibson-SemiBold'],
 ]
   .map(
     ([family, weight, file]) =>
       `@font-face{font-family:'${family}';font-weight:${weight};font-style:normal;font-display:swap;` +
-      `src:url(https://static.naranjax.com/assets/fonts/${file}.otf) format('opentype')}`,
+      `src:url(/${file}.woff2) format('woff2')}`,
   )
   .join('')
 
@@ -266,29 +288,26 @@ export const naranjax: Brand = {
   shape: { cta: '15px', block: '2.0625rem' },
 
   // Gibson, which is the face their site actually sets — and after the colour
-  // it is the loudest thing on the page. Their stylesheet points at four .otf
-  // files on their own CDN and those answer 200 with `access-control-allow-
-  // origin: *`, so this build asks for them there. It is a concept demo shown
-  // to that company, not a product: the face is licensed to Canada Type and
-  // this is a hotlink to the licensee's own server, which is fine for what this
-  // is and would not be fine for anything shipped.
+  // it is the loudest thing on the page. Self-hosted now, off this origin,
+  // under the licence this project holds; see `GIBSON` above for the two faults
+  // that came with hotlinking their CDN and for why there are three weights and
+  // not four. The credit sits in the footer, with the disclaimer.
   //
-  // Figtree stays in the stack behind it, and that is not politeness. If the
-  // CDN goes away, or if this has to stop borrowing the face, the page falls
-  // back to a humanist-geometric with the same tall x-height instead of to
-  // whatever the host resolves — and taking Gibson out again is deleting one
+  // Figtree stays in the stack behind it, and that is not politeness. It is the
+  // metric fallback for the swap, and it is what the page lands on if the
+  // licence ever has to go — a humanist-geometric with the same tall x-height,
+  // rather than whatever the host resolves. Taking Gibson out is deleting one
   // name from one line.
   //
-  // Declared as ONE family across four weights rather than as four families
-  // named for their weight, which is how their own stylesheet does it. Four
-  // families means every rule has to name the right one by hand and a `600`
-  // anywhere silently gets the regular; one family means `font-semibold` picks
-  // the SemiBold because that is what a weight is for.
+  // Declared as ONE family across its weights rather than as one family per
+  // weight, which is how their own stylesheet does it. A family per weight
+  // means every rule has to name the right one by hand and a `600` anywhere
+  // silently gets the regular; one family means `font-semibold` picks the
+  // SemiBold because that is what a weight is for.
   font: {
     stack: "'Gibson', 'Figtree', ui-sans-serif, system-ui, -apple-system, sans-serif",
     link:
-      '<link rel="preconnect" href="https://static.naranjax.com" crossorigin />\n' +
-      '    <link rel="preconnect" href="https://fonts.googleapis.com" />\n' +
+      '<link rel="preconnect" href="https://fonts.googleapis.com" />\n' +
       '    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n' +
       '    <link\n' +
       '      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap"\n' +
@@ -343,8 +362,15 @@ export const naranjax: Brand = {
   // This build puts a real company's mark on a landing that company did not
   // make, and the footer is where that gets said plainly rather than left for
   // the reader to work out.
+  //
+  // The typeface is named last and named separately ON PURPOSE. Two different
+  // rights sit in this paragraph and they belong to two different owners: the
+  // marks are Naranja X's and are reproduced without their involvement, which
+  // is what the first sentence says; Gibson is Canada Type's and is set here
+  // under a licence, which is what the last one says. Collapsing those into one
+  // claim of permission would make the first sentence false.
   disclaimer:
-    'Concepto no oficial y sin relación con Naranja X. Las marcas y el logotipo pertenecen a sus titulares y se reproducen solo con fines ilustrativos. Los datos y las cifras son de demostración y no constituyen una oferta comercial.',
+    'Concepto no oficial y sin relación con Naranja X. Las marcas y el logotipo pertenecen a sus titulares y se reproducen solo con fines ilustrativos. Los datos y las cifras son de demostración y no constituyen una oferta comercial. Compuesto en Gibson, de Rod McDonald, publicada por Canada Type y usada con licencia.',
 }
 
 /** Also the default export, which is how `virtual:brand` reaches exactly one of these. */

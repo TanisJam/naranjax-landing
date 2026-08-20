@@ -96,6 +96,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ico: 'image/x-icon',
   png: 'image/png',
   jpg: 'image/jpeg',
+  woff2: 'font/woff2',
 }
 
 const extension = (name: string): string => name.slice(name.lastIndexOf('.') + 1)
