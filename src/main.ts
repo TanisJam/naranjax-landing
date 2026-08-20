@@ -5,6 +5,7 @@ import pickSound from '../sound-effects/pick.mp3?url'
 import { brand } from './brand'
 import { FrameCounter } from './diagnostics/FrameCounter'
 import { createKnockouts } from './diagnostics/knockouts'
+import { startPageMotion } from './page/PageMotion'
 import { SceneOrchestrator } from './sheets/application/SceneOrchestrator'
 import { composition } from './sheets/domain/composition'
 import { layerSpecs, specFor, type LayerSpec } from './sheets/domain/specs'
@@ -19,6 +20,12 @@ if (!stage) throw new Error('#sheets-stage container is missing')
 // the artwork keeps the page's colour at every viewport.
 const orchestrator = new SceneOrchestrator(stage, composition)
 orchestrator.start()
+
+// The page around the card: the bar that steps aside going down, and the blocks
+// that rise into place as they are reached. Started here rather than on
+// `DOMContentLoaded` because this module is a deferred ES module — the document
+// is already parsed by the time any of it runs.
+startPageMotion()
 
 // The pointer cue is the one that fires most, so it sits well under the two
 // transitions — it is punctuation, not an announcement.
