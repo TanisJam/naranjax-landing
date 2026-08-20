@@ -99,8 +99,49 @@ export class BackdropCapture {
    * from the capture it composites against — while it fills the screen. That is
    * not a subtlety, it is three of the nine inner layers vanishing from a card
    * held up to be read, and it was reported as exactly that.
+   *
+   * BACK TO 1, AND EVERYTHING ABOVE IS WHY. Read it again with the report in
+   * hand — "layer 6 is not visible through layer 5" — because the mechanism is
+   * written out above in full and then argued away.
+   *
+   * The frosted plates are at stack indices 8, 7, 6, 5, 4, 2 and 1, and they
+   * draw in that order. The neighbour rule pairs them 8/7, 6/5 and 2/1: the
+   * first of each pair captures and the second reuses that capture, which was
+   * taken BEFORE the first one drew. So layer 5 composites against a frame with
+   * no layer 6 in it. And this file already says what happens next — the
+   * material runs `One / Zero` and writes its composite straight over the
+   * destination, so a plate missing from the capture is not softened, it is
+   * GONE wherever the sharing plate covers it. Three of the seven frosted
+   * plates were erasing their own neighbour, by construction, in the resting
+   * pose where the card is one object and looking through it is the whole
+   * effect.
+   *
+   * The measurement that cleared this was 0.72 luminance points, and the fault
+   * is in the metric rather than in the arithmetic: it was a MEAN OVER THE
+   * WHOLE FRAME. A plate erased inside the silhouette it shares with another —
+   * a fraction of a per cent of the pixels, at up to a third of the range — is
+   * worth a few hundredths of a point spread over a viewport. The number was
+   * right and it was answering a question nobody had asked.
+   *
+   * There is no ordering that rescues sharing, which is worth being clear about
+   * before anyone tries: with two adjacent plates and one capture between them,
+   * the capture is either missing the back one or taken too late for the front
+   * one. One of the pair is always wrong. Correct here means one capture per
+   * frosted plate, and that is what 1 is.
+   *
+   * WHAT IT COSTS, measured end to end at the ratio this actually ships at:
+   * nothing that can be told apart from the machine. Seven captures against
+   * four ran 46-60 fps and four ran 47-60 on the same viewport minutes apart,
+   * with the drawing buffer pinned at the governor's floor either way.
+   *
+   * At a pixel ratio of 3.5 the same change costs 151 gpu ms, and that number
+   * is real but it is not an argument for sharing: it is what a read-after-write
+   * barrier costs across a fifteen-megapixel buffer, seven times a frame. The
+   * governor already owns that trade — it spends resolution to hold the frame
+   * rate — so what this does on a machine with headroom is stop it climbing
+   * quite so high. Sharper and wrong was never the better end of that deal.
    */
-  stride = 2
+  stride = 1
 
   /**
    * Capture pixels per drawing-buffer pixel, per axis. The cost goes with the
