@@ -41,7 +41,11 @@ export type Brand = {
 
   readonly copy: Copy
 
+  readonly page: Page
+
   readonly palette: Palette
+  readonly shape: Shape
+  readonly font: Typeface
   readonly card: CardInks
 
   /**
@@ -87,6 +91,120 @@ export type Copy = {
 }
 
 /**
+ * The parts of the page that are LISTS rather than sentences.
+ *
+ * Separate from `Copy` for a reason that is not taste: `Copy` is four strings
+ * and the build substitutes them into `{{tokens}}` one for one. These are
+ * repeated structures, and a structure cannot be a token — so each of them is
+ * rendered to markup at build time by `blocks.ts` and substituted the same way
+ * the lockup is. Which is also why they belong on the brand at all: a landing
+ * whose navigation, figures and footer were hard-coded would be one brand's
+ * landing with another brand's paint on it.
+ *
+ * They stay OUT of the layout. Every one of these is content — words, figures,
+ * destinations — and the arrangement they land in is the same design in both
+ * builds. See `index.html`.
+ */
+export type Page = {
+  /** The header's links, in order. The call to action is `navCta`. */
+  readonly nav: readonly Link[]
+  /** What the header's pill says, and where it goes. */
+  readonly navCta: Link
+  /**
+   * The claim over the card, broken into the lines it is meant to break at.
+   *
+   * Three, and they arrive one after another — which is why the break is
+   * authored rather than left to the measure. A claim that rewraps on a
+   * narrower viewport is a claim whose rhythm was never the point.
+   */
+  readonly heroLines: readonly string[]
+  /** The four figures the brand is judged on, as cards. */
+  readonly stats: readonly Stat[]
+  /** The badges orbiting the dashed ring, in the order they are laid out. */
+  readonly orbit: readonly Badge[]
+  /**
+   * The words that drift across the closing plancha.
+   *
+   * Set in outline at eighty pixels, so these are read as texture before they
+   * are read as words. Short ones survive that; a sentence does not.
+   */
+  readonly marquee: readonly string[]
+  /** The line and the button of the footer's banner. */
+  readonly download: { readonly line: string; readonly cta: string }
+  /** The footer's link columns, minus the social one, which is drawn. */
+  readonly footer: readonly FooterColumn[]
+}
+
+export type Link = {
+  readonly label: string
+  readonly href: string
+}
+
+/**
+ * One figure, on its own card.
+ *
+ * Split into three because the reference sets them at three sizes on one line:
+ * the number is the shout, the unit rides small beside it, and the sentence
+ * under both is what the number is OF. Collapsing them into a string would put
+ * that typography in the content.
+ */
+export type Stat = {
+  /** The number itself, large. */
+  readonly value: string
+  /** The word that rides small beside it — «millones», «mil». Optional. */
+  readonly unit?: string
+  /**
+   * What the figure counts.
+   *
+   * Optional only because the last card in the reference row has no sentence at
+   * all: it says who the company belongs to and then prints that company's
+   * name, and a card built to carry a lockup has nothing to put here. Every
+   * card that states a figure states what it is of.
+   */
+  readonly label?: string
+  /**
+   * A name, set like one, in place of the sentence.
+   *
+   * The reference closes its row with «Somos parte del» over a logo. This is
+   * that line, and it is deliberately NOT the other company's mark: reproducing
+   * a third party's logotype inside a demo nobody at either company asked for
+   * is the one thing on this page that would stop being a quotation.
+   */
+  readonly mark?: string
+  /**
+   * The drawing in the bottom corner, as an inline `<svg>`. Decorative.
+   *
+   * Every card in the reference carries a small illustration down there and the
+   * row reads as five objects because of it. See the note in `glyphs.ts` for
+   * what stands in for artwork this page does not have.
+   */
+  readonly motif?: string
+  /**
+   * Which of the four grounds this card takes.
+   *
+   * A role rather than a colour: every one of them is one of the brand's two
+   * inks mixed into white by a fixed amount, so a brand that changes its inks
+   * gets four new tints for free and never a fifth colour somebody picked.
+   */
+  readonly tint: 'accent-soft' | 'accent' | 'ground-soft' | 'ground'
+}
+
+/** A badge on the dashed ring: a drawn glyph and the word it stands for. */
+export type Badge = {
+  /** The glyph, as an inline `<svg>` sized by its container. */
+  readonly icon: string
+  /** Read out instead of the drawing, and never shown. */
+  readonly label: string
+  /** Which ink the disc takes. */
+  readonly tint: 'accent' | 'ground'
+}
+
+export type FooterColumn = {
+  readonly title: string
+  readonly links: readonly Link[]
+}
+
+/**
  * Two inks and the ramp one of them is taken down to.
  *
  * The `ink` ramp is the second ink pulled to near-black at constant hue, and
@@ -113,6 +231,98 @@ export type Palette = {
     readonly 300: string
     readonly 200: string
   }
+  readonly surface: Surface
+}
+
+/**
+ * The page's own colours, named by ROLE rather than by value.
+ *
+ * This exists because the two brands do not agree on whether the page is dark.
+ * MandarinaX is a tinted near-black with the ink ramp showing through; the
+ * Naranja X demo follows that company's own site, which is white with violet
+ * planchas laid into it. The markup cannot say `bg-ink-950` and mean both, so
+ * it says `bg-surface` and each brand answers.
+ *
+ * The `ink` ramp above did not go away and could not: it is what the hero, the
+ * card render and the layer overlay are built on, and all three of those are
+ * dark in both builds — a card photographed against white is a different
+ * photograph. So the ramp keeps the hero and this keeps the page under it.
+ *
+ * Every pairing here was measured, not chosen. On the Naranja X values the body
+ * copy runs 15.9:1, the muted step 8.6:1, white on the violet plancha 12.7:1
+ * and the call to action 12.7:1 — which is why `accentInk` is the violet and
+ * not the orange, exactly as that site's own `--company-link-color` says. The
+ * published orange is 3.3:1 on white: real as a graphic, illegible as a word.
+ */
+export type Surface = {
+  /** The page ground. */
+  readonly page: string
+  /** The alternating plancha — a half-step off `page`, never a third colour. */
+  readonly soft: string
+  /** The brand's own plancha, laid in at full strength. */
+  readonly strong: string
+  /** Body copy on `page` and `soft`. */
+  readonly on: string
+  /** Secondary copy on `page` and `soft`. */
+  readonly onMuted: string
+  /** Copy on `strong`. */
+  readonly onStrong: string
+  /** Secondary copy on `strong`. */
+  readonly onStrongMuted: string
+  /** Hairlines and outlines on `page` and `soft`. */
+  readonly line: string
+  /**
+   * What the figure cards' tints are mixed INTO.
+   *
+   * Its own value rather than `page`, and the dark build is why. Four cards
+   * tinted by mixing an ink into the page ground works perfectly on white —
+   * a sixth of the orange is the reference's own peach — and on a near-black
+   * page the same sixth is a card you cannot see: measured, `#f37d06` at 16%
+   * into `#220b0a` lands on `#431d09`, which is the page with a rumour on it.
+   *
+   * So the base is stated. On the white build it is white and the mixes are
+   * the reference's. On the dark one it is a lifted step of the same ink ramp,
+   * which keeps the cards dark — as that page is — while leaving them far
+   * enough above the ground to read as four objects instead of one shadow.
+   */
+  readonly tintBase: string
+  /** The accent at a strength that survives as small type on `page`. */
+  readonly accentInk: string
+  /** The call to action's fill, and what is printed on it. */
+  readonly cta: string
+  readonly ctaBright: string
+  readonly onCta: string
+}
+
+/**
+ * The two radii the page is drawn with.
+ *
+ * On the list for the same reason the surfaces are: Naranja X rounds to 40px
+ * and it is not a detail, it is most of what the eye reads as that brand before
+ * it has read a word. MandarinaX keeps the 8px it was drawn at. Everything else
+ * about the layout — the measure, the rhythm, the order of the blocks — is the
+ * same design in both builds and stays out of here.
+ */
+export type Shape = {
+  /** Calls to action and pills. */
+  readonly cta: string
+  /** Blocks, cards and panels. */
+  readonly block: string
+}
+
+/**
+ * The typeface, and the stylesheet that serves it.
+ *
+ * Per brand because a voice is not only words. Naranja X sets everything in
+ * Gibson, which is licensed and not ours to serve, so this build sets the
+ * nearest thing with the same humanist-geometric build and the same tall
+ * x-height and says so here rather than pretending.
+ */
+export type Typeface = {
+  /** The value `--font-sans` is restated to. */
+  readonly stack: string
+  /** The `<link>` tags that load it, as markup. */
+  readonly link: string
 }
 
 /**

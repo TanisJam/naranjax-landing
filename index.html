@@ -65,34 +65,71 @@
       name="twitter:image:alt"
       content="{{shareImageAlt}}"
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Per brand, because a voice is not only words: one of these builds sets
+         everything in Rubik and the other in Gibson, which is the face Naranja X
+         actually uses, served off that company's own CDN. See `font` in
+         `src/brand/naranjax.ts` for what that borrowing does and does not
+         cover. -->
+    {{fontLink}}
     <script type="module" src="/src/main.ts"></script>
   </head>
-  <body class="bg-ink-950 font-sans text-ink-200 antialiased">
+  <body class="bg-surface font-sans text-on-surface antialiased">
+    <!-- The header is a BAR now, and that is the single change everything else
+         on this page hangs off.
+
+         It used to be transparent furniture floating over a black hero, because
+         the hero was the whole viewport and a solid band would have been a
+         strip the card had to start below. The reference does exactly the
+         opposite and gets away with it for a reason worth copying: its hero is
+         dark and full-bleed, so a white sixty-four-pixel bar laid across the
+         top of it is not a strip taken away from the artwork, it is the frame
+         around it. Fixed, so it stays; and it steps out of the way going down
+         the page and comes back on the way up, which is what `PageMotion`
+         does and what that site does.
+
+         Sixty-four pixels, a 1120px measure inside it, a 24px mark, links at a
+         70px gap and a filled pill on the right — every one of those is off
+         their own stylesheet rather than chosen to look similar. -->
+    <header id="site-header" class="site-header">
+      <div class="site-header__inner">
+        <a href="#" class="site-header__mark" aria-label="{{name}} — inicio">{{lockup}}
+        </a>
+        <nav class="site-header__nav" aria-label="Principal">
+          {{navLinks}}
+        </nav>
+        <div class="site-header__cta">{{navCta}}</div>
+      </div>
+    </header>
+
     <main class="flex flex-col">
       <!-- The hero is the whole viewport, and the card is the whole hero.
            Rendered live instead of a flat export: the product IS a card that
            comes apart into what the account can do, so the illustration is the
            argument rather than a picture of it.
 
-           It used to be a 38% column beside the copy, and the change is not
-           only a matter of size. A column meant that opening a layer had to
-           take the canvas fullscreen and then hand it back, and that swap was a
-           measured 29-pixel jump that took a compensation, an aim-point anchor
-           and a flat-plate approximation to get down to two. At a full-viewport
-           hero the canvas an opened layer wants is the canvas it already has,
-           so the swap is a no-op and the jump has nowhere to live.
+           WHY THE STAGE STAYS EXACTLY THE VIEWPORT, even now that there is a
+           claim sitting on it. Opening a layer takes the canvas fullscreen and
+           hands it back, and that swap was once a measured 29-pixel jump that
+           cost a compensation, an aim-point anchor and a flat-plate
+           approximation to get down to two. At a full-viewport hero the canvas
+           an opened layer wants is the canvas it already has, so the swap is a
+           no-op and the jump has nowhere to live. The claim is therefore laid
+           OVER the stage and takes no pointer — anything that shrank the canvas
+           to make room for it would be buying a headline with that whole
+           repair.
 
            `svh` rather than `vh`: on a phone the URL bar makes `vh` taller than
            what is actually on screen, and a hero that is exactly the viewport
-           is the entire point of this. -->
+           is the entire point of this.
+
+           The ground is the brand's own plancha rather than the ink ramp, and
+           it is the only place on the page where the card is not on near-black.
+           That is a gain rather than a compromise: the render was calibrated
+           against a dark ground and their violet is one, so the demo gets the
+           company's colour under its product without touching the lighting. -->
       <section
-        class="relative h-[100svh] min-h-[520px] w-full bg-ink-900"
+        id="hero"
+        class="relative h-[100svh] min-h-[560px] w-full bg-surface-strong"
         aria-label="Ilustración de la tarjeta {{name}}"
       >
         <!-- The stage is the control: the card opens into its eleven layers on
@@ -105,111 +142,115 @@
           aria-expanded="false"
           aria-label="Ver todo lo que podés hacer con {{name}}"
         ></div>
-        <!-- The page runs directly under the hero at every width now, so the
-             fade is unconditional where it used to be small-screen only: it is
-             what keeps the seam between the two backgrounds from reading as a
-             band across the screen. -->
-        <div
-          class="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-ink-950"
-        ></div>
-        <!-- After the fade in the source, not before: the gradient runs over
-             this strip of the hero and would swallow the label. -->
+
+        <!-- Three lines, and they arrive one after another rather than
+             together. That stagger is two tenths of a second apart on the
+             reference and it is most of why its hero reads as somebody saying
+             hello instead of as a banner being displayed. `aria-hidden` on the
+             wrapper is deliberate: this is the page's claim and it is announced
+             once, by the `h1` below, not twice. -->
+        <p class="hero-claim" aria-hidden="true">
+          {{heroLines}}
+        </p>
+
         <p
           id="sheets-hint"
-          class="pointer-events-none absolute inset-x-0 bottom-5 text-center text-xs tracking-wide text-ink-300/70"
+          class="pointer-events-none absolute inset-x-0 bottom-5 text-center text-xs tracking-wide text-on-strong-muted/70"
         >
           Arrastrá para girarla · Tocá para ver todo lo que podés hacer
         </p>
-        <!-- Over the hero rather than above it. The canvas owns the viewport,
-             so a header stacked on top of it would be a band the card has to
-             start below — and the card starting below the fold is the one thing
-             this layout exists to prevent.
-
-             Transparent to the pointer, and its contents are not: the hero is a
-             click target the size of the screen and the gaps between the mark
-             and the nav have to reach it, or the top strip of the card stops
-             answering to a click for no reason the user can see. -->
-        <header class="pointer-events-none absolute inset-x-0 top-0 z-10 pt-7">
-          <div
-            class="pointer-events-auto mx-auto flex w-full max-w-[80rem] flex-wrap items-center justify-between gap-4 px-6 pb-6 lg:px-12"
-          >
-            <a href="#" class="flex items-center gap-2.5" aria-label="{{name}} — inicio">{{lockup}}
-            </a>
-            <nav class="flex items-center gap-5 text-xs leading-5 tracking-tight text-ink-400">
-              <a href="#funciones" class="transition hover:text-ink-200">Cuenta</a>
-              <a href="#prestamos" class="transition hover:text-ink-200">Préstamos</a>
-              <a href="#beneficios" class="transition hover:text-ink-200">Beneficios</a>
-            </nav>
-          </div>
-        </header>
       </section>
 
-      <section class="flex w-full flex-col">
-        <div class="mx-auto flex w-full max-w-[34rem] flex-col gap-16 px-6 pt-10 pb-20">
-          <!-- The written half of the pitch. The card above is the hero now, so
-               this opens the page rather than sitting beside it: the headline is
-               the brand's own, and the line under it is the promise the nine
-               layers then itemise one at a time. -->
-          <div class="flex flex-col gap-6">
-            <p
-              class="text-xs leading-5 font-medium tracking-[0.2em] text-brand-accent uppercase"
-            >
-              Cuenta digital gratis
-            </p>
-            <h1
-              class="text-4xl leading-tight font-semibold text-neutral-50 sm:text-5xl sm:leading-[3.5rem]"
-            >
-              {{headline}}
-            </h1>
-            <p class="text-lg leading-7 text-ink-300">{{lede}}</p>
+      <!-- Below the hero the page is a stack of PLANCHAS: full-bleed bands that
+           alternate ground, each one holding a single idea at one measure. That
+           is the composition Naranja X's own site is built from — white, lilac,
+           white, violet — and it is why the tokens below are named for a role
+           rather than a colour. Under this brand's values the bands are three
+           steps of one near-black and the page reads as it always has; under
+           the other brand's they are white and violet and it reads as that
+           company's site. Same markup, and it has to be the same markup: two
+           layouts is two sites, and this is one.
 
-            <div class="flex flex-col gap-3 sm:flex-row">
-              <a
-                href="#funciones"
-                class="rounded-lg bg-brand-accent px-7 py-4 text-center text-base leading-6 font-medium text-ink-950 transition hover:bg-brand-accent-bright"
-              >
-                Abrir cuenta
-              </a>
-              <a
-                href="#funciones"
-                class="rounded-lg px-7 py-4 text-center text-base leading-6 font-medium text-neutral-50 outline outline-ink-700 transition hover:bg-ink-900"
-              >
-                Descargar la app
-              </a>
-            </div>
+           The violet is laid in at full strength TWICE on the whole page — this
+           hero and the closing plancha — and the two are the top and the bottom.
+           A colour that is everywhere is a background; this one is an event. -->
+      <section class="w-full bg-surface-soft">
+        <div
+          class="mx-auto flex w-full max-w-[41rem] flex-col items-center gap-8 px-6 py-24 text-center sm:py-32"
+        >
+          <!-- The written half of the pitch. Centred, because the reference is:
+               it reads as an announcement rather than as a column of prose,
+               which is what a claim wants. -->
+          <p class="text-xs leading-5 font-semibold tracking-[0.2em] text-accent-ink uppercase">
+            Cuenta digital gratis
+          </p>
+          <!-- Violet on the lilac plancha, at their own display size. On that
+               site every section title is the brand colour and none of them is
+               near-black, and it is the second thing after the ground that
+               makes a page read as theirs. -->
+          <h1 class="claim">{{headline}}</h1>
+          <p class="lede">{{lede}}</p>
 
-            <p class="text-xs leading-5 tracking-tight text-ink-400">
-              Sin costo de apertura ni de mantenimiento. La abrís desde la app en minutos.
-            </p>
+          <!-- Pills, and uppercase. Both are quoted rather than chosen: that
+               site rounds every button and sets the label in caps, and between
+               the two they are most of what the eye reads as this brand before
+               it has read a word. The radius is a token so the other build
+               keeps the eight pixels it was drawn at. -->
+          <div class="mt-2 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <a href="#funciones" class="nx-button">Abrir cuenta</a>
+            <a href="#funciones" class="nx-button nx-button--ghost">Descargar la app</a>
           </div>
 
-          <!-- The three numbers the account is actually judged on, before any
-               feature list. Someone deciding whether to open one is asking what
-               it costs and what it pays, and the answer fits on one line. -->
-          <dl class="grid grid-cols-3 gap-x-6 border-y border-ink-800 py-6">
-            <div class="flex flex-col gap-1">
-              <dt class="text-xs leading-5 tracking-tight text-ink-400">Costo</dt>
-              <dd class="text-2xl leading-8 font-semibold text-neutral-50">$0</dd>
-            </div>
-            <div class="flex flex-col gap-1">
-              <dt class="text-xs leading-5 tracking-tight text-ink-400">Rendimiento</dt>
-              <dd class="text-2xl leading-8 font-semibold text-neutral-50">18% TNA</dd>
-            </div>
-            <div class="flex flex-col gap-1">
-              <dt class="text-xs leading-5 tracking-tight text-ink-400">Servicios</dt>
-              <dd class="text-2xl leading-8 font-semibold text-neutral-50">+4.000</dd>
-            </div>
-          </dl>
+          <p class="text-xs leading-5 tracking-tight text-on-surface-muted">
+            Sin costo de apertura ni de mantenimiento. La abrís desde la app en minutos.
+          </p>
+        </div>
+      </section>
 
-          <!-- The bridge between the two halves of the page. The card on the
-               left is not decoration and this is where that gets said out loud:
-               every layer of it is one of the things listed here, and the list
-               is the same data the panels are built from. -->
-          <div id="funciones" class="flex flex-col gap-4 scroll-mt-8">
-            <h2 class="text-2xl leading-8 font-semibold text-neutral-50">
-              Todo lo que podés hacer con tu billetera digital
-            </h2>
-            <p class="text-base leading-6 text-ink-300">
+      <!-- The figures, on cards that arrive as you reach them.
+
+           This replaced a three-column definition list, and the reason is not
+           decoration. The list said the same numbers in a row of hairlines, and
+           a row of hairlines is a table: it is read once, downward, and
+           forgotten. Four cards at four grounds with a degree or two of lean
+           are read as four separate claims — which is what they are — and the
+           reference stakes its whole institutional section on exactly that.
+
+           The tints are the brand's own two inks mixed into white by a fixed
+           amount rather than four new colours, so this row costs the palette
+           nothing. See `.stat-card` in `src/style.css`. -->
+      <section class="w-full bg-surface">
+        <div class="mx-auto w-full max-w-[80rem] px-6 py-20 sm:py-24">
+          <ul class="stat-row">
+            {{statCards}}
+          </ul>
+        </div>
+      </section>
+
+      <!-- The bridge between the two halves of the page. The card in the hero is
+           not decoration and this is where that gets said out loud: every layer
+           of it is one of the things listed here, and the list is the same data
+           the panels are built from.
+
+           The ring on the left is quoted from that company's product pages,
+           where a dashed circle with filled discs on it is how a feature is
+           framed — and the dash is already this brand's vocabulary elsewhere on
+           its own site. It turns, slowly, and the discs turn back so their
+           glyphs stay upright. Decorative, and marked as such: everything it
+           says is said by the list beside it. -->
+      <section id="funciones" class="w-full scroll-mt-20 bg-surface-soft">
+        <div
+          class="mx-auto grid w-full max-w-[72rem] items-center gap-14 px-6 py-20 sm:py-24 lg:grid-cols-2 lg:gap-20"
+        >
+          <div class="orbit" data-reveal>
+            <span class="orbit__ring" aria-hidden="true"></span>
+            <span class="orbit__core">{{lockup}}</span>
+            {{orbitBadges}}
+          </div>
+
+          <div class="flex flex-col gap-4">
+            <h2 class="section-title">Todo lo que podés hacer con tu billetera digital</h2>
+            <p class="text-base leading-6 font-medium text-on-surface-muted">
               La tarjeta se abre en capas y cada una es una de estas funciones. Tocá el stack y
               después tocá la capa que quieras ver.
             </p>
@@ -222,58 +263,190 @@
                  keyboard cannot, and a landing needs the feature list on the
                  page anyway. One list serving both is the whole reason the
                  hidden one is gone. -->
-            <ul id="feature-list" class="mt-2 flex flex-col divide-y divide-ink-800"></ul>
+            <ul id="feature-list" class="mt-2 flex flex-col divide-y divide-line"></ul>
           </div>
+        </div>
+      </section>
 
-          <div id="prestamos" class="flex flex-col gap-4 scroll-mt-8">
-            <h2 class="text-2xl leading-8 font-semibold text-neutral-50">
-              Pedí tu préstamo y recibilo en el acto
-            </h2>
-            <p class="text-base leading-6 text-ink-300">{{loans}}</p>
-          </div>
+      <section id="prestamos" class="w-full scroll-mt-20 bg-surface">
+        <div
+          class="mx-auto flex w-full max-w-[41rem] flex-col items-center gap-5 px-6 py-20 text-center sm:py-24"
+        >
+          <h2 class="section-title">Pedí tu préstamo y recibilo en el acto</h2>
+          <p class="lede">{{loans}}</p>
+        </div>
+      </section>
 
-          <div id="beneficios" class="flex flex-col gap-4 scroll-mt-8">
-            <h2 class="text-2xl leading-8 font-semibold text-neutral-50">
-              Beneficios todos los días
-            </h2>
-            <ul class="flex flex-col gap-3 text-base leading-6 text-ink-300">
-              <li class="flex gap-3">
-                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-brand-accent"></span>
+      <section id="beneficios" class="w-full scroll-mt-20 bg-surface">
+        <div class="mx-auto w-full max-w-[72rem] px-6 pb-20 sm:pb-24">
+          <div class="benefits">
+            <h2 class="section-title">Beneficios todos los días</h2>
+            <ul class="benefits__list">
+              <li class="benefits__item">
+                <span aria-hidden="true" class="benefits__dot"></span>
                 <span>2x1 en Cinemark todos los días con tu tarjeta de crédito o débito.</span>
               </li>
-              <li class="flex gap-3">
-                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-brand-accent"></span>
+              <li class="benefits__item">
+                <span aria-hidden="true" class="benefits__dot"></span>
                 <span>30% de ahorro en McDonald's pagando con el QR de la app.</span>
               </li>
-              <li class="flex gap-3">
-                <span aria-hidden="true" class="mt-2.5 size-1.5 shrink-0 rounded-full bg-brand-accent"></span>
+              <li class="benefits__item">
+                <span aria-hidden="true" class="benefits__dot"></span>
                 <span>25% OFF y 5 cuotas sin interés pidiendo tu tarjeta 100% online.</span>
               </li>
             </ul>
           </div>
+        </div>
+      </section>
 
-          <!-- Closing CTA. Same two actions as the hero and deliberately not a
-               third one: a landing that ends by offering something new is a
-               landing that spent its scroll teaching you to want the wrong
-               thing. -->
-          <div class="flex flex-col gap-5 rounded-2xl bg-ink-900 p-8">
-            <h2 class="text-2xl leading-8 font-semibold text-neutral-50">
-              Abrí tu cuenta y olvidate de la billetera
-            </h2>
-            <p class="text-base leading-6 text-ink-300">{{closing}}</p>
-            <a
-              href="#funciones"
-              class="rounded-lg bg-brand-accent px-7 py-4 text-center text-base leading-6 font-medium text-ink-950 transition hover:bg-brand-accent-bright sm:self-start"
-            >
-              Abrir cuenta
-            </a>
-          </div>
+      <!-- The closing plancha, and the one piece of this page that is a direct
+           trace of the reference rather than an adaptation of it.
 
-          <footer class="flex flex-col gap-2 border-t border-ink-800 pt-6">
-            <p class="text-xs leading-5 tracking-tight text-ink-400">{{disclaimer}}</p>
-          </footer>
+           Its banner ends the same way ours does — a claim, a line, one button
+           and no third thing to want — and then it hands the bottom of the
+           screen to a ribbon of words set in outline, drifting. Three lines,
+           the middle one against the other two, four hundred seconds for a full
+           pass. At that speed nothing is ever seen to move; what is seen is
+           that the page is alive. Which is the entire point, and why the words
+           are the account's verbs rather than a slogan: read as texture first,
+           read as meaning only if you stop. -->
+      <section class="marquee-section w-full bg-surface-strong">
+        <div
+          class="mx-auto flex w-full max-w-[62rem] flex-col items-center gap-8 px-6 pt-28 pb-16 text-center sm:pt-32"
+        >
+          <p class="text-lg leading-7 font-semibold text-on-strong">¡Abrir la tuya es gratis!</p>
+          <h2 class="marquee-section__title">
+            ¿Qué esperás para tener <em class="marquee-section__accent">toda tu plata</em> en un
+            solo lugar?
+          </h2>
+          <p class="text-base leading-6 font-medium text-on-strong-muted">{{closing}}</p>
+          <a href="#funciones" class="nx-button nx-button--outline mt-2">Abrir cuenta</a>
+        </div>
+
+        <div class="marquee" aria-hidden="true">
+          {{marqueeLines}}
         </div>
       </section>
     </main>
+
+    <!-- Their footer, structure for structure: a white banner with the mark on
+         the left and the app on the right, and under it the columns on a
+         half-step ground.
+
+         The destinations are not theirs. Their own columns carry two phone
+         numbers and a set of legal pages, and a concept demo that nobody at
+         that company authorised has no business sending a reader to a number
+         that does not answer — the shape of the footer is what is being quoted
+         here, not its contents. Which is also what the last line is for. -->
+    <footer class="w-full bg-surface">
+      <div class="footer-banner">
+        <a href="#" class="footer-banner__mark" aria-label="{{name}} — inicio">{{lockup}}
+        </a>
+        <div class="footer-banner__app">
+          <p>{{downloadLine}}</p>
+          <a href="#funciones" class="nx-button">{{downloadCta}}</a>
+        </div>
+      </div>
+
+      <div class="footer-content">
+        <ul class="footer-cols">
+          {{footerColumns}}
+          <li class="footer-col">
+            <p class="footer-col__title">Seguinos</p>
+            <ul class="footer-col__links footer-col__links--icons">
+              <li>
+                <a href="#" aria-label="Instagram">
+                  <svg
+                    class="social-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="5" />
+                    <circle cx="12" cy="12" r="4.2" />
+                    <circle cx="17.3" cy="6.7" r="1.1" fill="currentColor" stroke="none" />
+                  </svg>
+                </a>
+              </li>
+              <li>
+                <a href="#" aria-label="Facebook">
+                  <svg class="social-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      fill="currentColor"
+                      d="M13.9 21v-8h2.7l.4-3.1h-3.1V7.9c0-.9.25-1.4 1.55-1.4h1.65V3.7c-.29-.04-1.28-.13-2.43-.13-2.4 0-4.05 1.47-4.05 4.17V9.9H8v3.1h2.62V21Z"
+                    />
+                  </svg>
+                </a>
+              </li>
+              <li>
+                <a href="#" aria-label="X">
+                  <svg
+                    class="social-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4.5 4.5 19.5 19.5M19.5 4.5 4.5 19.5" />
+                  </svg>
+                </a>
+              </li>
+              <li>
+                <a href="#" aria-label="YouTube">
+                  <svg
+                    class="social-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    aria-hidden="true"
+                  >
+                    <rect x="2.5" y="5.5" width="19" height="13" rx="4" />
+                    <path d="M10.4 9.4 15.6 12l-5.2 2.6Z" fill="currentColor" stroke="none" />
+                  </svg>
+                </a>
+              </li>
+              <li>
+                <a href="#" aria-label="LinkedIn">
+                  <svg
+                    class="social-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="3.5" />
+                    <path d="M7.6 10.6V17M7.6 7.5v.01M11.6 17v-6.4M11.6 13.1c0-1.6 1-2.5 2.4-2.5s2.4.9 2.4 2.6V17" />
+                  </svg>
+                </a>
+              </li>
+              <li>
+                <a href="#" aria-label="Google Play">
+                  <svg
+                    class="social-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M5 3.4 18.6 12 5 20.6Z" />
+                  </svg>
+                </a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+
+        <p class="footer-disclaimer">{{disclaimer}}</p>
+      </div>
+    </footer>
   </body>
 </html>

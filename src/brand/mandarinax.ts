@@ -1,3 +1,4 @@
+import { CARD, PHONE, SHIELD, SPARK, STORE, TAP } from './glyphs'
 import type { Brand } from './types'
 
 const ACCENT = '#f37d06'
@@ -41,6 +42,103 @@ export const mandarinax: Brand = {
       'Descargá la app y ya tenés tu cuenta gratis para manejar pesos y dólares desde un solo lugar. Sin trámites, sin sucursal y sin letra chica.',
   },
 
+  // The same slots the other brand fills, answered in this one's voice and with
+  // this one's numbers. The figures are the three the page already stated under
+  // the pitch — cost, yield, services — plus the one it always implied, and
+  // they moved onto cards because the cards are where the page now says them.
+  page: {
+    nav: [
+      { label: 'Cuenta', href: '#funciones' },
+      { label: 'Préstamos', href: '#prestamos' },
+      { label: 'Beneficios', href: '#beneficios' },
+    ],
+    navCta: { label: 'Abrí tu cuenta', href: '#funciones' },
+
+    heroLines: ['Exprimí', 'cada peso', 'que tenés'],
+
+    // Five, on the same alternating grounds the other build uses, because the
+    // arrangement is the layout's and the figures are the brand's. The last one
+    // is a claim rather than a parent company: this brand does not have one,
+    // and a card that said it did would be the only untrue line on the page.
+    stats: [
+      {
+        value: '$0',
+        label: 'de apertura y de mantenimiento, siempre.',
+        tint: 'accent-soft',
+        motif: CARD,
+      },
+      {
+        value: '18%',
+        unit: 'TNA',
+        label: 'sobre el saldo, todos los días del año.',
+        tint: 'ground',
+        motif: SPARK,
+      },
+      {
+        value: '+4.000',
+        label: 'servicios para pagar desde la app.',
+        tint: 'accent',
+        motif: STORE,
+      },
+      { value: '24/7', label: 'para transferir, pagar y cobrar.', tint: 'ground', motif: PHONE },
+      {
+        value: 'Sin sucursales',
+        label: 'toda la cuenta vive en tu teléfono.',
+        tint: 'accent-soft',
+        motif: TAP,
+      },
+    ],
+
+    orbit: [
+      { icon: TAP, label: 'Pagá con el celular', tint: 'accent' },
+      { icon: SHIELD, label: 'Tu plata protegida', tint: 'accent' },
+      { icon: SPARK, label: 'Beneficios todos los días', tint: 'ground' },
+    ],
+
+    marquee: [
+      'PAGAR',
+      'TRANSFERIR',
+      'AHORRAR',
+      'INVERTIR',
+      'COBRAR',
+      'PRÉSTAMOS',
+      'RENDIMIENTOS',
+      'BENEFICIOS',
+    ],
+
+    download: { line: 'Descargá la app y exprimí cada peso', cta: 'Descargar app' },
+
+    footer: [
+      {
+        title: 'Queremos ayudarte',
+        links: [
+          { label: 'Contacto', href: '#' },
+          { label: 'Centro de seguridad', href: '#' },
+          { label: 'Preguntas frecuentes', href: '#' },
+          { label: 'Información al usuario financiero', href: '#' },
+        ],
+      },
+      {
+        title: 'Sobre MandarinaX',
+        links: [
+          { label: 'Quiénes somos', href: '#' },
+          { label: 'Sustentabilidad', href: '#' },
+          { label: 'Trabajá con nosotros', href: '#' },
+          { label: 'Prensa', href: '#' },
+        ],
+      },
+      {
+        title: 'Potenciá tu plata',
+        links: [
+          { label: 'Tarjeta de crédito', href: '#' },
+          { label: 'Billetera virtual', href: '#' },
+          { label: 'Préstamos online', href: '#' },
+          { label: 'Costos, comisiones y límites', href: '#' },
+        ],
+      },
+    ],
+  },
+
   palette: {
     accent: ACCENT,
     accentBright: '#fa9632',
@@ -55,6 +153,43 @@ export const mandarinax: Brand = {
       300: '#d6bebd',
       200: '#eddfde',
     },
+
+    // Read these as a restatement, not a new decision: every value is a step of
+    // the ramp above, chosen so the page it produces is the page this brand
+    // already had. The surface layer exists because the other brand's site is
+    // white; here it hands back the tinted near-black that was always there.
+    surface: {
+      page: INK_950,
+      soft: '#30100f',
+      strong: '#30100f',
+      on: '#fafafa',
+      onMuted: '#d6bebd',
+      onStrong: '#fafafa',
+      onStrongMuted: '#d6bebd',
+      line: '#471a18',
+      // A lifted step of the ramp rather than the page ground, so the figure
+      // cards stay dark and still read as four separate objects. See
+      // `tintBase` in `src/brand/types.ts`.
+      tintBase: '#4a1c18',
+      accentInk: ACCENT,
+      cta: ACCENT,
+      ctaBright: '#fa9632',
+      onCta: INK_950,
+    },
+  },
+
+  // The radii the landing was drawn at.
+  shape: { cta: '0.5rem', block: '1rem' },
+
+  font: {
+    stack: "'Rubik', ui-sans-serif, system-ui, -apple-system, sans-serif",
+    link:
+      '<link rel="preconnect" href="https://fonts.googleapis.com" />\n' +
+      '    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n' +
+      '    <link\n' +
+      '      href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap"\n' +
+      '      rel="stylesheet"\n' +
+      '    />',
   },
 
   card: {

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type Plugin } from 'vite'
+import { renderBlocks } from './src/brand/blocks'
 import { resolveBrand } from './src/brand/registry'
 import type { Brand } from './src/brand/types'
 
@@ -109,6 +110,8 @@ const extension = (name: string): string => name.slice(name.lastIndexOf('.') + 1
 function fill(html: string, brand: Brand): string {
   const values: Record<string, string> = {
     name: brand.name,
+    downloadLine: brand.page.download.line,
+    downloadCta: brand.page.download.cta,
     title: brand.title,
     description: brand.description,
     origin: brand.origin,
@@ -117,9 +120,17 @@ function fill(html: string, brand: Brand): string {
     disclaimer: brand.disclaimer,
     ...brand.copy,
   }
-  const filled = html
-    // Markup, so it is substituted before the escaping pass and never through it.
-    .replaceAll('{{lockup}}', brand.lockup)
+  // Markup, so these are substituted before the escaping pass and never
+  // through it. The blocks are the brand's LISTS — its navigation, its figures,
+  // its footer — rendered by `blocks.ts`, which escapes each value as it
+  // assembles them. See the note there on why that escaping is not shared.
+  const markup: Record<string, string> = {
+    lockup: brand.lockup,
+    fontLink: brand.font.link,
+    ...renderBlocks(brand),
+  }
+  const filled = Object.entries(markup)
+    .reduce((html, [key, value]) => html.replaceAll(`{{${key}}}`, value), html)
     .replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
       const value = values[key]
       if (value === undefined) throw new Error(`index.html asks for {{${key}}}, which no brand has.`)
@@ -149,15 +160,33 @@ function escape(value: string): string {
  * a second class or a second stylesheet anywhere.
  */
 function paint(html: string, brand: Brand): string {
-  const { accent, accentBright, ground, ink } = brand.palette
-  const declarations = [
+  const { accent, accentBright, ground, ink, surface } = brand.palette
+  const colours = [
     ['brand-accent', accent],
     ['brand-accent-bright', accentBright],
     ['brand-ground', ground],
     ...Object.entries(ink).map(([step, value]) => [`ink-${step}`, value] as const),
-  ]
-    .map(([token, value]) => `--color-${token}:${value}`)
-    .join(';')
+    ['surface', surface.page],
+    ['surface-soft', surface.soft],
+    ['surface-strong', surface.strong],
+    ['on-surface', surface.on],
+    ['on-surface-muted', surface.onMuted],
+    ['on-strong', surface.onStrong],
+    ['on-strong-muted', surface.onStrongMuted],
+    ['line', surface.line],
+    ['tint-base', surface.tintBase],
+    ['accent-ink', surface.accentInk],
+    ['cta', surface.cta],
+    ['cta-bright', surface.ctaBright],
+    ['on-cta', surface.onCta],
+  ].map(([token, value]) => `--color-${token}:${value}`)
+
+  const declarations = [
+    ...colours,
+    `--radius-cta:${brand.shape.cta}`,
+    `--radius-block:${brand.shape.block}`,
+    `--font-sans:${brand.font.stack}`,
+  ].join(';')
   return html.replace(
     '</head>',
     `  <style id="brand-palette">html:root{${declarations}}</style>\n  </head>`,

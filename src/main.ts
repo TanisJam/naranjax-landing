@@ -365,22 +365,22 @@ if (features) {
       const button = document.createElement('button')
       button.type = 'button'
       button.className =
-        'group flex w-full items-baseline gap-4 py-4 text-left transition hover:text-neutral-50 focus-visible:outline-2 focus-visible:outline-mx-orange'
+        'group flex w-full items-baseline gap-4 py-4 text-left transition hover:text-on-surface focus-visible:outline-2 focus-visible:outline-accent-ink'
 
       const eyebrow = document.createElement('span')
       eyebrow.className =
-        'w-24 shrink-0 text-xs leading-5 font-medium tracking-[0.15em] text-mx-orange uppercase'
+        'w-24 shrink-0 text-xs leading-5 font-medium tracking-[0.15em] text-accent-ink uppercase'
       eyebrow.textContent = spec.eyebrow
 
       const body = document.createElement('span')
       body.className = 'flex min-w-0 flex-col gap-1'
 
       const title = document.createElement('span')
-      title.className = 'text-base leading-6 font-medium text-neutral-50'
+      title.className = 'text-base leading-6 font-semibold text-on-surface'
       title.textContent = spec.title
 
       const summary = document.createElement('span')
-      summary.className = 'text-sm leading-5 text-ink-400'
+      summary.className = 'text-sm leading-5 text-on-surface-muted'
       summary.textContent = spec.summary
 
       body.append(title, summary)

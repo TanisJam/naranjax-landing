@@ -77,7 +77,7 @@ export class SpecsOverlay {
       ></div>
       <div class="pointer-events-none relative mx-auto flex h-full w-full max-w-5xl flex-col justify-end gap-7 px-6 pb-12 sm:pb-16">
         <div class="pointer-events-auto flex flex-col gap-2">
-          <p data-eyebrow class="text-xs leading-5 font-medium tracking-[0.2em] text-mx-orange uppercase"></p>
+          <p data-eyebrow class="text-xs leading-5 font-medium tracking-[0.2em] text-brand-accent uppercase"></p>
           <h2 id="layer-specs-title" class="text-3xl leading-tight font-semibold text-neutral-50 sm:text-4xl sm:leading-[3rem]"></h2>
           <p data-summary class="max-w-xl text-base leading-6 text-ink-300"></p>
         </div>

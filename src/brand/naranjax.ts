@@ -1,10 +1,42 @@
+import { CARD, PHONE, SHIELD, SPARK, STORE, TAP } from './glyphs'
 import { LOCKUP, MARK } from './isologo'
 import { isologoSvg, squareIcon } from './svg'
 import type { Brand } from './types'
 
-const ACCENT = '#ff5000'
+// Both of these are quoted from that company's own stylesheet rather than
+// sampled off an image now — see the note on `palette` below. The accent moved
+// by one unit in red when it stopped being a sample and became a quotation.
+const ACCENT = '#fe5000'
 const VIOLET = '#50007f'
 const INK_950 = '#190a22'
+
+/** The lilac their site lays behind an alternating block. */
+const SOFT = '#f2ecf6'
+
+/** The near-black they set body copy in. Not this page's ink — theirs. */
+const TEXT = '#252525'
+
+/**
+ * The face itself, off the licensee's own CDN. See `font` below for why.
+ *
+ * `swap` rather than `block`: these are .otf files at a few hundred kilobytes
+ * each on a third-party host, and a page that holds its text hostage to
+ * somebody else's server is a page that can be made blank by somebody else's
+ * outage. The fallback is metrically close enough that the swap is a change of
+ * texture rather than a reflow of the layout.
+ */
+const GIBSON = [
+  ['Gibson', 400, 'Gibson-Regular'],
+  ['Gibson', 500, 'Gibson-Medium'],
+  ['Gibson', 600, 'Gibson-SemiBold'],
+  ['Gibson', 900, 'Gibson-Heavy'],
+]
+  .map(
+    ([family, weight, file]) =>
+      `@font-face{font-family:'${family}';font-weight:${weight};font-style:normal;font-display:swap;` +
+      `src:url(https://static.naranjax.com/assets/fonts/${file}.otf) format('opentype')}`,
+  )
+  .join('')
 
 /**
  * Naranja X, as a concept demo.
@@ -36,18 +68,146 @@ export const naranjax: Brand = {
   shareImageAlt:
     'La tarjeta de crédito Naranja X sobre el fondo de la marca, bajo el claim «Qué lindo es poder».',
 
-  // Restored from this repository's own history, not rewritten. Before the
-  // MandarinaX rebrand this landing carried Naranja X's copy, taken from their
-  // site — "cuotitas fijas", "estar tranqui", "así de simple y fácil". That
-  // register is the brand as much as the violet is, and a demo of somebody's
-  // landing that speaks in a voice they never use is a demo of somebody else's.
+  // Taken from Naranja X's careers site, which is the one place the company
+  // writes at length in its own voice — and that voice is not the product
+  // voice. The app speaks to you ("sacalo desde la app"); careers speaks AS the
+  // company, in the first person plural, and leans on one figure of speech hard
+  // enough that it is worth naming: the anaphora. "Estamos acá para crear
+  // productos que sorprendan. Estamos acá para revolucionar la experiencia
+  // financiera." That repetition is the register, so a line here carries it.
+  //
+  // The claim above the fold does NOT change. "Qué lindo es poder" is the
+  // brand's own and it is a claim, not a paragraph; what changes underneath is
+  // who is talking. The figures — nine million people, the second most used app
+  // in the country, two friends and a cardboard card — are that site's own
+  // sentences, kept close because paraphrasing them is what would make this
+  // read like an imitation instead of a demo.
   copy: {
     headline: 'Qué lindo es poder',
-    lede: 'Manejá tu platita desde una sola app. Pagá, transferí, hacé rendir tus pesos y mucho más.',
+    lede: 'Más de 9 millones de personas nos eligen todos los días para transformar sus finanzas. Somos mucho más que una fintech: una plataforma para pagar, cobrar, ahorrar e invertir desde un solo lugar.',
     loans:
-      'Sacalo desde la app, se acredita al instante en tu cuenta y lo devolvés en cuotitas fijas. Ideal para cancelar esa deuda y estar tranqui.',
+      'Estamos acá para que pedir plata no sea un trámite. Lo sacás desde la app, se acredita al instante y lo devolvés en cuotitas fijas: sabés desde el primer día cuánto vas a pagar.',
     closing:
-      'Descargá la app y automáticamente tenés tu cuenta gratis para manejar tus pesos y dólares desde un solo lugar. Así de simple y fácil.',
+      'Nuestra historia empezó con dos amigos, una tarjeta de cartón y una forma diferente de hacer negocios: la calidez y la cercanía con cada cliente ante todo. Hoy nuestra app es la 2da más usada de la Argentina, y sigue siendo la misma idea.',
+  },
+
+  // Measured off their careers site rather than composed. The nav is three
+  // links and a filled pill; the claim is three short lines that arrive one
+  // after another; the figures are the ones that site states about itself; the
+  // ribbon is a handful of words set in outline. What changes here is only
+  // which words — the arrangement is in `index.html` and is the same page for
+  // either brand.
+  page: {
+    nav: [
+      { label: 'Cuenta', href: '#funciones' },
+      { label: 'Préstamos', href: '#prestamos' },
+      { label: 'Beneficios', href: '#beneficios' },
+    ],
+    navCta: { label: 'Abrí tu cuenta', href: '#funciones' },
+
+    // Their own opening, kept at its own cadence: an interjection, a verb, and
+    // the promise. "¡Ey!, vení a impactar en millones de personas" is the
+    // careers hero, and this is the same sentence pointed at the account.
+    heroLines: ['¡Ey!, vení a hacer', 'todo con tu plata', 'desde un solo lugar'],
+
+    // The four figures that site publishes about itself, kept as it writes
+    // them. Paraphrasing a number is how a demo starts sounding like an
+    // imitation instead of a quotation.
+    // Five, in their order, in their words, on their grounds — peach, violet,
+    // orange, violet, peach. The one thing not taken literally is the decimal
+    // point in «+9.5»: this page is set in Spanish, where the separator is a
+    // comma, and it is also what lets the figure be counted at all — see the
+    // parser in `PageMotion`, which reads a dot as a thousands mark because on
+    // this same row `+4.000` means four thousand.
+    stats: [
+      {
+        value: '+9,5',
+        unit: 'millones',
+        label: 'de clientes.',
+        tint: 'accent-soft',
+        motif: TAP,
+      },
+      {
+        value: 'La segunda',
+        label: 'app financiera más usada en Argentina.',
+        tint: 'ground',
+        motif: PHONE,
+      },
+      {
+        value: 'Principal emisor',
+        label: 'de tarjetas de crédito en Argentina.',
+        tint: 'accent',
+        motif: CARD,
+      },
+      {
+        value: '+150',
+        unit: 'mil',
+        label: 'comercios utilizan nuestras soluciones de cobro-pago.',
+        tint: 'ground',
+        motif: STORE,
+      },
+      // Their fifth card is a logo and this one is a line of type. See `mark`
+      // in `types.ts`: whose company this is belongs in the quotation, and
+      // whose logotype it is does not.
+      {
+        value: 'Somos parte del',
+        mark: 'Grupo Galicia',
+        tint: 'accent-soft',
+        motif: PHONE,
+      },
+    ],
+
+    orbit: [
+      { icon: TAP, label: 'Pagá con el celular', tint: 'accent' },
+      { icon: SHIELD, label: 'Tu plata protegida', tint: 'accent' },
+      { icon: SPARK, label: 'Beneficios todos los días', tint: 'ground' },
+    ],
+
+    marquee: [
+      'PAGAR',
+      'TRANSFERIR',
+      'AHORRAR',
+      'INVERTIR',
+      'COBRAR',
+      'PRÉSTAMOS',
+      'RENDIMIENTOS',
+      'BENEFICIOS',
+    ],
+
+    download: { line: 'Descargá la app y disfrutá los beneficios', cta: 'Descargar app' },
+
+    // Their own three column headings. The destinations are not theirs and are
+    // not pretending to be: this build carries a real company's mark and has no
+    // business handing anyone a phone number that nobody answers.
+    footer: [
+      {
+        title: 'Queremos ayudarte',
+        links: [
+          { label: 'Contacto', href: '#' },
+          { label: 'Centro de seguridad', href: '#' },
+          { label: 'Preguntas frecuentes', href: '#' },
+          { label: 'Información al usuario financiero', href: '#' },
+        ],
+      },
+      {
+        title: 'Sobre Naranja X',
+        links: [
+          { label: 'Somos Naranja X', href: '#' },
+          { label: 'Sustentabilidad', href: '#' },
+          { label: 'Trabajá con nosotros', href: '#' },
+          { label: 'Inversores', href: '#' },
+        ],
+      },
+      {
+        title: 'Potenciá tu plata',
+        links: [
+          { label: 'Tarjeta de crédito', href: '#' },
+          { label: 'Billetera virtual', href: '#' },
+          { label: 'Préstamos online', href: '#' },
+          { label: 'Costos, comisiones y límites', href: '#' },
+        ],
+      },
+    ],
   },
 
   palette: {
@@ -64,6 +224,77 @@ export const naranjax: Brand = {
       300: '#cdbdd6',
       200: '#e8deed',
     },
+
+    // The page below the hero, and this is the part that is not a rotation of
+    // the other brand's. Naranja X's own site is white with violet planchas laid
+    // into it, so this build is too, and the ramp above stops at the hero.
+    //
+    // `accentInk` is the violet rather than the orange, and that is their call
+    // as much as ours: their stylesheet sets `--company-link-color` to this
+    // exact violet and keeps the orange for graphics. Measured, the reason is
+    // plain — the orange is 3.3:1 on white, which is a mark and not a word.
+    surface: {
+      page: '#ffffff',
+      soft: SOFT,
+      strong: VIOLET,
+      on: TEXT,
+      // Their `--company-secondary-text-color-on-white`, to the digit.
+      onMuted: '#4d4d4d',
+      onStrong: '#ffffff',
+      onStrongMuted: '#e8deed',
+      // The lilac taken one step down, so a hairline on white is a hairline and
+      // not a rule — there is no grey anywhere on that site and none here.
+      line: '#e2d6ea',
+      // White, because their page is: the four figure tints are this brand's
+      // two inks mixed into it at the fractions their own cards measure.
+      tintBase: '#ffffff',
+      accentInk: VIOLET,
+      cta: VIOLET,
+      // Their own `--company-button-bg-light-5-color`.
+      ctaBright: '#600098',
+      onCta: '#ffffff',
+    },
+  },
+
+  // Both measured off their careers site rather than inferred from a config
+  // variable, and the first one moved because of it. The pill was taken from a
+  // `--company-border-radius: 40px` on their Teamtailor job board, which is a
+  // different site; their own stylesheet sets `.nx-button` to fifteen pixels on
+  // a forty-pixel button, and the button in the screenshot measures a
+  // twenty-pixel corner at a scale where its height measures forty. So: not a
+  // pill. Cards and panels round to thirty-three.
+  shape: { cta: '15px', block: '2.0625rem' },
+
+  // Gibson, which is the face their site actually sets — and after the colour
+  // it is the loudest thing on the page. Their stylesheet points at four .otf
+  // files on their own CDN and those answer 200 with `access-control-allow-
+  // origin: *`, so this build asks for them there. It is a concept demo shown
+  // to that company, not a product: the face is licensed to Canada Type and
+  // this is a hotlink to the licensee's own server, which is fine for what this
+  // is and would not be fine for anything shipped.
+  //
+  // Figtree stays in the stack behind it, and that is not politeness. If the
+  // CDN goes away, or if this has to stop borrowing the face, the page falls
+  // back to a humanist-geometric with the same tall x-height instead of to
+  // whatever the host resolves — and taking Gibson out again is deleting one
+  // name from one line.
+  //
+  // Declared as ONE family across four weights rather than as four families
+  // named for their weight, which is how their own stylesheet does it. Four
+  // families means every rule has to name the right one by hand and a `600`
+  // anywhere silently gets the regular; one family means `font-semibold` picks
+  // the SemiBold because that is what a weight is for.
+  font: {
+    stack: "'Gibson', 'Figtree', ui-sans-serif, system-ui, -apple-system, sans-serif",
+    link:
+      '<link rel="preconnect" href="https://static.naranjax.com" crossorigin />\n' +
+      '    <link rel="preconnect" href="https://fonts.googleapis.com" />\n' +
+      '    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />\n' +
+      '    <link\n' +
+      '      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap"\n' +
+      '      rel="stylesheet"\n' +
+      '    />\n' +
+      `    <style>${GIBSON}</style>`,
   },
 
   card: {
@@ -83,14 +314,19 @@ export const naranjax: Brand = {
     },
   },
 
-  // Reversed, because the page is violet-black. The published lockup needs a
-  // white ground: its violet arm drawn on this one is a hole in the X. So the
-  // letters go white and the X goes solid orange, which is the reversal the
-  // brand itself uses on dark — and the split gets its say on the card.
+  // The published mark, at last, in its own two inks — and the reason it can be
+  // is that the header moved. It used to float over the violet-black hero,
+  // where the real lockup's violet arm is a hole in the X, so it was reversed:
+  // white letters, solid orange X. The header is now the white bar that site
+  // actually has, and on white the mark needs no reversal at all. Orange
+  // letters, orange X, violet counter overprinted — which is the logo, not an
+  // adaptation of it.
+  //
+  // Twenty-four pixels tall, from their `.logo-img { height: 24px }`.
   lockup: isologoSvg(
     LOCKUP,
-    { letters: '#fafafa', mark: ACCENT },
-    { title: 'Naranja X', attrs: 'class="h-7 w-auto"' },
+    { letters: ACCENT, mark: ACCENT, counter: VIOLET },
+    { title: 'Naranja X', attrs: 'class="h-6 w-auto"' },
   ),
 
   // The same construction the other brand's icon uses: the accent as the tile,

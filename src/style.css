@@ -53,6 +53,35 @@
   --color-ink-400: #ba9897;
   --color-ink-300: #d6bebd;
   --color-ink-200: #eddfde;
+
+  /* The page, named by role. The ramp above is what the HERO is built on — the
+     card, its light and the layer overlay are dark in both builds and have to
+     be, because a card photographed against white is a different photograph.
+     Everything below the hero reads these instead, and that is the whole reason
+     one markup can be a near-black page in one build and a white one in the
+     other. See `Surface` in `src/brand/types.ts`. */
+  --color-surface: #220b0a;
+  --color-surface-soft: #30100f;
+  --color-surface-strong: #30100f;
+  --color-on-surface: #fafafa;
+  --color-on-surface-muted: #d6bebd;
+  --color-on-strong: #fafafa;
+  --color-on-strong-muted: #d6bebd;
+  --color-line: #471a18;
+  /* What the figure cards' four tints are mixed into — white on the light
+     build, a lifted step of the ramp here. See `tintBase` in `types.ts`. */
+  --color-tint-base: #4a1c18;
+  --color-accent-ink: #f37d06;
+  --color-cta: #f37d06;
+  --color-cta-bright: #fa9632;
+  --color-on-cta: #220b0a;
+
+  /* Two radii and no more. A brand that rounds to 40px and one that rounds to 8
+     are not the same page with a different palette, so the number travels with
+     the brand — but only these two, because a third would be a layout knob and
+     layout is not on the brand layer. */
+  --radius-cta: 0.5rem;
+  --radius-block: 1rem;
 }
 
 /* The backdrop transition lives HERE, on the bare element, and not on the
@@ -79,6 +108,32 @@
      the copy below every time the card is turned. */
   user-select: none;
   transition: background-color var(--framed-out, 420ms) ease;
+}
+
+/* HOW HIGH THE CARD SITS, AND WHAT BECOMES OF IT ON THE WAY OUT.
+
+   Two offsets on one property, and they are different in kind.
+
+   `--hero-lift` is layout. The artwork is drawn in the middle of a canvas that
+   is exactly the viewport, and the bottom third of that viewport is spoken for
+   by the claim — so the middle of the canvas is not the middle of the room the
+   card actually has. Measured at 1440x900 the gap above the card was 148px
+   against 270px below it; a fourteenth of the hero takes those to about 85 and
+   335, which is a card sitting above its own promise rather than on it, and it
+   is the room the claim needs when it comes up to take this space.
+
+   `--hero-exit` is the scroll, written by `PageMotion`, and it is zero until
+   the reader has left the first tenth of the hero. See `driveHeroWithScroll`.
+
+   NOT applied under `[data-framed]`, which is the swap that takes this canvas
+   fullscreen. That swap measures the canvas before and after and compensates
+   the artwork by the difference, so an offset here is simply part of what gets
+   measured and the swap stays the no-op it was built to be — but only as long
+   as it is gone by the time the canvas IS the viewport, because a fullscreen
+   canvas is already where it needs to be. Instant rather than transitioned, for
+   the same reason: the compensation is computed for the frame of the swap. */
+#sheets-stage:not([data-framed]) {
+  translate: 0 calc(var(--hero-lift, -7%) + var(--hero-exit, 0px));
 }
 
 /* Written by `CardTumble` and only while the card is shut, because that is the
@@ -276,4 +331,1020 @@
 
 #sheets-stage[data-framed='closing']::after {
   animation: stage-grain-out var(--framed-out, 420ms) ease both;
+}
+
+/* ---------------------------------------------------------------------------
+   THE PAGE'S OWN COMPONENTS.
+
+   Everything above this line belongs to the card: the stage, the frame it
+   opens into, the grain over the render. Everything below belongs to the page
+   around it, and all of it is a trace of Naranja X's careers site — the bar,
+   the claim that arrives in three lines, the figures on tinted cards, the
+   dashed ring, the drifting ribbon, the footer.
+
+   The numbers are measurements and not preferences. A 64px bar, a 1120px
+   measure, links at a 70px gap, a 15px corner on a 40px button, 80px outline
+   type crossing the screen in four hundred seconds: every one of those was
+   read off that site's own stylesheet. Where a value is a token instead, it is
+   because the OTHER brand has to answer it too — the same markup is a white
+   page with violet planchas in one build and a tinted near-black in the other,
+   and the only thing that decides which is `src/brand/`.
+
+   Written as classes rather than as utilities in the markup because each of
+   these is a component with states, and a state on a utility string is a
+   second utility string somewhere else that has to be kept in step.
+   --------------------------------------------------------------------------- */
+
+/* The bar. Fixed rather than sticky: sticky inside a flow that starts with a
+   full-viewport hero has nothing to stick to until the hero has already gone
+   past, which is the one moment the bar has to be there. */
+.site-header {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 20;
+  height: 64px;
+  padding-inline: 16px;
+  background-color: var(--color-surface);
+  /* The transition is on `top` and not on a transform, because that is what
+     the reference animates and because a transform would take the bar's own
+     stacking context with it for no gain. */
+  transition: top 200ms ease-in-out, box-shadow 240ms ease;
+}
+
+/* Once the page has moved under it, the bar stops being part of the hero and
+   starts being a thing on top of the page — so it gets the edge that says so.
+   Written by `PageMotion` at the same 96 pixels that decide whether it is
+   allowed to hide at all, because they are the same judgement: below that the
+   reader has not left the top of the page. */
+.site-header[data-scrolled='true'] {
+  box-shadow: 0 1px 0 var(--color-line),
+    0 10px 24px color-mix(in srgb, var(--color-ink-950) 6%, transparent);
+}
+
+/* The mark answers the pointer too, and by the smallest amount on the page: it
+   is a link to the top of a page the reader is usually already on. */
+.site-header__mark {
+  transition: scale 200ms ease;
+}
+
+.site-header__mark:hover {
+  scale: 1.03;
+}
+
+/* Written by `PageMotion` on the way down and cleared on the way up. A header
+   that only ever hides would be a header the reader cannot get back without
+   scrolling to the top; one that hides going down and returns going up is the
+   one gesture everybody already knows. */
+.site-header[data-hidden='true'] {
+  top: -64px;
+}
+
+.site-header__inner {
+  display: flex;
+  height: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.site-header__mark {
+  display: flex;
+  align-items: center;
+}
+
+.site-header__nav {
+  display: none;
+  align-items: center;
+  height: 100%;
+  gap: 70px;
+}
+
+/* The links go at the first width that holds them at their own gap. Seventy
+   pixels between three links is a measurement off that site and it is not a
+   value worth defending on a phone, where the same three links at any gap are
+   a stack — so below this they are simply not shown, and the pill that follows
+   them carries the whole header. Which is what their own bar does. */
+@media (min-width: 900px) {
+  .site-header__nav {
+    display: flex;
+  }
+}
+
+.nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  font-weight: 500;
+  color: var(--color-on-surface);
+  text-decoration: none;
+  padding-top: 2px;
+  transition: color 160ms ease;
+}
+
+/* The underline is a rule that grows out of the middle of the word rather than
+   a border switched on. Same two pixels in the same place either way — what the
+   growth buys is that the link answers the pointer with a movement, and a
+   movement is read as an answer where a state change is read as a fact. It was
+   a transparent border for a reason that still holds, and this keeps it: the
+   line is always in the layout at its full width and only its scale changes, so
+   arriving at a link still costs the bar no reflow. */
+.nav-link::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  background-color: currentColor;
+  scale: 0 1;
+  transition: scale 200ms ease;
+}
+
+.nav-link:hover,
+.nav-link:focus-visible {
+  color: var(--color-accent-ink);
+}
+
+.nav-link:hover::after,
+.nav-link:focus-visible::after {
+  scale: 1 1;
+}
+
+/* The button, at their own dimensions: a 40px pill-that-is-not-a-pill with a
+   two-pixel border in its own fill colour, so the outline variants below are
+   the same object with the border kept and the fill taken away. */
+.nx-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 10px 26px;
+  border: 2px solid var(--color-cta);
+  border-radius: var(--radius-cta);
+  background-color: var(--color-cta);
+  color: var(--color-on-cta);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: box-shadow 200ms ease-in-out, background-color 200ms ease-in-out,
+    translate 200ms ease-in-out;
+}
+
+.nx-button:hover {
+  background-color: var(--color-cta-bright);
+  border-color: var(--color-cta-bright);
+  /* Their `.shadowed:hover`, in the brand's own colour at half alpha. */
+  box-shadow: 0 3px 6px color-mix(in srgb, var(--color-cta) 50%, transparent);
+  /* One pixel. It is the difference between a shadow that appeared and a button
+     that came up to meet the pointer, and it is the whole reason the shadow was
+     worth having: three pixels of offset under an object that has not moved is
+     a drawing of a shadow. */
+  translate: 0 -1px;
+}
+
+/* And back down under the press, faster than it came up. A button that stays
+   raised while it is being held is a button that did not notice. */
+.nx-button:active {
+  translate: 0 1px;
+  box-shadow: none;
+  transition-duration: 60ms;
+}
+
+/* On the page ground: the same shape, stated in line rather than in fill. */
+.nx-button--ghost {
+  background-color: transparent;
+  border-color: var(--color-line);
+  color: var(--color-on-surface);
+}
+
+.nx-button--ghost:hover {
+  background-color: var(--color-surface-soft);
+  border-color: var(--color-line);
+  box-shadow: none;
+}
+
+/* On the brand's plancha, where the fill is already the ground: their
+   `.white-outline`, which keeps the violet and draws the edge in white. */
+.nx-button--outline {
+  background-color: transparent;
+  border-color: var(--color-on-strong);
+  color: var(--color-on-strong);
+}
+
+.nx-button--outline:hover {
+  background-color: color-mix(in srgb, var(--color-on-strong) 12%, transparent);
+  border-color: var(--color-on-strong);
+  box-shadow: none;
+}
+
+/* THE CLAIM UNDER THE CARD.
+
+   Laid on the stage and taking no pointer, so the hero stays one click target
+   the size of the screen — anything that shrank the canvas to make room would
+   be paying for a headline with the fullscreen-swap repair. See the note in
+   `index.html`.
+
+   UNDER rather than over, and that is a measurement rather than a taste. The
+   reference centres its claim because there is nothing behind it but video;
+   here the card sits from about a quarter of the viewport to two thirds of it,
+   and a claim centred on that is a claim printed across the product. Measured
+   at 1440×900 the room above the card is 148px and the room below it is 270px,
+   so the type goes below — where three lines fit at a size worth setting them
+   at, and where the card reads as floating above its own promise instead of
+   being labelled.
+
+   The gradient is what makes that legible without a scrim: the render is
+   darkest at the bottom of the stage anyway, and eight per cent of the page's
+   own near-black is enough to hold white type without anyone seeing a band. */
+.hero-claim {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.06em;
+  padding: 48px 24px 56px;
+  pointer-events: none;
+  text-align: center;
+  /* Both written by `driveHeroWithScroll` and both zero at rest. The claim
+     rises into the space the card is leaving, at a fraction of the speed the
+     card leaves at, and goes out only once it has crossed the room. */
+  translate: 0 var(--claim-rise, 0px);
+  opacity: var(--claim-fade, 1);
+  color: var(--color-on-strong);
+  text-shadow: 0 2px 28px color-mix(in srgb, var(--color-ink-950) 50%, transparent);
+}
+
+/* The gradient that holds the type belongs to the HERO, not to the type.
+
+   It was on the claim, which was right until the claim started moving: a box
+   with a gradient in it that travels up the screen takes the gradient with it
+   and leaves a hard horizontal edge where the darkening stops, halfway up a
+   flat violet ground. As a layer of the section instead, the claim slides
+   across it and the ground under the whole hero stays one piece.
+
+   `::before` rather than `::after`, so it paints under the canvas as well as
+   under the type. The canvas is transparent and the card never reaches down
+   here, so the only thing this darkens is the ground — which is all it was ever
+   for. */
+#hero::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: min(46%, 340px);
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--color-ink-950) 8%, transparent)
+  );
+}
+
+.hero-line {
+  display: block;
+  font-weight: 600;
+  font-size: clamp(24px, 4.4vw, 46px);
+  line-height: 1.14;
+  opacity: 0;
+  animation: hero-line-in 500ms ease-in-out forwards;
+}
+
+.hero-line:nth-child(2) {
+  animation-delay: 200ms;
+}
+
+.hero-line:nth-child(3) {
+  animation-delay: 400ms;
+}
+
+@keyframes hero-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(50px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Display type. Their section titles are set in the brand colour at a size
+   that clamps against the viewport rather than stepping at breakpoints, which
+   is why one declaration covers a phone and a desktop. */
+.claim {
+  font-weight: 700;
+  font-size: clamp(36px, 7vw, 60px);
+  line-height: clamp(44px, 8vw, 68px);
+  color: var(--color-accent-ink);
+}
+
+.section-title {
+  font-weight: 700;
+  font-size: clamp(28px, 4.4vw, 40px);
+  line-height: 1.18;
+  color: var(--color-accent-ink);
+}
+
+.lede {
+  font-size: clamp(18px, 2.4vw, 22px);
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--color-on-surface-muted);
+}
+
+/* THE FIGURES.
+
+   Four cards, four grounds, and not one new colour: each tint is one of the
+   brand's two inks mixed into white by a fixed amount. The four amounts were
+   read off the reference — a peach at about a sixth of the orange, a coral at
+   about four tenths, a lilac at a sixth of the violet, and the violet itself
+   lightened just enough to sit beside them without swallowing the row.
+
+   `srgb` rather than a perceptual space on purpose: these were matched against
+   sampled pixels, and sRGB is the space those pixels were sampled in. */
+.stat-row {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Five of them, and five is the count that decides this row: it does not halve,
+   it does not third, and the two-column phone layout leaves one over. That last
+   one takes the full width rather than sitting in a half-empty row — a card on
+   its own beside a gap reads as something that failed to load. */
+.stat-row > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 1024px) {
+  .stat-row {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 20px;
+  }
+
+  .stat-row > :last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}
+
+/* Upright, flush, and taller than they are wide. All three are the reference's:
+   its row is five portrait panels in a line, and what keeps them from reading
+   as a table is the alternating ground and the drawing in each corner rather
+   than any lean. `isolation` is what lets that drawing sit UNDER the type — an
+   absolutely positioned child paints over in-flow text whatever the markup
+   order, so the card becomes its own stacking context and the motif goes into
+   the layer behind the words and in front of the card's own colour. */
+.stat-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 250px;
+  padding: 26px 22px;
+  border-radius: var(--radius-block);
+  transition: translate 260ms ease-out, box-shadow 260ms ease-out;
+}
+
+@media (min-width: 1024px) {
+  .stat-card {
+    min-height: 380px;
+  }
+}
+
+/* Picked up under the pointer. The lift and the shadow are one gesture — a card
+   that rises without its shadow growing is a card that got bigger, not one that
+   came off the page. */
+.stat-card:hover {
+  translate: 0 -6px;
+  box-shadow: 0 18px 34px color-mix(in srgb, var(--color-ink-950) 16%, transparent);
+}
+
+.stat-card--accent-soft {
+  background-color: color-mix(in srgb, var(--color-brand-accent) 18%, var(--color-tint-base));
+  color: var(--color-on-surface);
+}
+
+/* The orange at full strength, which is what the reference prints this card at
+   and which this one used to hold back to 46% so white type could sit on it.
+   The type is what changed, not the ink: their card sets its sentence in white
+   on that orange and measures about 3.4:1, which is under what body copy needs
+   at any weight, so this one keeps the near-black the other light cards use and
+   measures 5.6:1 on the same ground. The card the reader sees is the reference's
+   card; the sentence on it is one they can read. */
+.stat-card--accent {
+  background-color: var(--color-brand-accent);
+  /* The darkest step of the brand's own ramp rather than the page's text
+     colour, because this is the one card whose ground does not follow the page:
+     an accent is a bright colour in both of these brands by definition, and one
+     of them writes its pages in near-white. Measured, this is 4.6:1 in the
+     violet build and 11:1 in the other; the page's own ink would have been
+     2.6:1 — white type on a bright orange, which is the reference's own choice
+     and the one thing on this card that cannot be copied. */
+  color: var(--color-ink-950);
+}
+
+.stat-card--ground-soft {
+  background-color: color-mix(in srgb, var(--color-brand-ground) 18%, var(--color-tint-base));
+  color: var(--color-on-surface);
+}
+
+.stat-card--ground {
+  background-color: color-mix(in srgb, var(--color-brand-ground) 82%, var(--color-tint-base));
+  color: var(--color-on-strong);
+}
+
+/* The number is the shout and the unit rides small beside it — which is how
+   the reference sets every one of these, and the reason `Stat` is three fields
+   instead of a sentence.
+
+   The figure takes the brand's ink and the sentence under it does not, which is
+   the reference's own split. Theirs prints the sentence in white on the two
+   strongest tints and that lands at about two to one, so this one keeps the
+   violet there instead: on the coral it measures 7:1 and it is the same colour
+   the rest of the page titles are set in. The card that IS the ink inherits
+   white from its own rule below. */
+.stat-card__value {
+  font-weight: 700;
+  /* Smaller than it was, because the row went from four columns to five: the
+     figure now has about 190 pixels to hold «PRINCIPAL» in, and a word wider
+     than its card is a word with its last letter cut off — the card clips, so
+     nothing about that failure is soft. `break-word` is the net under the
+     measurement: a longer word in some future brand breaks rather than
+     disappears. */
+  font-size: clamp(24px, 2.1vw, 30px);
+  overflow-wrap: break-word;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  /* The shout is set in caps on that row — «LA SEGUNDA», «PRINCIPAL EMISOR» —
+     and it is done here rather than in the copy so the content stays a sentence
+     somebody can read out and the typography stays in the stylesheet. */
+  text-transform: uppercase;
+  color: var(--color-accent-ink);
+}
+
+/* The two cards that ARE an ink take their figure from the card rather than
+   from the palette. On a lightened tint the accent ink is a second colour on a
+   ground made of the first, which is the contrast the row is built on — but a
+   card printed at the ink's own full strength has no room for that ink on top
+   of it, and one of these two brands sets its accent ink to the accent itself,
+   where the figure disappears completely. Inheriting is the only rule that is
+   right for both: whatever a brand chose to write on its own strongest ground
+   is what the number is set in. */
+.stat-card--ground .stat-card__value,
+.stat-card--accent .stat-card__value {
+  color: inherit;
+}
+
+/* Tabular figures WHILE THE NUMBER IS COUNTING, and never after: the counter
+   drops this attribute on its last frame. A count from zero to four thousand
+   redraws these digits sixty times a second, and in proportional figures a 1 is
+   narrower than a 7 — which is a number that shivers for a second and then
+   stops. The state that is actually read keeps the figures the typeface was
+   drawn with. A reader without the bundle keeps the attribute and the tabular
+   figures with it, which costs a static number nothing. */
+[data-count] {
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card__unit {
+  font-size: 0.46em;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.stat-card__label {
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* The last card in the row says who the company belongs to and then prints the
+   name. Set like a name — one size down from the shout, in the other ink, and
+   never below the size at which bold type is allowed to be this colour on this
+   ground. See `mark` in `src/brand/types.ts` for why it is type and not a
+   logotype. */
+.stat-card__mark {
+  font-size: clamp(20px, 1.8vw, 24px);
+  line-height: 1.2;
+  font-weight: 700;
+  /* The accent taken two thirds of the way toward the ramp's darkest step. The
+     reference prints this name in the orange itself, which on its own peach
+     card measures 2.65:1 — under the threshold for type of any size. Deepened
+     it measures 4.6:1, and it is still unmistakably the orange: this card is
+     the one place on the page where the brand's other ink carries a whole line,
+     and giving it up would have been giving up the card. */
+  color: color-mix(in srgb, var(--color-brand-accent) 68%, var(--color-ink-950));
+}
+
+/* The drawing in the corner, at a sixth of the ink and bled off two edges so it
+   reads as a picture the card was cropped from rather than as an icon somebody
+   placed. `currentColor`, so it is white on the violet cards and near-black on
+   the peach ones without a second rule. */
+.stat-card__motif {
+  position: absolute;
+  right: -7%;
+  bottom: -5%;
+  z-index: -1;
+  width: 54%;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.stat-card__motif svg {
+  width: 100%;
+  height: auto;
+}
+
+/* THE RING.
+
+   A dashed circle with discs on it, turning slowly enough that it is never
+   caught moving. The badges ride the rotation and each glyph runs the same
+   rotation backwards, which is the only way a drawing survives being put on a
+   wheel — otherwise the icons arrive upside down at the halfway point.
+
+   `aspect-ratio` rather than a height, so the circle is a circle at every
+   width without a second media query. */
+.orbit {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  margin-inline: auto;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+.orbit__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px dashed color-mix(in srgb, var(--color-accent-ink) 55%, transparent);
+  animation: orbit-turn 90s linear infinite;
+}
+
+/* A FULL TURN FROM WHEREVER THE ELEMENT ALREADY IS, which is not what this
+   keyframe used to say.
+
+   It said `rotate: 360deg`, and a `to`-only keyframe takes its `from` from the
+   element's own value — which for a badge is its place on the circle. So a
+   badge parked at -58deg travelled 418 degrees in the ninety seconds, one at
+   38deg travelled 322, and one at 128deg travelled 232: three different angular
+   speeds converging on the same point at the end of every cycle. The discs
+   caught each other up and overlapped, which is exactly what it looked like.
+   The ring itself has no `--angle` and falls through to the same 360 it always
+   turned, so one keyframe still serves both. */
+@keyframes orbit-turn {
+  to {
+    rotate: calc(var(--angle, 0deg) + 360deg);
+  }
+}
+
+/* The mark at the centre, on the page's own ground rather than on the brand's:
+   this tile has to hold a lockup in either build, and one of those lockups is
+   printed in the brand's colours. A violet tile under a violet counter is a
+   hole in the X. */
+.orbit__core {
+  display: grid;
+  place-items: center;
+  width: 62%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid var(--color-line);
+  background-color: var(--color-surface);
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--color-ink-950) 12%, transparent);
+}
+
+.orbit__core svg {
+  width: 54%;
+  height: auto;
+}
+
+/* Placed by rotating the whole arm and then pushing the badge out along it —
+   which is one transform per badge and no trigonometry in the markup. The
+   glyph then takes the rotation back off. */
+.orbit-badge {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  rotate: var(--angle, 0deg);
+  animation: orbit-turn 90s linear infinite;
+  pointer-events: none;
+}
+
+.orbit-badge__glyph {
+  display: grid;
+  place-items: center;
+  width: clamp(56px, 14%, 74px);
+  aspect-ratio: 1;
+  translate: 0 -50%;
+  rotate: calc(-1 * var(--angle, 0deg));
+  border-radius: 50%;
+  color: white;
+  animation: orbit-counterturn 90s linear infinite;
+}
+
+@keyframes orbit-counterturn {
+  to {
+    rotate: calc(-1 * var(--angle, 0deg) - 360deg);
+  }
+}
+
+.orbit-badge__glyph svg {
+  width: 56%;
+  height: auto;
+}
+
+.orbit-badge--accent .orbit-badge__glyph {
+  background-color: var(--color-brand-accent);
+}
+
+.orbit-badge--ground .orbit-badge__glyph {
+  background-color: var(--color-brand-ground);
+}
+
+/* The benefits, in a block rather than on the page. Their site closes every
+   list like this: a rounded panel of the half-step ground sitting on the page
+   ground, which is what the block radius was worth having for. */
+.benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 40px 28px;
+  border-radius: var(--radius-block);
+  background-color: var(--color-surface-soft);
+}
+
+@media (min-width: 640px) {
+  .benefits {
+    padding: 48px;
+  }
+}
+
+.benefits__list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 44rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 500;
+  color: var(--color-on-surface-muted);
+}
+
+.benefits__item {
+  display: flex;
+  gap: 12px;
+}
+
+.benefits__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 8px;
+  border-radius: 9999px;
+  background-color: var(--color-brand-accent);
+}
+
+/* THE RIBBON.
+
+   Outline type at eighty pixels with a soft bloom behind it, three lines, the
+   middle one running the other way, four hundred seconds for a pass. Nothing
+   about those numbers is negotiable — they are the reference's, and at any
+   faster speed the whole thing stops being weather and starts being a
+   banner. */
+.marquee-section {
+  position: relative;
+  overflow: hidden;
+}
+
+.marquee-section__title {
+  font-weight: 700;
+  font-size: clamp(32px, 5.2vw, 56px);
+  line-height: 1.16;
+  color: var(--color-on-strong);
+}
+
+/* The one word the sentence turns on, in the other ink. Their own headline
+   does this and it is the only place on the page where the orange is asked to
+   carry a word — which it can, here, because the ground is the violet and not
+   the white. */
+.marquee-section__accent {
+  font-style: normal;
+  color: var(--color-brand-accent);
+}
+
+.marquee {
+  padding-block: 16px;
+  overflow: hidden;
+  user-select: none;
+}
+
+.marquee__line {
+  display: block;
+  width: fit-content;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: clamp(40px, 9vw, 80px);
+  line-height: 1.12;
+  text-transform: uppercase;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--color-on-strong);
+  text-shadow: 0 0 44px color-mix(in srgb, var(--color-on-strong) 30%, transparent);
+  animation: marquee-drift 400s linear infinite;
+}
+
+.marquee__line--reverse {
+  animation-name: marquee-drift-reverse;
+}
+
+/* Half of its own width, because each line is its list laid down twice: at the
+   end of the pass the second copy is exactly where the first one started and
+   the loop has no seam. */
+@keyframes marquee-drift {
+  from {
+    transform: translateX(-50%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes marquee-drift-reverse {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* THE FOOTER. Banner on the page ground, columns on the half-step. */
+.footer-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding: 64px 32px;
+}
+
+@media (min-width: 768px) {
+  .footer-banner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.footer-banner__mark svg {
+  height: 32px;
+  width: auto;
+}
+
+.footer-banner__app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .footer-banner__app {
+    flex-direction: row;
+  }
+}
+
+.footer-content {
+  background-color: var(--color-surface-soft);
+  padding: 40px 32px;
+}
+
+.footer-cols {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 1120px;
+  margin-inline: auto;
+}
+
+@media (min-width: 768px) {
+  .footer-cols {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 32px;
+  }
+}
+
+.footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+}
+
+.footer-col__title {
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: var(--color-on-surface);
+}
+
+.footer-col__links {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.footer-col__links a {
+  color: var(--color-on-surface-muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
+.footer-col__links a:hover {
+  color: var(--color-accent-ink);
+}
+
+.footer-col__links--icons {
+  flex-flow: row wrap;
+  gap: 20px;
+}
+
+.social-icon {
+  height: 20px;
+  width: 20px;
+}
+
+.footer-disclaimer {
+  max-width: 1120px;
+  margin: 40px auto 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--color-line);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-on-surface-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   THE SMALL ANSWERS.
+
+   Everything on this page that moves because the reader touched it, gathered
+   here rather than scattered through the components, because they are one
+   decision made six times and they have to agree: nothing travels more than a
+   few pixels, nothing takes longer than a fifth of a second, and everything is
+   a `translate`, a `scale` or a colour — properties the compositor can animate
+   without asking the layout anything, which is what lets all of this run in the
+   same frames the card is being drawn in.
+
+   The rule they all follow: the movement is the ANSWER, not the information.
+   Every one of these elements says what it is and where it goes with the
+   pointer standing still.
+   --------------------------------------------------------------------------- */
+
+/* The cue under the card breathes. It is the one instruction on the page that
+   the reader has to notice without being told to look, and three pixels every
+   three and a half seconds is the smallest thing that catches an eye — slow
+   enough that it is never caught in the act, which is also why it is allowed to
+   run forever. */
+#sheets-hint {
+  animation: hint-breathe 3.4s ease-in-out infinite;
+}
+
+@keyframes hint-breathe {
+  50% {
+    translate: 0 3px;
+    opacity: 0.7;
+  }
+}
+
+/* The feature rows step toward the reader. This list is the keyboard's route
+   into the layers of the card and the pointer's list of what they are, so the
+   row under the pointer moves the way the layer it opens will. */
+#feature-list button {
+  transition: translate 200ms ease-out;
+}
+
+#feature-list button:hover,
+#feature-list button:focus-visible {
+  translate: 6px 0;
+}
+
+/* The dot beside a benefit swells when the line is reached. The dot is the only
+   part of that row that is not words, so it is the only part that can answer
+   without the sentence appearing to change. */
+.benefits__dot {
+  transition: scale 200ms ease-out;
+}
+
+.benefits__item:hover .benefits__dot {
+  scale: 1.5;
+}
+
+/* Footer links move a hair toward their own column edge. Twenty of them in
+   three columns is a place where a colour change alone is easy to miss. */
+.footer-col__links a {
+  display: inline-block;
+  transition: color 160ms ease, translate 160ms ease-out;
+}
+
+.footer-col__links a:hover {
+  translate: 3px 0;
+}
+
+/* THE REVEAL.
+
+   Their directive is an IntersectionObserver at a tenth of visibility that
+   plays one 700ms keyframe and then stops watching, and `PageMotion` is that
+   directive. What is different here is the guard: the hidden state is written
+   under `[data-motion='on']`, which only exists once the script has run.
+
+   Their version puts `opacity: 0` in the stylesheet, which means a page whose
+   bundle fails to arrive is a page with nothing on it. Ours falls back to
+   simply being visible, which is what a landing owes a reader who got the
+   markup and not the script. */
+[data-motion='on'] [data-reveal] {
+  opacity: 0;
+  transform: translateY(50px);
+}
+
+/* The row of figures comes in from the side instead, and the resting state has
+   to be the first frame of that entrance to the pixel — see `ENTRANCES` in
+   `src/page/PageMotion.ts`. Two declarations of one pose in two files is the
+   kind of thing that goes wrong quietly: if they disagree, the card jumps in
+   the frame the animation takes over. */
+[data-motion='on'] [data-reveal='side'] {
+  transform: perspective(900px) translateX(72px) rotateY(-24deg);
+}
+
+/* Motion is an ENHANCEMENT here and never information, so the reduced
+   preference does not soften these — it removes them. The claim is present,
+   the cards are present, the ring and the ribbon simply stop. Same criterion
+   the card's own transitions use further up this file. */
+@media (prefers-reduced-motion: reduce) {
+  [data-motion='on'] [data-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .hero-line {
+    opacity: 1;
+    animation: none;
+  }
+
+  .orbit__ring,
+  .orbit-badge,
+  .orbit-badge__glyph,
+  .marquee__line,
+  #sheets-hint {
+    animation: none;
+  }
+
+  /* The small answers keep the answer and lose the movement. Every one of them
+     also changes a colour, an underline or a shadow, so the reader who asked
+     for stillness still gets told what is under the pointer — they simply get
+     told between two frames, and nothing on the page travels. */
+  .site-header,
+  .nav-link::after,
+  .nx-button,
+  .stat-card,
+  #feature-list button,
+  .benefits__dot,
+  .footer-col__links a,
+  .site-header__mark {
+    transition: none;
+  }
+
+  .nx-button:hover,
+  .nx-button:active,
+  .stat-card:hover,
+  #feature-list button:hover,
+  #feature-list button:focus-visible,
+  .footer-col__links a:hover {
+    translate: none;
+  }
+
+  .benefits__item:hover .benefits__dot,
+  .site-header__mark:hover {
+    scale: none;
+  }
 }
