@@ -896,6 +896,36 @@
   height: auto;
 }
 
+/* THE CARD'S ARTWORK, where the brand has artwork instead of a glyph.
+
+   One box for all five rather than a size per card. The illustrations arrive at
+   five different aspect ratios — a seated figure is wide, a hand holding a
+   phone is tall — and sizing each to its own taste is how a row of five stops
+   reading as a row. A single box with `contain` inside it gives every drawing
+   the same room and lets each one sit at whatever shape it is, which is what
+   the reference row does: the objects differ, the weight does not.
+
+   Bottom-anchored, because these are drawn standing on a floor: `object-position`
+   keeps the shoes and the storefront's base on the same line across the row
+   even though the drawings are different heights.
+
+   Full opacity, unlike the glyph above it. A `currentColor` path at 0.16 is a
+   watermark and it wants to be behind the words; artwork is the thing itself.
+   It still sits under the text on `z-index` — the card is `isolate`, so that is
+   contained — but the two never meet: the copy runs from the top and the art
+   box starts below the halfway line. */
+.stat-card__art {
+  position: absolute;
+  inset-inline: 12%;
+  bottom: 5%;
+  z-index: -1;
+  width: 76%;
+  height: 42%;
+  object-fit: contain;
+  object-position: center bottom;
+  pointer-events: none;
+}
+
 /* THE RING.
 
    A dashed circle with discs on it, turning slowly enough that it is never

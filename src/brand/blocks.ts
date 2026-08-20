@@ -52,7 +52,7 @@ const heroLine = (line: string): string => `<span class="hero-line">${escape(lin
  *
  * `data-reveal="side"` is that entrance; the delay is what spaces the five out.
  */
-function statCard({ value, unit, label, mark, motif, tint }: Stat, index: number): string {
+function statCard({ value, unit, label, mark, motif, art, tint }: Stat, index: number): string {
   // The figure gets an element of its own so it can be counted up as the card
   // arrives — see `countUp` in `src/page/PageMotion.ts`. It has to be its own
   // element rather than the whole line: the unit rides inside that line, and a
@@ -69,7 +69,15 @@ function statCard({ value, unit, label, mark, motif, tint }: Stat, index: number
   const under = mark
     ? `<p class="stat-card__mark">${escape(mark)}</p>`
     : `<p class="stat-card__label">${escape(label ?? '')}</p>`
-  const drawing = motif ? `<span class="stat-card__motif" aria-hidden="true">${motif}</span>` : ''
+  // Artwork if the brand has it, the drawn glyph if it does not, and never
+  // both — see `art` in `types.ts`. `aria-hidden` either way: both of them say
+  // again what the two lines above already said, and a screen reader that
+  // announces the storefront has read the card twice.
+  const drawing = art
+    ? `<img class="stat-card__art" src="/${escape(art)}" alt="" aria-hidden="true" loading="lazy" decoding="async">`
+    : motif
+      ? `<span class="stat-card__motif" aria-hidden="true">${motif}</span>`
+      : ''
   return (
     `<li class="stat-card stat-card--${tint}"` +
     ` data-reveal="side" data-reveal-delay="${index * 110}">` +

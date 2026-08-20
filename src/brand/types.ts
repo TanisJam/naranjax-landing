@@ -180,6 +180,19 @@ export type Stat = {
    */
   readonly motif?: string
   /**
+   * The card's illustration, as a file in `brand-assets/<id>/`. Decorative.
+   *
+   * WHERE THIS BEATS `motif` AND WHERE IT DOES NOT. A glyph is one path in
+   * `currentColor` and it costs nothing to give a brand a set of them; it is
+   * what a card falls back to. Artwork is the real thing the reference puts
+   * down there — a person, two phones, a storefront — and no amount of drawing
+   * with one ink stands in for it.
+   *
+   * So a card takes one or the other, never both, and `art` wins. A brand with
+   * no artwork keeps its glyphs and the row still reads as five objects.
+   */
+  readonly art?: string
+  /**
    * Which of the four grounds this card takes.
    *
    * A role rather than a colour: every one of them is one of the brand's two

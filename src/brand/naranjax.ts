@@ -1,4 +1,4 @@
-import { CARD, PHONE, SHIELD, SPARK, STORE, TAP } from './glyphs'
+import { SHIELD, SPARK, TAP } from './glyphs'
 import { LOCKUP, MARK } from './isologo'
 import { isologoSvg, squareIcon } from './svg'
 import type { Brand } from './types'
@@ -147,26 +147,26 @@ export const naranjax: Brand = {
         unit: 'millones',
         label: 'de clientes.',
         tint: 'accent-soft',
-        motif: TAP,
+        art: 'art-clientes.png',
       },
       {
         value: 'La segunda',
         label: 'app financiera más usada en Argentina.',
         tint: 'ground',
-        motif: PHONE,
+        art: 'art-app.png',
       },
       {
         value: 'Principal emisor',
         label: 'de tarjetas de crédito en Argentina.',
         tint: 'accent',
-        motif: CARD,
+        art: 'art-tarjeta.png',
       },
       {
         value: '+150',
         unit: 'mil',
         label: 'comercios utilizan nuestras soluciones de cobro-pago.',
         tint: 'ground',
-        motif: STORE,
+        art: 'art-comercios.png',
       },
       // Their fifth card is a logo and this one is a line of type. See `mark`
       // in `types.ts`: whose company this is belongs in the quotation, and
@@ -175,7 +175,7 @@ export const naranjax: Brand = {
         value: 'Somos parte del',
         mark: 'Grupo Galicia',
         tint: 'accent-soft',
-        motif: PHONE,
+        art: 'art-nx.png',
       },
     ],
 
