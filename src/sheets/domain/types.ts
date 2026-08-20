@@ -277,16 +277,16 @@ export interface SheetSurface {
    * barely moved the needle between six and ten. The stalls are the cost, not
    * the blur.
    *
-   * So it is spent by OPACITY, which is what decides how much there is to
-   * diffuse in the first place. The two foils and the two most see-through
-   * films carry it; the three films sitting at 0.90 and above do not, because
-   * almost nothing reaches through them for a blur to work on and the milky
-   * body already does everything visible at that alpha.
+   * NOTHING CARRIES IT. It was spent by opacity — the two foils and the two
+   * most see-through films — until the closed resting pose was measured at the
+   * resolution the piece settles at: 31.1 gpu ms against a 16.6 ms budget, of
+   * which 20 were this flag across seven layers. The decision and the numbers
+   * are written out beside the default in `composition.ts`.
    *
-   * Four capturing layers measured a vsync step above two on a machine already
-   * degraded by a long measuring session, so treat that as a direction rather
-   * than a figure. This flag is the knob: it is per layer precisely so the line
-   * can be moved without touching anything else.
+   * The flag stays rather than being deleted, because it is per layer and that
+   * is what keeps the line movable: turning one back on is an edit to one
+   * surface. Be warned that the cost does not divide evenly — the two plates
+   * that draw first carried two thirds of it, and only as a pair.
    */
   frostsBackdrop: boolean
   /**
