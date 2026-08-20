@@ -120,8 +120,6 @@ export type Page = {
   readonly heroLines: readonly string[]
   /** The four figures the brand is judged on, as cards. */
   readonly stats: readonly Stat[]
-  /** The badges orbiting the dashed ring, in the order they are laid out. */
-  readonly orbit: readonly Badge[]
   /**
    * The words that drift across the closing plancha.
    *
@@ -215,16 +213,6 @@ export type Stat = {
    * gets four new tints for free and never a fifth colour somebody picked.
    */
   readonly tint: 'accent-soft' | 'accent' | 'ground-soft' | 'ground'
-}
-
-/** A badge on the dashed ring: a drawn glyph and the word it stands for. */
-export type Badge = {
-  /** The glyph, as an inline `<svg>` sized by its container. */
-  readonly icon: string
-  /** Read out instead of the drawing, and never shown. */
-  readonly label: string
-  /** Which ink the disc takes. */
-  readonly tint: 'accent' | 'ground'
 }
 
 export type FooterColumn = {

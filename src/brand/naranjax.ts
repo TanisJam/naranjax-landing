@@ -1,4 +1,3 @@
-import { SHIELD, SPARK, TAP } from './glyphs'
 import { LOCKUP, MARK } from './isologo'
 import { isologoSvg, squareIcon } from './svg'
 import type { Brand } from './types'
@@ -178,12 +177,6 @@ export const naranjax: Brand = {
         tint: 'accent-soft',
         art: 'art-nx.png',
       },
-    ],
-
-    orbit: [
-      { icon: TAP, label: 'Pagá con el celular', tint: 'accent' },
-      { icon: SHIELD, label: 'Tu plata protegida', tint: 'accent' },
-      { icon: SPARK, label: 'Beneficios todos los días', tint: 'ground' },
     ],
 
     marquee: [

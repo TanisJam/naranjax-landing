@@ -945,112 +945,295 @@
   pointer-events: none;
 }
 
-/* THE RING.
+/* THE RAIL: what the plates are called, hung beside them.
 
-   A dashed circle with discs on it, turning slowly enough that it is never
-   caught moving. The badges ride the rotation and each glyph runs the same
-   rotation backwards, which is the only way a drawing survives being put on a
-   wheel — otherwise the icons arrive upside down at the halfway point.
+   Only while the stack is open. Shut, the card is one object with one name and
+   there is nothing to label; open, it is eleven plates and nine of them are a
+   feature of the product that nothing on screen names. See `LayerRail.ts`.
 
-   `aspect-ratio` rather than a height, so the circle is a circle at every
-   width without a second media query. */
-.orbit {
-  position: relative;
-  width: 100%;
-  max-width: 460px;
-  margin-inline: auto;
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-}
+   Absolutely positioned inside `#sheets-stage`, which is `inset: 0` over the
+   hero, so a rung's `translate` is in the same pixels the projection produces
+   and there is no offset to carry.
 
-.orbit__ring {
+   THE RAIL TAKES NO POINTER EXCEPT ON THE LABELS THEMSELVES. The stage under it
+   is the card's own hit target — a drag anywhere on it turns the artwork and a
+   click opens it — so a transparent sheet over the hero would quietly kill
+   both. `pointer-events` is off on the container and back on for the one
+   element that has something to answer. */
+.layer-rail {
   position: absolute;
   inset: 0;
-  border-radius: 50%;
-  border: 2px dashed color-mix(in srgb, var(--color-accent-ink) 55%, transparent);
-  animation: orbit-turn 90s linear infinite;
-}
-
-/* A FULL TURN FROM WHEREVER THE ELEMENT ALREADY IS, which is not what this
-   keyframe used to say.
-
-   It said `rotate: 360deg`, and a `to`-only keyframe takes its `from` from the
-   element's own value — which for a badge is its place on the circle. So a
-   badge parked at -58deg travelled 418 degrees in the ninety seconds, one at
-   38deg travelled 322, and one at 128deg travelled 232: three different angular
-   speeds converging on the same point at the end of every cycle. The discs
-   caught each other up and overlapped, which is exactly what it looked like.
-   The ring itself has no `--angle` and falls through to the same 360 it always
-   turned, so one keyframe still serves both. */
-@keyframes orbit-turn {
-  to {
-    rotate: calc(var(--angle, 0deg) + 360deg);
-  }
-}
-
-/* The mark at the centre, on the page's own ground rather than on the brand's:
-   this tile has to hold a lockup in either build, and one of those lockups is
-   printed in the brand's colours. A violet tile under a violet counter is a
-   hole in the X. */
-.orbit__core {
-  display: grid;
-  place-items: center;
-  width: 62%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  border: 1px solid var(--color-line);
-  background-color: var(--color-surface);
-  box-shadow: 0 18px 40px color-mix(in srgb, var(--color-ink-950) 12%, transparent);
-}
-
-.orbit__core svg {
-  width: 54%;
-  height: auto;
-}
-
-/* Placed by rotating the whole arm and then pushing the badge out along it —
-   which is one transform per badge and no trigonometry in the markup. The
-   glyph then takes the rotation back off. */
-.orbit-badge {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: start center;
-  rotate: var(--angle, 0deg);
-  animation: orbit-turn 90s linear infinite;
+  z-index: 2;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 260ms ease;
 }
 
-.orbit-badge__glyph {
-  display: grid;
-  place-items: center;
-  width: clamp(56px, 14%, 74px);
-  aspect-ratio: 1;
-  translate: 0 -50%;
-  rotate: calc(-1 * var(--angle, 0deg));
+/* Arriving AFTER the plates have separated rather than with them. The deploy is
+   the gesture the click asked for and it should be watched, not read over. The
+   delay is the deploy's own length, near enough — `AnimationTimeline.
+   deployDuration` is 0.651s and the cue that scores it is what really sets the
+   pace. Leaving has no such debt, so it is instant: the rail is gone before the
+   card starts closing.
+
+   This only arms the rail. WHETHER ANY LABEL IS ON SCREEN is a separate
+   question and the answer is almost always no — see `--active` below. */
+.layer-rail--shown {
+  opacity: 1;
+  transition-delay: 560ms;
+}
+
+/* ONE LABEL, AND ONLY WHILE ITS PLATE IS BEING POINTED AT.
+
+   All nine used to come up together the moment the card opened, and it was a
+   wall: nine titles down the side of an artwork whose whole event is the plates
+   separating, competing with it at exactly the moment there was something to
+   watch. A name is an answer to a question, and the question is "what is THIS
+   one" — so it arrives when the reader asks it, one at a time.
+
+   The rung stays in the layout and stays positioned whether or not it is up,
+   because `LayerRail.update` only ever moves the active one and a hidden rung
+   holding its last coordinates costs nothing.
+
+   POINTER-EVENTS TRACK THE OPACITY, and they have to. A label out in the gutter
+   is reached by crossing empty page, so it must be clickable the whole time it
+   is visible and dead the moment it is not — an invisible label left live in
+   the gutter swallows the click that means "put the card away". The linger in
+   `LayerRail.ts` is what keeps it live long enough to actually reach. */
+.layer-rail__rung {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  /* The rung is placed at its plate's own height, and the label has to straddle
+     that line rather than hang below it. */
+  translate: 0 0;
+  transform: translateY(-50%);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 180ms ease,
+    visibility 0s linear 180ms;
+}
+
+.layer-rail__rung--active {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 180ms ease,
+    visibility 0s;
+}
+
+/* Drawn from the label back to the plate, and it is a HAIRLINE — the thinnest
+   mark that still reads, because it is scaffolding and not content. Its right
+   end is pinned at the label and it pivots there, so decluttering the labels
+   tilts the leaders instead of breaking them off their plates.
+
+   These are long now, and most of their length is spent crossing the artwork —
+   which is the cost of putting the labels somewhere they can be read. The
+   gradient is what makes that cost bearable: full strength at the label, where
+   it has to connect to type, and nearly gone by the time it reaches the plate,
+   where it is lying over the one thing the reader came to look at. A line of
+   constant opacity across a card is a scratch on it. */
+.layer-rail__leader {
+  position: absolute;
+  right: 100%;
+  height: 1px;
+  transform-origin: 100% 50%;
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--color-on-strong) 22%, transparent),
+    color-mix(in srgb, var(--color-on-strong) 70%, transparent)
+  );
+}
+
+/* The far end lands ON the plate, and a line that merely stops there is
+   ambiguous about which of two neighbouring plates it meant. A dot is a
+   full stop: it says the leader arrived rather than ran out. */
+.layer-rail__leader::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  color: white;
-  animation: orbit-counterturn 90s linear infinite;
-}
-
-@keyframes orbit-counterturn {
-  to {
-    rotate: calc(-1 * var(--angle, 0deg) - 360deg);
-  }
-}
-
-.orbit-badge__glyph svg {
-  width: 56%;
-  height: auto;
-}
-
-.orbit-badge--accent .orbit-badge__glyph {
+  translate: -50% -50%;
   background-color: var(--color-brand-accent);
+  /* The plates it lands on run from near-white to coral, and an orange dot on
+     the orange ply is not a full stop. The ring is what keeps it a mark on
+     every one of the nine. */
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--color-ink-950) 55%, transparent);
 }
 
-.orbit-badge--ground .orbit-badge__glyph {
-  background-color: var(--color-brand-ground);
+.layer-rail__label {
+  /* Live only while its rung is. `visibility: hidden` on the rung already takes
+     the whole subtree out of hit testing, so this needs no state of its own —
+     which is the reason the rung hides with `visibility` rather than opacity
+     alone. Opacity 0 leaves an element perfectly clickable. */
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    translate 160ms ease-out;
+}
+
+/* The label leans the way the plate it names is about to come out. Four pixels,
+   which is under the width of a space — enough to answer, not enough to be a
+   second animation competing with the plate's own lift. */
+.layer-rail__label:hover {
+  background-color: color-mix(in srgb, var(--color-ink-950) 55%, transparent);
+  translate: 4px 0;
+}
+
+.layer-rail__eyebrow {
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-brand-accent);
+}
+
+.layer-rail__title {
+  font-size: 0.875rem;
+  line-height: 1.125rem;
+  font-weight: 600;
+  color: var(--color-on-strong);
+}
+
+/* THE FAN, RE-FORMED DOWN THE SIDE OF THE TEXT.
+
+   There was a dashed orbit here — a ring, a lockup and two badges riding the
+   rim on a ninety-second turn — and it is gone. See the note in `index.html`
+   for why: it illustrated "the card comes apart in layers" with a wheel.
+
+   What stands in its place is not a picture of the stack, it IS the stack,
+   dealt out one ply per row. Each row carries the plate it opens, coloured from
+   that plate's own `surface` in `composition.ts` — `main.ts` writes the four
+   custom properties below and nothing here names a colour.
+
+   The step is the whole trick. Nine bars in a column is a column of bars; nine
+   bars each nudged a little further right than the one above is the fan from
+   the hero, and the eye reads the diagonal before it reads a single word. 6px
+   across nine rows is 48px of travel against a 46px plate, so the last ply has
+   moved a hair over its own width — the same shallow deal the artwork opens
+   into, at the one angle a flat bar can carry it.
+
+   `skewX` and not a 3D transform, deliberately. A `rotate3d` here would be a
+   second perspective on the page fighting the camera's, and it would want a
+   `perspective` on every ancestor to behave. A skew is the projection of a
+   plate lying at a low angle, which is exactly what these are. */
+.feature-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.feature-list__item + .feature-list__item {
+  border-top: 1px solid var(--color-line);
+}
+
+/* The plate column is wide enough for the plate plus the whole step, so the
+   last ply has somewhere to be without the text reflowing under it. */
+.feature-row {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem;
+  width: 100%;
+  padding-block: 1.15rem;
+  text-align: left;
+}
+
+.feature-row:focus-visible {
+  outline: 2px solid var(--color-accent-ink);
+  outline-offset: 2px;
+}
+
+/* Nudged down to the cap height of the eyebrow, so the plate sits ON the line
+   the row starts at rather than floating above it. */
+.feature-row__ply {
+  --ply-step: 6px;
+  width: 46px;
+  height: 13px;
+  margin-top: 0.45rem;
+  border-radius: 1.5px;
+  translate: calc(var(--ply-index, 0) * var(--ply-step)) 0;
+  transform: skewX(-38deg);
+  background-image: linear-gradient(102deg, var(--ply-a, #fff), var(--ply-b, #fff));
+  opacity: var(--ply-alpha, 1);
+  /* The cut edge, and then the shadow it casts on the row below. The core
+     colour IS the body seen through more of itself — see the note on
+     `coreColor` in `composition.ts` — so a plate's own thickness is the one
+     part of its material that survives being flattened.
+
+     BUT NOT THE CORE ALONE, and this is the one place the row is allowed to
+     disagree with the artwork. Four of the nine plies are cream, bone or
+     off-white; in the stack they read because they are lit and sitting against
+     a near-black backdrop, and this section is pale lilac. Measured on the
+     build, `glossy-light` puts #e3cfbc against #f0ebf5 — an edge you cannot
+     find, and four rows of the nine went blank.
+
+     So the edge is mixed a quarter of the way to the page's own text ink. That
+     is a contrast FLOOR rather than a colour: `--color-on-surface` is by
+     definition the darkest thing this ground is required to carry, so every
+     ply gets a findable edge on either brand without anybody choosing a hex.
+     The orange plies barely move — they were already dark enough — and the pale
+     ones gain the cut edge that the lighting used to give them. */
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--ply-core, #000) 76%, var(--color-on-surface)),
+    0 6px 12px color-mix(in srgb, var(--ply-core, #000) 42%, transparent);
+  transition:
+    translate 220ms ease-out,
+    box-shadow 220ms ease-out;
+}
+
+/* The row under the pointer moves the way the layer it opens will: out of the
+   fan, along the fan's own axis. The plate goes further than the text does,
+   because in the artwork it is the plate that leaves and the stack that stays. */
+.feature-row:hover .feature-row__ply,
+.feature-row:focus-visible .feature-row__ply {
+  translate: calc(var(--ply-index, 0) * var(--ply-step) + 10px) -2px;
+  box-shadow:
+    0 2px 0 color-mix(in srgb, var(--ply-core, #000) 76%, var(--color-on-surface)),
+    0 10px 20px color-mix(in srgb, var(--ply-core, #000) 52%, transparent);
+}
+
+.feature-row__body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.feature-row__eyebrow {
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-accent-ink);
+}
+
+.feature-row__title {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.feature-row__summary {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--color-on-surface-muted);
 }
 
 /* The benefits, in a block rather than on the page. Their site closes every
@@ -1316,14 +1499,22 @@
 
 /* The feature rows step toward the reader. This list is the keyboard's route
    into the layers of the card and the pointer's list of what they are, so the
-   row under the pointer moves the way the layer it opens will. */
-#feature-list button {
-  transition: translate 200ms ease-out;
+   row under the pointer moves the way the layer it opens will.
+
+   Six pixels for the row against the plate's ten, and the gap between those two
+   numbers is the point: the row leans in, the plate comes OUT of it. One
+   distance for both would be the row sliding as a block, which is a list item
+   answering a hover — not a plate leaving a stack. */
+.feature-row {
+  transition:
+    translate 200ms ease-out,
+    color 200ms ease-out;
 }
 
-#feature-list button:hover,
-#feature-list button:focus-visible {
+.feature-row:hover,
+.feature-row:focus-visible {
   translate: 6px 0;
+  color: var(--color-on-surface);
 }
 
 /* The dot beside a benefit swells when the line is reached. The dot is the only
@@ -1388,9 +1579,6 @@
     animation: none;
   }
 
-  .orbit__ring,
-  .orbit-badge,
-  .orbit-badge__glyph,
   .marquee__line,
   #sheets-hint {
     animation: none;
@@ -1404,7 +1592,9 @@
   .nav-link::after,
   .nx-button,
   .stat-card,
-  #feature-list button,
+  .feature-row,
+  .feature-row__ply,
+  .layer-rail__label,
   .benefits__dot,
   .footer-col__links a,
   .site-header__mark {
@@ -1414,8 +1604,9 @@
   .nx-button:hover,
   .nx-button:active,
   .stat-card:hover,
-  #feature-list button:hover,
-  #feature-list button:focus-visible,
+  .feature-row:hover,
+  .feature-row:focus-visible,
+  .layer-rail__label:hover,
   .footer-col__links a:hover {
     translate: none;
   }
@@ -1423,5 +1614,18 @@
   .benefits__item:hover .benefits__dot,
   .site-header__mark:hover {
     scale: none;
+  }
+
+  /* NOT `translate: none`, which is what the rule above does for everything
+     else and what would be wrong here. The ply's offset is two things added
+     together: its place in the fan, which is LAYOUT and has to survive, and the
+     10px it comes out on hover, which is the movement being asked about. Zeroing
+     the property takes both, and nine plates snap into a flush column — the
+     reader who asked for stillness gets a different composition, not a still
+     one. So the hover is written back to the resting offset instead, and what
+     stays to answer the pointer is the shadow, which is a colour. */
+  .feature-row:hover .feature-row__ply,
+  .feature-row:focus-visible .feature-row__ply {
+    translate: calc(var(--ply-index, 0) * var(--ply-step)) 0;
   }
 }

@@ -1,4 +1,4 @@
-import { CARD, PHONE, SHIELD, SPARK, STORE, TAP } from './glyphs'
+import { CARD, PHONE, SPARK, STORE, TAP } from './glyphs'
 import type { Brand } from './types'
 
 const ACCENT = '#f37d06'
@@ -87,12 +87,6 @@ export const mandarinax: Brand = {
         tint: 'accent-soft',
         motif: TAP,
       },
-    ],
-
-    orbit: [
-      { icon: TAP, label: 'Pagá con el celular', tint: 'accent' },
-      { icon: SHIELD, label: 'Tu plata protegida', tint: 'accent' },
-      { icon: SPARK, label: 'Beneficios todos los días', tint: 'ground' },
     ],
 
     marquee: [

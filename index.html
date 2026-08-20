@@ -240,31 +240,41 @@
            says is said by the list beside it. -->
       <section id="funciones" class="w-full scroll-mt-20 bg-surface-soft">
         <div
-          class="mx-auto grid w-full max-w-[72rem] items-center gap-14 px-6 py-20 sm:py-24 lg:grid-cols-2 lg:gap-20"
+          class="mx-auto grid w-full max-w-[72rem] gap-12 px-6 py-20 sm:py-24 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:gap-20"
         >
-          <div class="orbit" data-reveal>
-            <span class="orbit__ring" aria-hidden="true"></span>
-            <span class="orbit__core">{{lockup}}</span>
-            {{orbitBadges}}
-          </div>
+          <!-- THERE WAS A DASHED ORBIT HERE AND IT IS NOT COMING BACK. It was a
+               circle with the lockup in it and two badges riding the rim, and it
+               held half the width of a section whose subject, in its own words,
+               is that the card comes apart in layers. The card does exactly that
+               one screen up. Drawing a wheel beside the sentence that describes
+               it was the section illustrating itself with something else.
 
-          <div class="flex flex-col gap-4">
+               What replaces it is not another illustration. The plies moved INTO
+               the rows — see `.feature-row__ply` — so the thing the heading
+               claims is the thing the reader's eye is travelling down. -->
+          <div class="flex flex-col gap-4 lg:sticky lg:top-28 lg:self-start" data-reveal>
             <h2 class="section-title">Todo lo que podés hacer con tu billetera digital</h2>
             <p class="text-base leading-6 font-medium text-on-surface-muted">
               La tarjeta se abre en capas y cada una es una de estas funciones. Tocá el stack y
               después tocá la capa que quieras ver.
             </p>
-            <!-- Built from the same spec data the panels are, so a feature's
-                 name here and the panel it opens can never disagree.
-
-                 This list is also the keyboard's route into those panels, and
-                 that is why it is visible rather than `sr-only`: aiming at one
-                 layer of a floating stack is something a pointer can do and a
-                 keyboard cannot, and a landing needs the feature list on the
-                 page anyway. One list serving both is the whole reason the
-                 hidden one is gone. -->
-            <ul id="feature-list" class="mt-2 flex flex-col divide-y divide-line"></ul>
           </div>
+
+          <!-- Built from the same spec data the panels are, so a feature's name
+               here and the panel it opens can never disagree.
+
+               This list is also the keyboard's route into those panels, and that
+               is why it is visible rather than `sr-only`: aiming at one layer of
+               a floating stack is something a pointer can do and a keyboard
+               cannot, and a landing needs the feature list on the page anyway.
+               One list serving both is the whole reason the hidden one is gone.
+
+               Every row now carries its own ply, coloured from the very layer it
+               opens — `main.ts` reads `surface` off the composition rather than
+               repeating nine hex values here. Nine rows in a column, each one
+               stepped a little further right than the one above, and the fan
+               from the hero re-forms down the side of the text. -->
+          <ul id="feature-list" class="feature-list"></ul>
         </div>
       </section>
 

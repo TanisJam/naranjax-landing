@@ -9,6 +9,7 @@ import { startPageMotion } from './page/PageMotion'
 import { SceneOrchestrator } from './sheets/application/SceneOrchestrator'
 import { composition } from './sheets/domain/composition'
 import { layerSpecs, specFor, type LayerSpec } from './sheets/domain/specs'
+import { LayerRail } from './sheets/infrastructure/dom/LayerRail'
 import { SpecsOverlay } from './sheets/infrastructure/dom/SpecsOverlay'
 import type { SheetObject } from './sheets/infrastructure/three/SheetObject'
 import { HAPTICS, SoundBoard, SWELLS } from './sound/SoundBoard'
@@ -286,6 +287,56 @@ stage.addEventListener('click', (event) => {
   openSpecs(layer, spec)
 })
 
+// THE RAIL: the nine names, hung beside the nine plates once the card opens.
+//
+// Built here rather than inside the orchestrator because it is a presentation
+// of `specs.ts`, exactly like the panel and exactly like the feature list, and
+// the scene has no business knowing that the product has features. What the
+// scene provides is where a plate ended up, which is `onAfterRender` below.
+const rail = new LayerRail(stage, {
+  entries: layerSpecs.flatMap((spec) => {
+    const sheet = orchestrator.sheets.find((candidate) => candidate.layer.id === spec.layer)
+    // Same rule the feature list follows: a spec naming a layer the composition
+    // does not have is a typo in one of two files, and the honest answer is to
+    // leave no rung for it rather than to hang a label on nothing.
+    return sheet ? [{ sheet, spec }] : []
+  }),
+  // All eleven, covers included — see `obstacles`.
+  obstacles: orchestrator.sheets,
+  onAddress: (sheet) => {
+    orchestrator.hoverOverride = sheet
+  },
+  onOpen: (sheet, spec) => {
+    sound.resume()
+    openSpecs(sheet, spec)
+  },
+})
+
+// Positioned after the draw, against the matrices of the frame being shown.
+//
+// Whether it is shown at all is DERIVED here rather than pushed from the three
+// places that change it, and that is not laziness. The rail belongs on screen
+// exactly when the stack is open and no panel is over it, and those two facts
+// are moved by the click handler, the keyboard handler, the feature list, the
+// rail's own labels, the backdrop, the close button and Escape. Seven call
+// sites each remembering to update a third piece of state is a missed
+// transition waiting to happen — and the one that gets missed is Escape, which
+// is the one nobody tests. Read once a frame it cannot be wrong, and
+// `setShown` returns immediately when nothing changed.
+orchestrator.onAfterRender = () => {
+  rail.setShown(orchestrator.timeline.deployed && !specs.open)
+  // WHICH label is up follows whatever the piece already believes is being
+  // addressed, and reading it from there rather than wiring the rail to the
+  // pointer is what makes the label reachable at all. `timeline.hovered` is the
+  // picker's answer OR the rail's own override — see `hoverOverride` — so
+  // moving the pointer off a plate and onto that plate's label keeps the same
+  // sheet addressed, and the label does not vanish out from under the hand
+  // going to click it. The gap between the two is what `LINGER_MS` covers.
+  rail.setActive(orchestrator.timeline.hovered)
+  rail.update(orchestrator.stage.camera)
+}
+window.addEventListener('resize', () => rail.measure(), { passive: true })
+
 // A div with a button role gets none of a button's keyboard behaviour for free,
 // and both keys have to be handled: Enter fires on keydown, Space would
 // otherwise scroll the page out from under the panel.
@@ -362,7 +413,7 @@ if (features) {
   const byId = new Map(orchestrator.sheets.map((sheet) => [sheet.layer.id, sheet]))
 
   features.replaceChildren(
-    ...layerSpecs.flatMap((spec) => {
+    ...layerSpecs.flatMap((spec, index) => {
       const sheet = byId.get(spec.layer)
       // A spec naming a layer the composition does not have is a typo in one of
       // the two files, and the honest response is to leave no entry for it
@@ -371,27 +422,52 @@ if (features) {
 
       const button = document.createElement('button')
       button.type = 'button'
-      button.className =
-        'group flex w-full items-baseline gap-4 py-4 text-left transition hover:text-on-surface focus-visible:outline-2 focus-visible:outline-accent-ink'
+      button.className = 'feature-row'
 
-      const eyebrow = document.createElement('span')
-      eyebrow.className =
-        'w-24 shrink-0 text-xs leading-5 font-medium tracking-[0.15em] text-accent-ink uppercase'
-      eyebrow.textContent = spec.eyebrow
+      // The ply, coloured from the layer this row opens rather than from a
+      // palette written beside it. `surface` is the same object the shader is
+      // built from, so a plate that gets recoloured in `composition.ts` brings
+      // its row with it and there is no second place to remember.
+      //
+      // Four values and not the whole surface: the two gradient stops, the core
+      // that shows as the cut edge, and the opacity. A ply in the stack is also
+      // frosted, iridescent, woven and lit, and none of that survives being
+      // flattened into a 46px bar — what does survive is which colour it is and
+      // whether you can see through it, which is exactly what tells one row
+      // from another at a glance.
+      const ply = document.createElement('span')
+      ply.className = 'feature-row__ply'
+      ply.setAttribute('aria-hidden', 'true')
+      const surface = sheet.layer.surface
+      ply.style.setProperty('--ply-a', surface.colorA)
+      ply.style.setProperty('--ply-b', surface.colorB)
+      ply.style.setProperty('--ply-core', surface.coreColor)
+      ply.style.setProperty('--ply-alpha', String(surface.opacity))
+      // Its place in the fan. The rows are evenly spaced and the plies are not
+      // meant to be, so the step is what turns a column of bars back into the
+      // stack from the hero — see `.feature-row__ply` for the measure.
+      ply.style.setProperty('--ply-index', String(index))
 
       const body = document.createElement('span')
-      body.className = 'flex min-w-0 flex-col gap-1'
+      body.className = 'feature-row__body'
+
+      // Eyebrow above the title rather than in a column beside it, which is the
+      // order the panel this row opens puts them in. Two arrangements of the
+      // same three strings would be two designs for one thing.
+      const eyebrow = document.createElement('span')
+      eyebrow.className = 'feature-row__eyebrow'
+      eyebrow.textContent = spec.eyebrow
 
       const title = document.createElement('span')
-      title.className = 'text-base leading-6 font-semibold text-on-surface'
+      title.className = 'feature-row__title'
       title.textContent = spec.title
 
       const summary = document.createElement('span')
-      summary.className = 'text-sm leading-5 text-on-surface-muted'
+      summary.className = 'feature-row__summary'
       summary.textContent = spec.summary
 
-      body.append(title, summary)
-      button.append(eyebrow, body)
+      body.append(eyebrow, title, summary)
+      button.append(ply, body)
 
       button.addEventListener('click', () => {
         sound.resume()
@@ -402,6 +478,7 @@ if (features) {
       })
 
       const item = document.createElement('li')
+      item.className = 'feature-list__item'
       item.appendChild(button)
       return [item]
     }),

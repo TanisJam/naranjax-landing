@@ -15,13 +15,12 @@ import type { Brand, FooterColumn, Link, Stat } from './types'
  * would be a second index.html hiding in a TypeScript file.
  */
 export function renderBlocks(brand: Brand): Record<string, string> {
-  const { nav, navCta, heroLines, stats, orbit, marquee, footer } = brand.page
+  const { nav, navCta, heroLines, stats, marquee, footer } = brand.page
   return {
     navLinks: nav.map(navLink).join('\n            '),
     navCta: `<a href="${escape(navCta.href)}" class="nx-button">${escape(navCta.label)}</a>`,
     heroLines: heroLines.map(heroLine).join('\n            '),
     statCards: stats.map(statCard).join('\n            '),
-    orbitBadges: orbit.map(badge).join('\n            '),
     marqueeLines: marqueeLines(marquee),
     footerColumns: footer.map(footerColumn).join('\n            '),
   }
@@ -95,40 +94,6 @@ function statCard(
     under +
     drawing +
     `</li>`
-  )
-}
-
-/**
- * One badge on the ring.
- *
- * The angle is a custom property because the ring places its badges with a
- * rotation and a counter-rotation — the disc travels around the circle and the
- * glyph inside it stays upright, which is the only way a drawing survives being
- * put on a wheel. See `.orbit-badge` in `src/style.css`.
- */
-/**
- * Where each badge sits on the circle, and the answer is: as far from the next
- * one as the arithmetic allows.
- *
- * This was a table of three authored angles — -58, 128, 38 — which put two of
- * the discs 96 and 90 degrees apart and left 174 degrees of empty dash on the
- * other side. Read off the count instead, so the ring is evenly loaded at three
- * badges and still evenly loaded at five, and nobody has to remember to add an
- * angle when they add a glyph. The quarter turn back is what puts the first one
- * at the top of the circle rather than out to the right.
- */
-const angleFor = (index: number, count: number): string =>
-  `${(-90 + (index * 360) / count).toFixed(2)}deg`
-
-function badge(
-  { icon, label, tint }: Brand['page']['orbit'][number],
-  index: number,
-  all: readonly unknown[],
-): string {
-  return (
-    `<span class="orbit-badge orbit-badge--${tint}" style="--angle:${angleFor(index, all.length)}">` +
-    `<span class="orbit-badge__glyph">${icon}<span class="sr-only">${escape(label)}</span></span>` +
-    `</span>`
   )
 }
 

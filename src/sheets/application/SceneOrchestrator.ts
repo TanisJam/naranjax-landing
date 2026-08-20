@@ -245,6 +245,22 @@ export class SceneOrchestrator {
   readonly picker: LayerPicker
 
   /**
+   * A layer to light up as though the pointer were on it, or null to leave the
+   * answer to the pointer.
+   *
+   * The rail beside the deployed stack is the reason this exists. Its labels
+   * are DOM, they sit off the artwork, and a pointer resting on one of them is
+   * over no layer at all — so the plate a reader is pointing AT would go dark
+   * at the moment they aimed at its name. The override says which plate the
+   * page believes is being addressed, and the pointer keeps every other frame.
+   *
+   * Read once per frame beside the picker rather than written into `hovered`
+   * from outside, because the loop overwrites that field on every pass and a
+   * value set between two frames would live for less than one.
+   */
+  hoverOverride: SheetObject | null = null
+
+  /**
    * Called after every rendered frame with how long that frame's own work took,
    * in milliseconds. Null unless something is measuring.
    *
@@ -255,6 +271,15 @@ export class SceneOrchestrator {
    * `FrameCounter` for why that gap is the useful part.
    */
   onFrame: ((cpuMs: number) => void) | null = null
+
+  /**
+   * Called once per frame with the scene graph already updated, for whatever
+   * has to be positioned against where a plate actually ended up.
+   *
+   * Separate from `onFrame`, which is a measurement and is null whenever
+   * nothing is measuring. This one runs in the shipped page.
+   */
+  onAfterRender: (() => void) | null = null
 
   /**
    * Spends resolution to hold the frame rate. Public so a measurement can take
@@ -698,9 +723,14 @@ export class SceneOrchestrator {
     // highlight that damps in over several — the alternative is raycasting
     // after the motion is written and paying for a second matrix update.
     this.picker.update(this.stage.camera)
-    this.timeline.hovered = this.picker.hovered
-    this.timeline.hoveredAt = this.picker.hoveredAt
-    this.timeline.hoverPush = this.picker.hoveredPush
+    // The override wins, and takes the other two with it. A plate lit from the
+    // rail is not being touched, so it has no position along its spine and no
+    // push: handing it the pointer's leftovers would bend a plate the reader is
+    // only naming, using a gesture aimed somewhere else entirely.
+    const addressed = this.hoverOverride ?? this.picker.hovered
+    this.timeline.hovered = addressed
+    this.timeline.hoveredAt = this.hoverOverride ? 0.5 : this.picker.hoveredAt
+    this.timeline.hoverPush = this.hoverOverride ? 0 : this.picker.hoveredPush
     this.timeline.update(delta)
     // Before the parallax, which has to know whether this frame's drag is
     // already spoken for. Gated on the TARGET rather than on how far the stack
@@ -732,6 +762,14 @@ export class SceneOrchestrator {
     // not a redraw. See `SHUTTER_HZ`.
     this.film.update(delta)
     this.stage.renderer.render(this.stage.scene, this.stage.camera)
+
+    // AFTER the draw, and that is the whole reason it is here rather than
+    // beside the motion above. Anything hanging DOM off a plate has to read
+    // that plate's world matrix, and the renderer is what brings the whole
+    // graph up to date — before this line the pivots still hold last frame's.
+    // Called inside the same animation frame, so the DOM it moves is laid out
+    // in the paint that shows the frame it was measured from.
+    this.onAfterRender?.()
 
     // After the draw, so the interval spans a whole frame including whatever
     // the GPU was still finishing when the last one returned. That lag is the
