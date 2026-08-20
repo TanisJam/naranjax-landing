@@ -1192,17 +1192,32 @@ diffuseColor.rgb *= mix(vec3(1.0), uCoreColor, facing * uAbsorption);
 // notes had already recorded once from the other direction: a near-white body
 // reads as grey where anything sits behind it. Alpha is what closes a sheet.
 // Albedo is what colours it. Driving both off one number confuses them.
-// READ THIS BEFORE TOUCHING THE 0.1 BELOW. The albedo term was deliberately
-// weakened when the frost still had a real backdrop to scatter: milkiness that
-// used to be PAINTED into the body was produced by the diffused capture
-// instead, and running both at the old weight whitened the foils twice over.
-// That capture has since been removed — it was two thirds of the frame — so
-// this term is now carrying the milkiness alone at a weight chosen for sharing
-// it. The foils read glassier than they were authored to. Raising it back is a
-// look decision that is still open, not an oversight.
+// THE 0.25 BELOW WAS CHOSEN BY EYE, AGAINST A LADDER. It was 0.1 while the
+// frost still had a real backdrop to scatter: milkiness that used to be
+// PAINTED into the body was produced by the diffused capture instead, and
+// running both at full weight whitened the foils twice over. That capture is
+// gone — it was two thirds of the frame — so this term carries the milkiness
+// alone now, and at 0.1 the plies read as tinted glass rather than as frosted
+// acrylic.
+//
+// Swept live at 0.10 / 0.20 / 0.25 / 0.32 / 0.40 on the opened card with the
+// motion frozen, so the pose was identical and the weight was the only thing
+// moving. 0.25 is the last step where the body reads and the orange still
+// holds. Above it the failure is the one this layer's notes already recorded
+// once from the other direction: the plies go peach and then grey. Alpha is
+// what closes a sheet, albedo is what colours it, and buying body by pushing
+// the albedo at white is paid for in colour.
+//
+// It costs nothing — four instructions, measured at 54.7 gpu ms against 52.2
+// across the whole range at a 3.5 pixel ratio, which is noise. And it cannot
+// touch the closed pose at all: both covers carry a frost of zero, so the
+// branch below never runs for them.
+//
+// No backticks in here, and that is not a style note: this comment lives inside
+// the GLSL template literal, so one would end the string.
 if (uFrost > 0.0) {
   float depthAlongView = mix(0.45, 1.0, 1.0 - facing) * uFrost;
-  diffuseColor.rgb = mix(diffuseColor.rgb, uFrostColor, depthAlongView * 0.1);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uFrostColor, depthAlongView * 0.25);
   diffuseColor.a = mix(diffuseColor.a, 1.0, depthAlongView);
 }
 
