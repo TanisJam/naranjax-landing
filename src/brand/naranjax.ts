@@ -174,6 +174,7 @@ export const naranjax: Brand = {
       {
         value: 'Somos parte del',
         mark: 'Grupo Galicia',
+        markLogo: 'galicia.svg',
         tint: 'accent-soft',
         art: 'art-nx.png',
       },

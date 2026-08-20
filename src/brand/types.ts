@@ -166,11 +166,26 @@ export type Stat = {
    * A name, set like one, in place of the sentence.
    *
    * The reference closes its row with «Somos parte del» over a logo. This is
-   * that line, and it is deliberately NOT the other company's mark: reproducing
-   * a third party's logotype inside a demo nobody at either company asked for
-   * is the one thing on this page that would stop being a quotation.
+   * that line. Where `markLogo` is set this text stays as the accessible name
+   * and the logotype is what gets drawn.
    */
   readonly mark?: string
+  /**
+   * The logotype for `mark`, as a file in `brand-assets/<id>/`.
+   *
+   * THE ONE THIRD-PARTY LOGOTYPE ON THIS PAGE, and it needs its reason written
+   * down. Everything else here quotes Naranja X, whose brand the whole demo is
+   * a study of; this is the mark of the group that owns them, and it is drawn
+   * because «Somos parte del» is a sentence that names a company and stops in
+   * mid-air without it.
+   *
+   * Nominative use: it identifies the company it belongs to and claims nothing.
+   * The file is the one Commons carries as public domain — below the threshold
+   * of originality, trademark intact, credited to the group itself — and the
+   * footer already states that the page is unofficial and that the marks are
+   * their owners'.
+   */
+  readonly markLogo?: string
   /**
    * The drawing in the bottom corner, as an inline `<svg>`. Decorative.
    *

@@ -859,11 +859,11 @@
   font-weight: 500;
 }
 
-/* The last card in the row says who the company belongs to and then prints the
-   name. Set like a name — one size down from the shout, in the other ink, and
-   never below the size at which bold type is allowed to be this colour on this
-   ground. See `mark` in `src/brand/types.ts` for why it is type and not a
-   logotype. */
+/* The last card in the row says who the company belongs to and then names it.
+   Set like a name — one size down from the shout, in the other ink, and never
+   below the size at which bold type is allowed to be this colour on this
+   ground. This is the fallback: where the brand supplies the logotype, the rule
+   below draws that instead and these values never apply. */
 .stat-card__mark {
   font-size: clamp(20px, 1.8vw, 24px);
   line-height: 1.2;
@@ -875,6 +875,25 @@
      the one place on the page where the brand's other ink carries a whole line,
      and giving it up would have been giving up the card. */
   color: color-mix(in srgb, var(--color-brand-accent) 68%, var(--color-ink-950));
+}
+
+/* The logotype, where there is one. See `markLogo` in `src/brand/types.ts` for
+   why this page draws one third-party mark and only one.
+
+   Sized off the card rather than to a pixel height, because it is the only
+   thing in this row that is a fixed drawing: everything else reflows and a
+   logotype that did not would drift out of the measure as the row narrows. The
+   cap keeps it from outgrowing the shout above it at the widest column.
+
+   No colour of ours goes near it. A logotype is two inks its owner chose and
+   the contrast argument above — which deepens OUR accent to clear 4.6:1 — has
+   no business being applied to somebody else's mark. It lands on the peach card
+   at the orange it is drawn in. */
+.stat-card__logo {
+  display: block;
+  width: 82%;
+  max-width: 168px;
+  height: auto;
 }
 
 /* The drawing in the corner, at a sixth of the ink and bled off two edges so it

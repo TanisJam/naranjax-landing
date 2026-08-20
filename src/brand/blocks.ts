@@ -52,7 +52,10 @@ const heroLine = (line: string): string => `<span class="hero-line">${escape(lin
  *
  * `data-reveal="side"` is that entrance; the delay is what spaces the five out.
  */
-function statCard({ value, unit, label, mark, motif, art, tint }: Stat, index: number): string {
+function statCard(
+  { value, unit, label, mark, markLogo, motif, art, tint }: Stat,
+  index: number,
+): string {
   // The figure gets an element of its own so it can be counted up as the card
   // arrives — see `countUp` in `src/page/PageMotion.ts`. It has to be its own
   // element rather than the whole line: the unit rides inside that line, and a
@@ -66,8 +69,15 @@ function statCard({ value, unit, label, mark, motif, art, tint }: Stat, index: n
     : counted
   // A name where the sentence would be, or the sentence. Never both: the card
   // that carries a lockup is the one card in the row that is not a figure.
+  //
+  // Where the brand has the logotype, that is what gets drawn — and `mark` is
+  // not dropped for it, it becomes the alt text. The card reads «Somos parte
+  // del Grupo Galicia» either way, seen or spoken.
+  const named = markLogo
+    ? `<img class="stat-card__logo" src="/${escape(markLogo)}" alt="${escape(mark ?? '')}" loading="lazy" decoding="async">`
+    : escape(mark ?? '')
   const under = mark
-    ? `<p class="stat-card__mark">${escape(mark)}</p>`
+    ? `<p class="stat-card__mark">${named}</p>`
     : `<p class="stat-card__label">${escape(label ?? '')}</p>`
   // Artwork if the brand has it, the drawn glyph if it does not, and never
   // both — see `art` in `types.ts`. `aria-hidden` either way: both of them say
