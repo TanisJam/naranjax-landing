@@ -128,11 +128,30 @@
    horizontal edge sat across the plancha at rest, in every frame, on every
    load. A tint that stops in the middle of a flat ground is not subtle.
 
-   The exit gets away with the same translate because it only ever runs while
-   the hero is on its way off the screen, and by then the edge has nothing flat
-   left to cut across. So: if the card needs to sit higher again, move the
-   ARTWORK inside the canvas — the camera, the scene — and leave this element
-   exactly where the layout put it.
+   The exit was left on the stage on the grounds that it only runs while the
+   hero is leaving, and that was wrong twice. It outruns the scroll by design —
+   `LAUNCH_REACH` is what makes the card look thrown rather than dragged — so at
+   1440x900 the stage was already 247px clear of the hero's bottom edge with
+   413px of that hero still on screen, and the grain stopped in the middle of
+   it. And a translate on the stage does a second, quieter thing: any value
+   other than `none` makes the element A STACKING CONTEXT, which is precisely
+   what the note on `stage-grain-in` below says must not happen in the resting
+   state. Sealed inside the stage, the grain has a transparent backdrop to
+   blend against, and `overlay` against nothing is not a soft blend, it is NO
+   blend — the raw noise, ungoverned, at its full 0.14.
+
+   SO THE TRANSLATE MOVES DOWN ONE ELEMENT, to the canvas. The canvas is the
+   artwork and nothing else: it carries no grain, it draws transparent, and
+   moving it moves the card and moves nothing that can be seen to have an edge.
+   The stage keeps the box the layout gave it, stays out of the stacking
+   business, and the grain lies still across the whole plancha while the card
+   flies up out of it.
+
+   The pointer classes measure the STAGE, so while the exit is running the
+   artwork is drawn a little above where a hit test thinks it is. That is the
+   accepted cost and it is bounded by the gesture: the exit is non-zero only
+   after the reader has left the first tenth of the hero, by which point the
+   card is on its way off the screen and nobody is aiming at it.
 
    NOT applied under `[data-framed]`, which is the swap that takes this canvas
    fullscreen. That swap measures the canvas before and after and compensates
@@ -141,7 +160,7 @@
    as it is gone by the time the canvas IS the viewport, because a fullscreen
    canvas is already where it needs to be. Instant rather than transitioned, for
    the same reason: the compensation is computed for the frame of the swap. */
-#sheets-stage:not([data-framed]) {
+#sheets-stage:not([data-framed]) canvas {
   translate: 0 var(--hero-exit, 0px);
 }
 
