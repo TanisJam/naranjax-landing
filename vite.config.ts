@@ -23,6 +23,15 @@ import type { Brand } from './src/brand/types'
  */
 function brandPlugin(): Plugin {
   const brand = resolveBrand(process.env.VITE_BRAND)
+  // A FILE ON DISK BEATS THE DRAWING OF ONE, and the order below is what says
+  // so — `binaries` is spread last, so anything a brand actually ships in
+  // `brand-assets/<id>/` replaces the generated entry of the same name.
+  //
+  // Stated here rather than left to the reader to infer from Map semantics,
+  // because it IS load-bearing now: `brand-assets/naranjax/favicon.svg` is the
+  // company's own published icon, and swapping these two lines would silently
+  // go back to serving a redrawing of it. `brand.icon` stays as the fallback
+  // for a brand that has no published SVG, which is what mandarinax is.
   const generated = new Map<string, string | Uint8Array>([
     ['favicon.svg', brand.icon(brand.palette.ink[950])],
     ['site.webmanifest', manifest(brand)],

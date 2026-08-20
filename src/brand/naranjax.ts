@@ -342,11 +342,20 @@ export const naranjax: Brand = {
     { title: 'Naranja X', attrs: 'class="h-6 w-auto"' },
   ),
 
-  // The same construction the other brand's icon uses: the accent as the tile,
-  // the mark punched out of it in the page's own near-black. The two-ink split
-  // does not come along, and it could not — at sixteen pixels the violet arm is
-  // two pixels wide, and two pixels of #50007f against #ff5000 is a smudge
-  // rather than a second colour.
+  // THIS NO LONGER SHIPS FOR THIS BRAND, and editing it will not change what a
+  // browser tab shows. `brand-assets/naranjax/favicon.svg` is the company's own
+  // published icon and the build serves that instead — see the note on the
+  // asset map in `vite.config.ts`. Kept because the `Brand` contract requires
+  // it and because it is what any brand WITHOUT a published SVG falls back to.
+  //
+  // It is also worth keeping for what the published file settles. This used to
+  // argue that the two-ink split could not survive a favicon: that at sixteen
+  // pixels the violet arm is two pixels wide, and two pixels of #50007f against
+  // #fe5000 is a smudge rather than a second colour. Reasonable, and wrong —
+  // Naranja X ships exactly that split at exactly that size, and carries the
+  // whole NX rather than the X alone. The argument was sound and the premise
+  // was guesswork, which is the difference between reasoning about a mark and
+  // reading the one its owner publishes.
   icon: (ground) =>
     squareIcon(MARK, { letters: ground, mark: ground }, {
       ground: ACCENT,
