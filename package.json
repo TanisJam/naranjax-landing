@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:naranjax": "VITE_BRAND=naranjax vite",
     "build": "tsc --noEmit && vite build",
+    "build:naranjax": "VITE_BRAND=naranjax npm run build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
