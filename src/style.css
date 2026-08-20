@@ -110,20 +110,29 @@
   transition: background-color var(--framed-out, 420ms) ease;
 }
 
-/* HOW HIGH THE CARD SITS, AND WHAT BECOMES OF IT ON THE WAY OUT.
-
-   Two offsets on one property, and they are different in kind.
-
-   `--hero-lift` is layout. The artwork is drawn in the middle of a canvas that
-   is exactly the viewport, and the bottom third of that viewport is spoken for
-   by the claim — so the middle of the canvas is not the middle of the room the
-   card actually has. Measured at 1440x900 the gap above the card was 148px
-   against 270px below it; a fourteenth of the hero takes those to about 85 and
-   335, which is a card sitting above its own promise rather than on it, and it
-   is the room the claim needs when it comes up to take this space.
+/* WHAT BECOMES OF THE CARD ON THE WAY OUT — and nothing else.
 
    `--hero-exit` is the scroll, written by `PageMotion`, and it is zero until
    the reader has left the first tenth of the hero. See `driveHeroWithScroll`.
+   The card therefore rests wherever the canvas draws it, dead centre, and this
+   property is untouched until the reader moves.
+
+   THERE WAS A SECOND OFFSET HERE AND IT IS NOT COMING BACK. `--hero-lift` held
+   the card a fourteenth of the hero above centre, to open room under it for the
+   claim — measured at 1440x900 it took the gaps from 148px above and 270px
+   below to about 85 and 335. It looked right and it was still wrong, because
+   this rule does not move the artwork, it moves the ELEMENT: `#sheets-stage`
+   carries the grain as `::after`, `inset: 0`, `mix-blend-mode: overlay` at 0.14
+   over the hero's plancha. Translating the stage translates that veil with it,
+   so the grain ended a fourteenth of the hero short of the bottom and a hard
+   horizontal edge sat across the plancha at rest, in every frame, on every
+   load. A tint that stops in the middle of a flat ground is not subtle.
+
+   The exit gets away with the same translate because it only ever runs while
+   the hero is on its way off the screen, and by then the edge has nothing flat
+   left to cut across. So: if the card needs to sit higher again, move the
+   ARTWORK inside the canvas — the camera, the scene — and leave this element
+   exactly where the layout put it.
 
    NOT applied under `[data-framed]`, which is the swap that takes this canvas
    fullscreen. That swap measures the canvas before and after and compensates
@@ -133,7 +142,7 @@
    canvas is already where it needs to be. Instant rather than transitioned, for
    the same reason: the compensation is computed for the frame of the swap. */
 #sheets-stage:not([data-framed]) {
-  translate: 0 calc(var(--hero-lift, -7%) + var(--hero-exit, 0px));
+  translate: 0 var(--hero-exit, 0px);
 }
 
 /* Written by `CardTumble` and only while the card is shut, because that is the
