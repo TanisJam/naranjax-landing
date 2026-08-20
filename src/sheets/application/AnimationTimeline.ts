@@ -479,7 +479,27 @@ export class AnimationTimeline {
       )
     }
 
-    if (this.focusProgress === 0) {
+    // AT ZERO **AND ASKED TO BE THERE**. The target is what tells a focus that
+    // has finished coming home from one that has not started yet, and progress
+    // alone cannot: it reads 0 in both cases.
+    //
+    // Leaving the target out of it is a bug that only appears when a frame
+    // arrives with `delta` of zero, and exactly one thing produces that — the
+    // clock being restarted. `main.ts` stops the loop whenever the stage is
+    // scrolled off screen, so opening a layer from the feature list, which is
+    // eighteen hundred pixels below the hero, ran this order:
+    //
+    //   click -> focusTarget = 1, focused = plate, stage goes fullscreen
+    //   the stage is now in view, so the observer restarts the loop
+    //   first frame back: getDelta() is ~0, so progress steps by ~0 and stays 0
+    //   -> this branch fires, nulls `focused`, and calls `onFocusRelease`
+    //   -> which deletes `data-framed` and clears the reframe
+    //
+    // The panel then sat open, `main` inert, over a card still parked up in the
+    // hero where nobody could see it. Every other route in is a click on the
+    // artwork itself, which can only happen while the loop is already running
+    // and a real delta is coming, which is why it took the list to show it.
+    if (this.focusProgress === 0 && this.focusTarget === 0) {
       const released = this.focused
       this.focused = null
       if (released) {
