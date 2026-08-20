@@ -1,4 +1,5 @@
 import { Vector2 } from 'three'
+import type { WebGLRenderer } from 'three'
 import type { FilmGrainUniforms } from '../infrastructure/three/material/sheetMaterial'
 
 /**
@@ -67,6 +68,21 @@ export class FilmGrain {
   readonly uniforms: FilmGrainUniforms = {
     uGrain: { value: GRAIN_AMOUNT },
     uGrainSeed: { value: new Vector2() },
+    uViewTexel: { value: new Vector2(1, 1) },
+  }
+
+  /**
+   * Measured against the DRAWING BUFFER rather than the CSS box, because that
+   * is what `gl_FragCoord` counts in and the cells are locked to it. On a 2x
+   * display the two differ by exactly the factor that would halve the grain.
+   *
+   * Called on every resize, including the ones that only move the drawing
+   * buffer — the resolution governor changes the pixel ratio without the CSS
+   * box moving at all, and the grain has to follow it.
+   */
+  resize(renderer: WebGLRenderer): void {
+    const size = renderer.getDrawingBufferSize(new Vector2())
+    this.uniforms.uViewTexel.value.set(1 / Math.max(1, size.x), 1 / Math.max(1, size.y))
   }
 
   private elapsed = 0

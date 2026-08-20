@@ -157,32 +157,20 @@ const baseSurface: SheetSurface = {
   imperfection: 0.13,
   // Off by default: the two covers are finished card and scatter nothing. Every
   // layer between them turns it on — that is what they are made of.
+  //
+  // This is the MILKY BODY, and it is all that is left of the frost. It had a
+  // sibling, `frostsBackdrop`, which diffused what was behind a ply as well —
+  // seven layers carried it. Diffusing the backdrop meant copying the
+  // framebuffer mid-frame, and a mid-frame copy makes the GPU finish everything
+  // already queued: measured on the closed resting pose at the resolution the
+  // piece settles at, the frame ran 31.1 gpu ms against a 16.6 ms budget, of
+  // which 20 were that flag. It came out, and the frame came down to 12.1.
+  //
+  // Two plates carried 13.4 of those 20 between them and only TOGETHER, which
+  // is why there was no subset worth keeping. The whole capture path went with
+  // it — see the commit that removed `BackdropCapture`. What that costs in look
+  // is written on the milkiness term in `sheetShader.ts`, and it is still open.
   frost: 0,
-  // OFF ON EVERY LAYER, and it is the one value in this file settled by
-  // measurement rather than by looking at it.
-  //
-  // It used to track `frost`: a sheet that frosts its own body while leaving
-  // the stack behind it razor sharp is the tell that it is a tint and not a
-  // material, so every layer between the covers turned it on. Seven of them.
-  //
-  // What that cost. Diffusing the backdrop copies the framebuffer mid-frame,
-  // and a mid-frame copy makes the GPU finish everything already queued. On the
-  // closed resting pose, at the resolution the piece actually settles at — a
-  // forced ratio of 1, governor off, GPU timer, medians of three interleaved
-  // rounds — the frame ran 31.1 gpu ms against a 16.6 ms budget. That is the
-  // thirty frames a second it was reported at. With this off everywhere the
-  // same frame ran 11.4. Two thirds of the frame, for the blur behind the plies.
-  //
-  // It did not divide evenly, which is why there is no subset to keep. Two
-  // plates — `holo-wave` and `translucent-emboss`, the pair that draw first —
-  // carried 13.4 of those 20 ms between them, and only TOGETHER: unfrosting
-  // either one on its own measured nothing at all.
-  //
-  // What each layer loses is real, and it was argued out in the comments that
-  // used to sit beside each `true`. Git still has them, and this flag is per
-  // layer precisely so one of those arguments can be taken up again alone. The
-  // milky body is untouched — `frost` is a handful of instructions and stays.
-  frostsBackdrop: false,
   frostColor: '#fff5ee',
   // Off by default, and every ply between the two covers turns it on. The
   // covers do not: their print covers the rect edge to edge at full ink, so a

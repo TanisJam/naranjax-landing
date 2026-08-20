@@ -751,9 +751,7 @@ uniform float uAbsorption;
 uniform float uImperfection;
 uniform float uFrost;
 uniform vec3 uFrostColor;
-uniform sampler2D uBackdrop;
-uniform vec2 uBackdropTexel;
-uniform float uFrostSpread;
+uniform vec2 uViewTexel;
 uniform sampler2D uDecalMap;
 uniform sampler2D uDecalHeightMap;
 uniform float uDecalInk;
@@ -1034,31 +1032,6 @@ void weaveField(out float mask, out vec2 slope, out float fade) {
   slope = gradient;
 }
 
-/**
- * What is behind this fragment, scattered.
- *
- * Golden-angle spiral rather than a grid or a box: the samples never line up on
- * an axis, so a kernel this sparse dissolves detail instead of printing its own
- * shape over it. sqrt(t) on the radius is what spreads the taps evenly across
- * the DISC — without it they crowd the centre and the edge of the blur goes
- * ragged, since area grows with the square of the radius.
- */
-vec3 frostedBackdrop(vec2 uv, float radius, out float coverage) {
-  vec4 sum = texture2D(uBackdrop, uv);
-
-  const float GOLDEN_ANGLE = 2.399963229728653;
-  for (int i = 1; i <= FROST_TAPS; i++) {
-    float t = float(i) / float(FROST_TAPS);
-    float angle = float(i) * GOLDEN_ANGLE;
-    vec2 offset = vec2(cos(angle), sin(angle)) * sqrt(t) * radius;
-    sum += texture2D(uBackdrop, uv + offset * uBackdropTexel);
-  }
-
-  sum /= float(FROST_TAPS + 1);
-  coverage = sum.a;
-  return sum.rgb;
-}
-
 float ribField(out float fade) {
   float phase = vParam.y * uRibFrequency * SHEET_TWO_PI + uRibPhase;
   // Narrow window, fully faded well before a cycle nears the pixel grid.
@@ -1219,11 +1192,14 @@ diffuseColor.rgb *= mix(vec3(1.0), uCoreColor, facing * uAbsorption);
 // notes had already recorded once from the other direction: a near-white body
 // reads as grey where anything sits behind it. Alpha is what closes a sheet.
 // Albedo is what colours it. Driving both off one number confuses them.
-// The albedo term is deliberately the weaker of the two now that the frost has
-// a real backdrop to scatter. Milkiness that used to have to be PAINTED into
-// the body is produced by the diffused capture instead, and running both at the
-// old weight whitened the foils twice over — once as albedo and once again as
-// the pale blur composited under them.
+// READ THIS BEFORE TOUCHING THE 0.1 BELOW. The albedo term was deliberately
+// weakened when the frost still had a real backdrop to scatter: milkiness that
+// used to be PAINTED into the body was produced by the diffused capture
+// instead, and running both at the old weight whitened the foils twice over.
+// That capture has since been removed — it was two thirds of the frame — so
+// this term is now carrying the milkiness alone at a weight chosen for sharing
+// it. The foils read glassier than they were authored to. Raising it back is a
+// look decision that is still open, not an oversight.
 if (uFrost > 0.0) {
   float depthAlongView = mix(0.45, 1.0, 1.0 - facing) * uFrost;
   diffuseColor.rgb = mix(diffuseColor.rgb, uFrostColor, depthAlongView * 0.1);
@@ -1252,7 +1228,7 @@ totalEmissiveRadiance += uRimColor * (1.0 - smoothstep(0.0, 0.35, vBevel)) * uBe
 `
 
 /**
- * Appended to `<colorspace_fragment>`, and BEFORE the backdrop composite below.
+ * Appended to `<colorspace_fragment>`.
  *
  * Film grain, and it belongs to the camera rather than to any sheet — which is
  * why every layer reads the same two uniform objects and arrives at the same
@@ -1269,12 +1245,11 @@ totalEmissiveRadiance += uRimColor * (1.0 - smoothstep(0.0, 0.35, vBevel)) * uBe
  * since the page owns the backdrop behind it — a thing this gets for free by
  * riding the same alpha as everything else.
  *
- * Ordered before the frost composite deliberately. The frosted layers scatter a
- * capture of the framebuffer, which already carries the grain of everything
- * drawn under them; graining after the composite would apply it a second time to
- * whatever shows through. What is left is a grain that gets blurred along with
- * the backdrop it sits in, which is the right answer anyway — the defocused
- * thing behind the glass is defocused, grain included.
+ * `uViewTexel` is the drawing buffer's texel size, and this is the only thing
+ * that reads it. It arrives through `FilmGrainUniforms` because the cell grid
+ * is locked to the FILM PLANE — see the note on the cell below. It used to be
+ * owned by the backdrop capture, which measured the same buffer for its own
+ * reasons and is gone.
  */
 export const FRAGMENT_GRAIN_CHUNK = /* glsl */ `
 if (uGrain > 0.0) {
@@ -1282,7 +1257,7 @@ if (uGrain > 0.0) {
   // the film plane: it does not travel with the object, does not stretch at
   // grazing angles, and does not get finer as a plate turns away. Anchored to
   // the geometry it would be a texture, and a texture is what this is not.
-  vec2 cell = floor(gl_FragCoord.xy * uBackdropTexel.y * SHEET_GRAIN_DENSITY);
+  vec2 cell = floor(gl_FragCoord.xy * uViewTexel.y * SHEET_GRAIN_DENSITY);
   // The seed offsets the HASH INPUT rather than the grid, so the cells stay
   // pixel-aligned and only their values change. Offsetting the grid instead
   // slides the whole field a fraction of a cell every shutter, which reads as
@@ -1297,52 +1272,6 @@ if (uGrain > 0.0) {
   // the one place a photograph never has any.
   float density = dot(gl_FragColor.rgb, vec3(0.2126, 0.7152, 0.0722));
   gl_FragColor.rgb += g * uGrain * 4.0 * density * (1.0 - density);
-}
-`
-
-/**
- * Appended to `<colorspace_fragment>`: the frosted layers composite what is
- * behind them by hand, instead of letting the blend do it.
- *
- * AFTER the colour conversion and not before, which is not a detail. The
- * capture is a copy of the framebuffer, so it is already tone mapped and
- * already encoded; mixing it into linear light would put two different curves
- * in the same average and the result goes muddy in the midtones every time.
- *
- * The layer then has to REPLACE what it covers rather than blend into it —
- * `blendDst: ZeroFactor` on the material — because the whole point is that the
- * blend's own `dst` is the sharp version this is here to get rid of. Compositing
- * manually and blending on top would show both.
- *
- * Weighted by the capture's own alpha, so a sheet with nothing behind it shows
- * its body and stays see-through to the page rather than frosting empty space
- * into a grey plate. That is also the physical answer: nothing behind means
- * nothing to transmit.
- */
-export const FRAGMENT_BACKDROP_CHUNK = /* glsl */ `
-if (uFrostSpread > 0.0) {
-  float behindAlpha;
-  vec3 behind = frostedBackdrop(
-    gl_FragCoord.xy * uBackdropTexel,
-    // Collapsed to nothing at the outline. A frosted layer REPLACES what it
-    // covers rather than blending into it, so an edge fragment at zero coverage
-    // still writes -- and what it has to write is the destination it found. A
-    // capture read at radius zero is exactly that destination; read at any
-    // other radius it is a blur bleeding one frost radius past the silhouette,
-    // which is a halo around the plate instead of an edge on it.
-    uFrostSpread / uBackdropTexel.y * gEdge,
-    behindAlpha
-  );
-
-  // Straight "over", with the diffused capture standing in for the destination.
-  // Both sides are premultiplied — the framebuffer holds premultiplied colour
-  // after any blend, and this writes premultiplied colour back — so the two
-  // stay in the same representation across every layer of the stack.
-  float bodyAlpha = gl_FragColor.a;
-  gl_FragColor = vec4(
-    gl_FragColor.rgb * bodyAlpha + behind * (1.0 - bodyAlpha),
-    bodyAlpha + behindAlpha * (1.0 - bodyAlpha)
-  );
 }
 `
 

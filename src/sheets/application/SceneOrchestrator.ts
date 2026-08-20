@@ -1,7 +1,6 @@
 import { Clock, Euler, Group, Quaternion, Vector3 } from 'three'
 import { clamp } from '../domain/easing'
 import type { Composition } from '../domain/types'
-import { BackdropCapture } from '../infrastructure/three/BackdropCapture'
 import { SheetObject } from '../infrastructure/three/SheetObject'
 import {
   CAMERA_TARGET,
@@ -222,13 +221,7 @@ export class SceneOrchestrator {
   readonly artwork: Group
   private readonly stackOrder: StackOrder
   private readonly stackOcclusion: StackOcclusion
-  /**
-   * Public for the same reason `resolution` is: the capture stride is a cost
-   * knob the diagnostics have to be able to move, and its effect is only
-   * observable while the piece is running.
-   */
-  readonly backdrop: BackdropCapture
-  private readonly film: FilmGrain
+    private readonly film: FilmGrain
 
   private readonly parallaxGroup = new Group()
   /**
@@ -331,14 +324,12 @@ export class SceneOrchestrator {
     // Before the sheets: every material merges the occlusion uniforms into its
     // own program as it is built, so the field has to exist first.
     this.stackOcclusion = new StackOcclusion(composition.sheets)
-    this.backdrop = new BackdropCapture()
     this.film = new FilmGrain()
 
     this.sheets = composition.sheets.map((layer, index) => {
       const sheet = new SheetObject(
         layer,
         this.stackOcclusion.uniforms,
-        this.backdrop,
         this.film.uniforms,
         index,
       )
@@ -433,7 +424,6 @@ export class SceneOrchestrator {
     this.tumble?.dispose()
     this.inspector?.dispose()
     for (const sheet of this.sheets) sheet.dispose()
-    this.backdrop.dispose()
     this.stage.dispose()
   }
 
@@ -542,9 +532,9 @@ export class SceneOrchestrator {
     const { clientWidth, clientHeight } = this.container
     if (clientWidth === 0 || clientHeight === 0) return false
     this.stage.resize(clientWidth, clientHeight)
-    // After the stage, which is what sets the drawing buffer the capture has to
-    // match texel for texel.
-    this.backdrop.resize(this.stage.renderer)
+    // After the stage, which is what sets the drawing buffer the grain cells
+    // have to match texel for texel.
+    this.film.resize(this.stage.renderer)
     // And after the camera, which is what all three of these measure.
     this.fitFocus()
     this.fitClosed()
@@ -741,15 +731,6 @@ export class SceneOrchestrator {
     // Advanced on elapsed time rather than per frame — the grain is an exposure,
     // not a redraw. See `SHUTTER_HZ`.
     this.film.update(delta)
-    // Before the draw, never after: the capture stride counts layers within a
-    // frame, so it has to start from zero on the frame it is counting.
-    //
-    // And sharing is switched off outright while a layer is being read. The
-    // stride is only sound while the draw order is the stack order — that is
-    // what keeps a reused capture one plate stale instead of half a deck — and
-    // `StackOrder` lifts the read layer to the end of the queue, which is
-    // precisely the case that breaks it. See `beginFrame`.
-    this.backdrop.beginFrame(this.timeline.focused === null)
     this.stage.renderer.render(this.stage.scene, this.stage.camera)
 
     // After the draw, so the interval spans a whole frame including whatever

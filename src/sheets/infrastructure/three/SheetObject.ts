@@ -15,7 +15,6 @@ import type { SheetDecal, SheetLayer } from '../../domain/types'
 import { createShellGeometry } from './geometry/shellGeometry'
 import { createCardFaceTexture, createCardReliefTexture } from './material/cardFaceTexture'
 import { createLayerMotifTexture } from './material/layerMotifTexture'
-import type { BackdropCapture } from './BackdropCapture'
 import {
   createSheetDepthMaterial,
   createSheetMaterial,
@@ -267,11 +266,6 @@ export class SheetObject {
      */
     occlusion: StackOcclusionUniforms,
     /**
-     * The shared frame capture a frosted layer scatters. Only layers with frost
-     * ever touch it — see the `onBeforeRender` below.
-     */
-    backdrop: BackdropCapture,
-    /**
      * The camera's film. Shared by every layer and written by nobody here —
      * grain belongs to the frame, not to a sheet. See `FilmGrain`.
      */
@@ -304,7 +298,6 @@ export class SheetObject {
       this.decalMap,
       this.reliefMap,
       occlusion,
-      backdrop.uniforms,
       grain,
       layerIndex,
     )
@@ -337,22 +330,6 @@ export class SheetObject {
     if (this.depthMaterial) mesh.customDepthMaterial = this.depthMaterial
     // `position` is a zero buffer; nothing on the CPU knows where this ends up.
     mesh.frustumCulled = false
-
-    // Freeze the frame the instant before this layer draws over it. The layers
-    // go back to front, so what is in the framebuffer at this moment is exactly
-    // what lies behind this sheet — no more, no less. Not registered on layers
-    // without frost, so the four opaque ones cost nothing.
-    //
-    // Safe from the shadow pass: that path calls `onBeforeShadow` and renders
-    // through `renderBufferDirect`, never through the hook used here.
-    if (layer.surface.frostsBackdrop) {
-      // The index goes with it because sharing a capture is only sound between
-      // layers that are NEIGHBOURS in the stack, and the count of frosted
-      // layers cannot tell `BackdropCapture` that on its own — an opaque ply
-      // between two frosted ones is invisible to a counter and fatal to the
-      // rule. See `capture`.
-      mesh.onBeforeRender = (renderer) => backdrop.capture(renderer, layerIndex)
-    }
 
     this.mesh = mesh
 

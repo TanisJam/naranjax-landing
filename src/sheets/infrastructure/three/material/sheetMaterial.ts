@@ -1,16 +1,13 @@
 import {
   Color,
-  CustomBlending,
   DataTexture,
   FrontSide,
   Matrix4,
   MeshDepthMaterial,
   MeshPhysicalMaterial,
-  OneFactor,
   SRGBColorSpace,
   Vector2,
   Vector4,
-  ZeroFactor,
   type IUniform,
   type Texture,
   type WebGLProgramParametersWithUniforms,
@@ -19,7 +16,6 @@ import type { SheetShape, SheetSurface, WeavePattern } from '../../../domain/typ
 import {
   DEPTH_SHARED_PRELUDE,
   FRAGMENT_AO_CHUNK,
-  FRAGMENT_BACKDROP_CHUNK,
   FRAGMENT_COLOR_CHUNK,
   FRAGMENT_DEPTH_ALPHA_CHUNK,
   FRAGMENT_EMISSIVE_CHUNK,
@@ -33,12 +29,6 @@ import {
   VERTEX_POSITION_CHUNK,
   VERTEX_PRELUDE,
 } from './sheetShader'
-
-/** The captured frame every frosted layer scatters. See `BackdropCapture`. */
-export interface BackdropUniforms {
-  uBackdrop: IUniform<Texture>
-  uBackdropTexel: IUniform<Vector2>
-}
 
 /**
  * The stack's occlusion field, held by one owner and read by every layer.
@@ -73,24 +63,19 @@ export interface FilmGrainUniforms {
   uGrain: IUniform<number>
   /** Reseeds the field; changes at the shutter rate, not at the frame rate. */
   uGrainSeed: IUniform<Vector2>
+  /**
+   * One over the DRAWING BUFFER's size, in pixels — not the CSS box, which on a
+   * 2x display differs by exactly the factor that would misregister the cells.
+   *
+   * Here because the grain is the only thing that reads it and the grid is
+   * locked to the film plane. It was the backdrop capture's uniform until that
+   * was removed; `FilmGrain.resize` now measures the same buffer.
+   */
+  uViewTexel: IUniform<Vector2>
 }
 
-/**
- * How wide the frost scatters at full strength, as a fraction of the drawing
- * buffer height.
- *
- * Small in absolute terms and it has to be. What frosting destroys is DETAIL,
- * and the detail in this stack — the print on the far card, the engraving, the
- * weave — is only a few pixels across at this camera distance. A radius wide
- * enough to be obvious as an effect drags whole layers into each other and the
- * stack turns to soup; this one is set where the text behind stops being
- * readable and the colour fields behind barely move at all, which is exactly
- * what a sheet of etched glass does to a page held behind it.
- */
-const FROST_MAX_SPREAD = 0.013
-
 /** Every knob the shader exposes. Animation writes straight into these. */
-export interface SheetUniforms extends StackOcclusionUniforms, BackdropUniforms, FilmGrainUniforms {
+export interface SheetUniforms extends StackOcclusionUniforms, FilmGrainUniforms {
   /**
    * Mesh space to the ARTWORK's space, where the stack is genuinely stacked
    * along +Y. Rewritten each frame by `StackOcclusion`, which is also the only
@@ -149,7 +134,6 @@ export interface SheetUniforms extends StackOcclusionUniforms, BackdropUniforms,
   uFrostColor: IUniform<Color>
   /** Blur radius, as a fraction of the drawing buffer HEIGHT so it is
    * resolution independent — the same frost at 1x and at 2x. */
-  uFrostSpread: IUniform<number>
   uDecalMap: IUniform<Texture>
   /**
    * Where the relief is differentiated from. The decal itself on every layer
@@ -268,7 +252,7 @@ export function createSheetDepthMaterial(
   // even though a depth pass never evaluates them — an array with no length
   // does not compile. MeshDepthMaterial carries no defines of its own, unlike
   // the physical material this is the shadow half of.
-  material.defines = { SHEET_LAYERS: uniforms.uOccluder.value.length, FROST_TAPS: 10 }
+  material.defines = { SHEET_LAYERS: uniforms.uOccluder.value.length }
   material.userData = { sheetUniforms: uniforms } satisfies SheetMaterialUserData
   material.onBeforeCompile = applySheetDepthShader
   return material
@@ -311,7 +295,7 @@ function applySheetShader(
     // already grained, so the two orders differ. See FRAGMENT_GRAIN_CHUNK.
     .replace(
       '#include <colorspace_fragment>',
-      `#include <colorspace_fragment>\n${FRAGMENT_GRAIN_CHUNK}\n${FRAGMENT_BACKDROP_CHUNK}`,
+      `#include <colorspace_fragment>\n${FRAGMENT_GRAIN_CHUNK}`,
     )
 }
 
@@ -321,14 +305,12 @@ export function createSheetMaterial(
   decalMap: Texture | null,
   reliefMap: Texture | null,
   occlusion: StackOcclusionUniforms,
-  backdrop: BackdropUniforms,
   grain: FilmGrainUniforms,
   layerIndex: number,
 ): { material: MeshPhysicalMaterial; uniforms: SheetUniforms } {
   const uniforms: SheetUniforms = {
     // Spread, so every layer holds the SAME uniform objects the owner writes.
     ...occlusion,
-    ...backdrop,
     ...grain,
     uStackMatrix: { value: new Matrix4() },
     uLayerIndex: { value: layerIndex },
@@ -380,9 +362,6 @@ export function createSheetMaterial(
     uImperfection: { value: surface.imperfection },
     uFrost: { value: surface.frost },
     uFrostColor: { value: new Color(surface.frostColor) },
-    // Zero on a layer that does not frost its backdrop, which is also what
-    // switches the composite off — see the branch in FRAGMENT_BACKDROP_CHUNK.
-    uFrostSpread: { value: surface.frostsBackdrop ? surface.frost * FROST_MAX_SPREAD : 0 },
     uDecalMap: { value: decalMap ?? BLANK_DECAL },
     // Falls back to the decal, which is what every layer authored before this
     // sampler existed already meant by relief. The blank is flat in alpha, so a
@@ -431,24 +410,6 @@ export function createSheetMaterial(
     depthWrite: surface.opacity >= 1,
   })
 
-  // A frosted layer has already done the blend itself, in the shader, against a
-  // scattered copy of the frame — so the hardware must not do it a second time.
-  // `One / Zero` writes the composite straight through. Left on the default and
-  // the sharp destination comes back underneath the diffused one, which reads as
-  // a ghost of the layer behind rather than as glass.
-  if (surface.frostsBackdrop) {
-    material.blending = CustomBlending
-    material.blendSrc = OneFactor
-    material.blendDst = ZeroFactor
-    material.blendSrcAlpha = OneFactor
-    material.blendDstAlpha = ZeroFactor
-    // Still in the transparent queue: that is what honours the back-to-front
-    // `renderOrder` the capture depends on, and what keeps these off the
-    // early-z sort that would run them nearest-first.
-    material.transparent = true
-    material.depthWrite = false
-  }
-
   // What replaces those depth writes is back-face culling, which is already on.
   //
   // A sheet still has to occlude ITSELF — you never see a sheet's far wall
@@ -475,7 +436,6 @@ export function createSheetMaterial(
     // Enough taps that the spiral reads as a blur rather than as a ring of
     // ghosts, and no more: this runs on seven overlapping full-screen layers,
     // so every tap is paid for seven times over.
-    FROST_TAPS: 10,
   }
   material.userData = { sheetUniforms: uniforms } satisfies SheetMaterialUserData
   material.onBeforeCompile = applySheetShader

@@ -266,30 +266,7 @@ export interface SheetSurface {
    */
   imperfection: number
   frost: number
-  /**
-   * Whether this layer scatters what is BEHIND it as well as its own body.
-   *
-   * Split from `frost` because the two cost wildly different amounts. The milky
-   * body is a handful of instructions. Diffusing the backdrop means freezing the
-   * frame immediately before the layer draws, and a mid-frame copy out of the
-   * framebuffer makes the GPU finish everything queued before it — measured at
-   * roughly half the frame budget for seven of them, against a tap count that
-   * barely moved the needle between six and ten. The stalls are the cost, not
-   * the blur.
-   *
-   * NOTHING CARRIES IT. It was spent by opacity — the two foils and the two
-   * most see-through films — until the closed resting pose was measured at the
-   * resolution the piece settles at: 31.1 gpu ms against a 16.6 ms budget, of
-   * which 20 were this flag across seven layers. The decision and the numbers
-   * are written out beside the default in `composition.ts`.
-   *
-   * The flag stays rather than being deleted, because it is per layer and that
-   * is what keeps the line movable: turning one back on is an edit to one
-   * surface. Be warned that the cost does not divide evenly — the two plates
-   * that draw first carried two thirds of it, and only as a pair.
-   */
-  frostsBackdrop: boolean
-  /**
+    /**
    * What the scattered light looks like. Near-white and slightly cool: it is
    * light that has bounced inside the material rather than the material's own
    * colour, so it carries the light's tint far more than the body's.

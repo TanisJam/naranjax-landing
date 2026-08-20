@@ -154,12 +154,11 @@ function createGpuTimer(renderer: WebGLRenderer): GpuTimer {
   const samples: number[] = []
   const pending: WebGLQuery[] = []
   let original: WebGLRenderer['render'] | null = null
-  // Three renders the shadow map inside the same top-level call, and the
-  // backdrop capture can draw during `onBeforeRender`. Only ONE `TIME_ELAPSED`
-  // query may be open at a time, so nesting has to be counted rather than
-  // assumed away — the outermost call owns the query and the inner ones pass
-  // straight through. Bracketing the outermost is also what makes the number
-  // whole: the shadow pass is part of what the frame cost.
+  // Three renders the shadow map inside the same top-level call. Only ONE
+  // `TIME_ELAPSED` query may be open at a time, so nesting has to be counted
+  // rather than assumed away — the outermost call owns the query and the inner
+  // ones pass straight through. Bracketing the outermost is also what makes the
+  // number whole: the shadow pass is part of what the frame cost.
   let depth = 0
 
   const drain = (): void => {
@@ -300,72 +299,7 @@ export interface Knockouts {
    * to a different multiple of it.
    */
   shadows(on: boolean): string
-  /**
-   * Stops the frost: no backdrop captures, no spiral, no manual composite. The
-   * layers go back to being plain translucent sheets.
-   *
-   * THE MOST EXPENSIVE THING IN THE PIECE, at 5.94 ms of a 13.2 ms frame. Four
-   * of the layers capture the drawing buffer and each frosted fragment walks a
-   * spiral of taps through it, so the cost is a full-buffer copy plus a
-   * many-tap blur, several times over.
-   *
-   * It was measured at -0.1 ms twice and written off as free. Both of those
-   * readings were taken on the frame interval while the piece was holding 60,
-   * where every knockout reads as nothing — see `createGpuTimer`. Nothing about
-   * the frost changed between those readings and this one; the instrument did.
-   *
-   * Both halves at once. `frostCapture` and `frostTaps` split it, and the split
-   * is what says which one to attack — they are entirely different costs with
-   * entirely different fixes, and a single 5.94 ms cannot tell them apart.
-   */
-  frost(on: boolean): string
-  /**
-   * Stops the per-fragment half: the golden-angle spiral of eleven dependent
-   * taps every frosted fragment walks through the capture.
-   *
-   * Scales with COVERED PIXELS and with the blur radius in texels — a wide
-   * radius scatters the taps far enough apart to miss the texture cache, which
-   * is the failure mode a blur at full resolution is built to have.
-   */
-  frostTaps(on: boolean): string
-  /**
-   * Stops the per-frame half: the four full drawing-buffer copies, one before
-   * each frosted layer draws.
-   *
-   * Scales with BUFFER SIZE and with how many layers capture, and not at all
-   * with how much of the screen the stack covers. Leaves the taps running
-   * against a texture nobody refreshes — the frame goes wrong, which is fine,
-   * because what is being timed is the copy.
-   */
-  frostCapture(on: boolean): string
-  /**
-   * How many frosted layers share one backdrop capture. The shipping value is
-   * in `BackdropCapture`; this is for reading the curve, since the whole cost
-   * is per-call and should therefore fall roughly as 1/stride.
-   */
-  frostStride(stride: number): string
-  /**
-   * Capture texels per drawing-buffer pixel, per axis. See `BackdropCapture`.
-   *
-   * The one dial here that separates the two halves of what a capture costs,
-   * which nothing else can: the NUMBER of copies stays exactly the same and
-   * only their AREA moves. A large effect says the copies are bandwidth and a
-   * smaller rectangle is worth chasing; a flat one says they are per-call
-   * stalls and the only lever that will ever matter is how many there are.
-   *
-   * It answered that question and the answer was the second one. Halving this
-   * to 0.25 — a quarter of the texels written — took 5.13 gpu ms off a 129 ms
-   * frame, while removing the copies outright took 24.92. Four per cent for
-   * three quarters of the area is not an area cost.
-   *
-   * Measure it at a pixel ratio the machine CANNOT hold, and that is not a
-   * detail. At 1.75 this piece sits against the vsync period on an M3, the GPU
-   * clocks down between frames, and every knockout in this file reads backwards
-   * — switching work off measures SLOWER, by more than the drift. At 3.5 the
-   * device is saturated, the clocks stay up and the readings go forward again.
-   */
-  captureScale(scale: number): string
-  /**
+            /**
    * Resizes the shadow map, which is the depth pass's FRAGMENT budget.
    *
    * The depth material discards — that is what lets a film cast an honest
@@ -474,13 +408,9 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
   // composition authored rather than whatever the last knockout left behind.
   const pixelRatio = renderer.getPixelRatio()
   const casters = orchestrator.sheets.map((sheet) => sheet.mesh.castShadow)
-  const spreads = orchestrator.sheets.map((sheet) => sheet.uniforms.uFrostSpread.value)
-  const captures = orchestrator.sheets.map((sheet) => sheet.mesh.onBeforeRender)
   const grainAmount = orchestrator.sheets[0]?.uniforms.uGrain.value ?? 0
   const lit = areaLights.map((light) => light.visible)
 
-  const shippedStride = orchestrator.backdrop.stride
-  const shippedScale = orchestrator.backdrop.scale
   const shippedShadowMap = orchestrator.stage.keyLight.shadow.mapSize.x
   const timer = createGpuTimer(renderer)
 
@@ -492,9 +422,9 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
       orchestrator.resolution.enabled = false
       const was = renderer.getPixelRatio()
       renderer.setPixelRatio(ratio)
-      // Never `setPixelRatio` alone: the backdrop capture is sized to the
-      // drawing buffer texel for texel, and a capture that disagrees with it
-      // puts the frost's samples in the wrong place.
+      // Never `setPixelRatio` alone: the grain's cell grid is sized to the
+      // drawing buffer texel for texel, and a grid that disagrees with it
+      // changes the grain under the measurement.
       orchestrator.refresh()
       return `pixel ratio ${was} → ${ratio}`
     },
@@ -527,44 +457,10 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
       return `shadow casters ${given} of ${casters.filter(Boolean).length}`
     },
 
-    frost(on) {
-      knockouts.frostTaps(on)
-      knockouts.frostCapture(on)
-      return `frost ${on ? 'on' : 'off'}`
-    },
 
-    frostTaps(on) {
-      orchestrator.sheets.forEach((sheet, i) => {
-        // Zero is what the branch in the shader tests, so this costs the
-        // fragment nothing beyond the compare — no taps and no composite.
-        sheet.uniforms.uFrostSpread.value = on ? spreads[i]! : 0
-      })
-      return `frost taps ${on ? 'on' : 'off'}`
-    },
 
-    frostStride(stride) {
-      const was = orchestrator.backdrop.stride
-      orchestrator.backdrop.stride = Math.max(1, Math.floor(stride))
-      return `frost capture stride ${was} → ${orchestrator.backdrop.stride}`
-    },
 
-    captureScale(scale) {
-      const was = orchestrator.backdrop.scale
-      orchestrator.backdrop.scale = scale
-      // The target is allocated from this, so it has to be rebuilt — and never
-      // alone: the capture is sized against the drawing buffer.
-      orchestrator.refresh()
-      return `capture scale ${was} → ${scale}`
-    },
 
-    frostCapture(on) {
-      orchestrator.sheets.forEach((sheet, i) => {
-        // The copy of the whole drawing buffer that each frosted layer makes
-        // immediately before it draws.
-        sheet.mesh.onBeforeRender = on ? captures[i]! : () => {}
-      })
-      return `frost capture ${on ? 'on' : 'off'}`
-    },
 
     grain(on) {
       for (const sheet of orchestrator.sheets) {
@@ -590,9 +486,6 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
     reset() {
       knockouts.shadows(true)
       knockouts.shadowMap(shippedShadowMap)
-      knockouts.frost(true)
-      knockouts.frostStride(shippedStride)
-      knockouts.captureScale(shippedScale)
       knockouts.grain(true)
       knockouts.lights(true)
       const restored = knockouts.pixelRatio(pixelRatio)
@@ -656,22 +549,6 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
       // then the one that recompiles, then the ratio, which is the only one
       // that reallocates buffers.
       const trials: [label: string, off: () => void, on: () => void][] = [
-        ['no frost', () => void knockouts.frost(false), () => void knockouts.frost(true)],
-        [
-          'no frost taps',
-          () => void knockouts.frostTaps(false),
-          () => void knockouts.frostTaps(true),
-        ],
-        [
-          'no frost capture',
-          () => void knockouts.frostCapture(false),
-          () => void knockouts.frostCapture(true),
-        ],
-        [
-          'capture stride 1',
-          () => void knockouts.frostStride(1),
-          () => void knockouts.frostStride(shippedStride),
-        ],
         ['no shadows', () => void knockouts.shadows(false), () => void knockouts.shadows(true)],
         ['no grain', () => void knockouts.grain(false), () => void knockouts.grain(true)],
         ['no area lights', () => void knockouts.lights(false), () => void knockouts.lights(true)],
