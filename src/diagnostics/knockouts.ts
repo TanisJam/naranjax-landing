@@ -345,6 +345,27 @@ export interface Knockouts {
    */
   frostStride(stride: number): string
   /**
+   * Capture texels per drawing-buffer pixel, per axis. See `BackdropCapture`.
+   *
+   * The one dial here that separates the two halves of what a capture costs,
+   * which nothing else can: the NUMBER of copies stays exactly the same and
+   * only their AREA moves. A large effect says the copies are bandwidth and a
+   * smaller rectangle is worth chasing; a flat one says they are per-call
+   * stalls and the only lever that will ever matter is how many there are.
+   *
+   * It answered that question and the answer was the second one. Halving this
+   * to 0.25 — a quarter of the texels written — took 5.13 gpu ms off a 129 ms
+   * frame, while removing the copies outright took 24.92. Four per cent for
+   * three quarters of the area is not an area cost.
+   *
+   * Measure it at a pixel ratio the machine CANNOT hold, and that is not a
+   * detail. At 1.75 this piece sits against the vsync period on an M3, the GPU
+   * clocks down between frames, and every knockout in this file reads backwards
+   * — switching work off measures SLOWER, by more than the drift. At 3.5 the
+   * device is saturated, the clocks stay up and the readings go forward again.
+   */
+  captureScale(scale: number): string
+  /**
    * Resizes the shadow map, which is the depth pass's FRAGMENT budget.
    *
    * The depth material discards — that is what lets a film cast an honest
@@ -459,6 +480,7 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
   const lit = areaLights.map((light) => light.visible)
 
   const shippedStride = orchestrator.backdrop.stride
+  const shippedScale = orchestrator.backdrop.scale
   const shippedShadowMap = orchestrator.stage.keyLight.shadow.mapSize.x
   const timer = createGpuTimer(renderer)
 
@@ -526,6 +548,15 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
       return `frost capture stride ${was} → ${orchestrator.backdrop.stride}`
     },
 
+    captureScale(scale) {
+      const was = orchestrator.backdrop.scale
+      orchestrator.backdrop.scale = scale
+      // The target is allocated from this, so it has to be rebuilt — and never
+      // alone: the capture is sized against the drawing buffer.
+      orchestrator.refresh()
+      return `capture scale ${was} → ${scale}`
+    },
+
     frostCapture(on) {
       orchestrator.sheets.forEach((sheet, i) => {
         // The copy of the whole drawing buffer that each frosted layer makes
@@ -561,6 +592,7 @@ export function createKnockouts(orchestrator: SceneOrchestrator): Knockouts {
       knockouts.shadowMap(shippedShadowMap)
       knockouts.frost(true)
       knockouts.frostStride(shippedStride)
+      knockouts.captureScale(shippedScale)
       knockouts.grain(true)
       knockouts.lights(true)
       const restored = knockouts.pixelRatio(pixelRatio)
