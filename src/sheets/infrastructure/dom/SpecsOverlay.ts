@@ -7,12 +7,14 @@ import type { LayerSpec } from '../../domain/specs'
  * the domain says what a layer HAS to say, and this is one way of saying it.
  * Swapping the panel for a different presentation should not touch `specs.ts`.
  *
- * DOM rather than geometry, and that is the load-bearing decision here. The
- * canvas is confined to a 38% column while "full screen" means the viewport, so
- * the panel could not live in the scene without the renderer taking over the
- * whole page — which is the fill rate the piece spent a long session buying
- * back. It also makes the text real text: selectable, zoomable, and readable by
- * a screen reader, none of which a texture can be at any price.
+ * DOM rather than geometry, and that is the load-bearing decision here. Putting
+ * these words in the scene means drawing them, and every pixel of type would be
+ * paid for out of the same fill rate the piece spent a long session buying back
+ * — for text that would then be unselectable, unzoomable and invisible to a
+ * screen reader, which is what a texture is at any price.
+ *
+ * (The 38% column this used to cite is long gone: the canvas is the whole hero.
+ * See `CLOSED_COVERAGE`, which carries what that number was worth.)
  *
  * Built here instead of authored in `index.html` because the markup is the same
  * nine times over and the content is data. What IS in the html is the trigger
@@ -58,38 +60,47 @@ export class SpecsOverlay {
     root.setAttribute('aria-modal', 'true')
     root.setAttribute('aria-labelledby', 'layer-specs-title')
 
-    // A poster, not a page over a curtain. The card is what the user asked to
-    // see up close, so nothing here may cover it: the dismiss surface is
-    // transparent, and the only opaque thing is a gradient climbing out of the
-    // bottom edge for the text to stand on.
+    // A SPEC SHEET BESIDE THE PLATE, which is what a spec sheet is.
     //
-    // That gradient is not decoration either. A layer seen full-frame is foil,
-    // holograms and pressed relief — text laid straight onto it is illegible
-    // over half its area and unreadably so over the holographic quarter. The
-    // scrim buys a band where type has a constant ground, and it buys it at the
-    // bottom because the two thirds above are where the material actually
-    // reads.
+    // THIS WAS A POSTER AND THE POSTER IS GONE. The plate used to arrive across
+    // the whole screen, so there was nowhere for words except on top of it —
+    // and a layer seen full-frame is foil, holograms and pressed relief, which
+    // type is illegible over half of and unreadable over the holographic
+    // quarter. The answer was a gradient climbing three fifths of the way up
+    // the screen to buy a band with a constant ground. It worked, and what it
+    // bought was two thirds of a screen of texture with a strip of text along
+    // the floor.
+    //
+    // The plate now takes a little over half the width — see `FOCUS_SPAN` — so
+    // the words go where they belong: on the page's own ground, at a measure,
+    // beside the thing they describe. No scrim, because nothing is lying on
+    // foil any more. That is the same reason the scrim existed and the same
+    // reason it does not.
+    //
+    // The dismiss surface stays transparent and stays the whole viewport. The
+    // card is what the user asked to see up close and nothing may cover it, and
+    // a click anywhere that is not the sheet still means "put it back".
+    //
+    // BELOW `--specs-split` THE OLD ARRANGEMENT IS THE RIGHT ONE and it is
+    // still here. A phone cannot set a plate and a sheet side by side, so it
+    // gets the full-frame plate and the scrim, and `fitFocus` frames the plate
+    // to match. The breakpoint is stated in the stylesheet and read from there
+    // by both — see `FOCUS_SPLIT_ASPECT`.
     root.innerHTML = `
       <div data-dismiss class="absolute inset-0"></div>
-      <div
-        aria-hidden="true"
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-ink-950 via-ink-950/85 to-transparent"
-      ></div>
-      <div class="pointer-events-none relative mx-auto flex h-full w-full max-w-5xl flex-col justify-end gap-7 px-6 pb-12 sm:pb-16">
-        <div class="pointer-events-auto flex flex-col gap-2">
-          <p data-eyebrow class="text-xs leading-5 font-medium tracking-[0.2em] text-brand-accent uppercase"></p>
-          <h2 id="layer-specs-title" class="text-3xl leading-tight font-semibold text-neutral-50 sm:text-4xl sm:leading-[3rem]"></h2>
-          <p data-summary class="max-w-xl text-base leading-6 text-ink-300"></p>
+      <div data-scrim aria-hidden="true" class="layer-specs__scrim"></div>
+      <div class="layer-specs__frame">
+        <div class="layer-specs__sheet">
+          <p data-eyebrow class="layer-specs__eyebrow"></p>
+          <h2 id="layer-specs-title" class="layer-specs__title"></h2>
+          <p data-summary class="layer-specs__summary"></p>
+          <dl data-entries class="layer-specs__entries"></dl>
         </div>
-        <dl
-          data-entries
-          class="pointer-events-auto grid grid-cols-2 gap-x-8 gap-y-4 border-t border-ink-700/60 pt-5 sm:grid-cols-3"
-        ></dl>
       </div>
       <button
         type="button"
         data-dismiss
-        class="absolute top-6 right-6 flex size-10 items-center justify-center rounded-full bg-ink-950/60 text-ink-300 outline-ink-700 transition hover:bg-ink-800 hover:text-neutral-50 focus-visible:outline-2"
+        class="layer-specs__close"
       >
         <span aria-hidden="true" class="text-xl leading-none">&times;</span>
         <span class="sr-only">Cerrar</span>
@@ -186,14 +197,14 @@ export class SpecsOverlay {
     this.entries.replaceChildren(
       ...spec.entries.map((entry) => {
         const row = document.createElement('div')
-        row.className = 'flex flex-col gap-1'
+        row.className = 'layer-specs__entry'
 
         const label = document.createElement('dt')
-        label.className = 'text-xs leading-5 tracking-tight text-ink-300'
+        label.className = 'layer-specs__label'
         label.textContent = entry.label
 
         const value = document.createElement('dd')
-        value.className = 'text-base leading-6 text-neutral-50'
+        value.className = 'layer-specs__value'
         value.textContent = entry.value
 
         row.append(label, value)

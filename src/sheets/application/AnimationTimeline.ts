@@ -125,6 +125,18 @@ interface WindRestPose {
  * rotations. Nothing here rebuilds geometry, which is exactly why the shape
  * lives in the vertex shader.
  */
+/**
+ * What the unfocused plates fade to while a layer is being read, as a share of
+ * their own opacity.
+ *
+ * Not zero, and the number is the whole argument. At zero the plate hangs in a
+ * void and the piece has thrown away the one thing it was built to say — that
+ * this is one ply of eleven. At anything much above a quarter the fan is still
+ * busy enough to compete with the type set over it. This is where the stack
+ * reads as present and stops reading as content.
+ */
+const FOCUS_QUIET = 0.16
+
 export class AnimationTimeline {
   /**
    * Seconds the stack takes to come apart.
@@ -734,6 +746,32 @@ export class AnimationTimeline {
       this.hoverAmounts[i] = hover
       this.hoverGlows[i] = glow
       if (hovered) this.hoverCenters[i] = this.hoveredAt
+
+      // THE DECK GOES QUIET WHILE ONE CARD IS BEING READ.
+      //
+      // The plate being read no longer covers the screen — see `FOCUS_SPAN` —
+      // and the ten it came from are still exactly where the deploy left them,
+      // which is across the whole frame including the half the spec sheet now
+      // wants. Sliding the stack out of the way cannot work: `fitLayout` turns
+      // the fan by the aspect precisely so it fills the frame, so there is no
+      // amount of shift that clears a column without also throwing the fan off
+      // the other edge.
+      //
+      // So they fade rather than move, and the composition is left alone. Not
+      // to nothing: `FOCUS_QUIET` leaves enough that the stack the plate was
+      // drawn from is still legible behind the words, which is worth more than
+      // a clean field — it is the difference between a card on a background and
+      // a card taken OUT of something.
+      //
+      // Free, as changes to this material go. Every sheet is built
+      // `transparent: true` even at full opacity, for the draw-order reasons in
+      // `sheetMaterial.ts`, so this is a uniform write and not a recompile.
+      const quiet = sheet === this.focused ? 1 : lerp(1, FOCUS_QUIET, this.focusAmount)
+      sheet.uniforms.uQuiet.value = quiet
+      // A faded plate must stop writing depth or it punches a hole in whatever
+      // is behind it — the four solid plies are the only ones that write at
+      // all, and they are exactly the four this takes below 1.
+      sheet.material.depthWrite = sheet.layer.surface.opacity >= 1 && quiet >= 1
 
       // The drag. Gated on `local` rather than `reveal` because this is a shape
       // uniform and the closed card is the strict case: eleven layers sit

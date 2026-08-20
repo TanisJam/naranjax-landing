@@ -40,13 +40,64 @@ const EXPLODED_POSE: [number, number, number] = [0.42, -0.62, 0.18]
 const CLOSED_POSE: [number, number, number] = [1.489, -0.024, 0]
 
 /**
- * How far past the edge of the canvas a layer opened full-frame reaches.
+ * How much of the frame a layer being read is allowed to take, on a screen wide
+ * enough to set its spec sheet beside it.
  *
- * A few percent, and it earns them: a layer that merely FITS leaves a hairline
- * of backdrop down one side that the idle float and the pointer parallax then
- * breathe in and out of, which reads as the card not quite having arrived. This
- * is the knob for the crop — `focusZoom` itself is measured and must not be
- * authored over.
+ * IT USED TO BE 1.04 AND IT USED TO BE THE WHOLE SCREEN. That value was a
+ * BLEED: a few percent past the edge of the canvas, so a plate that merely
+ * fitted did not leave a hairline of backdrop down one side for the idle float
+ * to breathe in and out of. The crop was the right answer to the question being
+ * asked, and the question was wrong.
+ *
+ * What it produced is the complaint this constant is written against. A layer
+ * seen full-frame is one flat material and nothing else — no type on it, no
+ * scale beside it, nothing to look AT — so the panel's words had to be laid on
+ * top of the foil, which needed a gradient over the bottom three fifths of the
+ * screen to be legible at all. Two thirds of a screen of texture, a band of
+ * text along the floor, and a card that had stopped being a card and become a
+ * background. Opening a layer emptied the page.
+ *
+ * So the plate keeps a little over half the width and the spec sheet takes the
+ * rest, on its own ground, at a size type is meant to be read at. And the thing
+ * that costs nothing and pays for the whole change: at this size the fan the
+ * plate came OUT of is still on screen behind it. The reader can see the stack
+ * it was drawn from, which is what taking one card out of a deck looks like and
+ * is a good deal more informative than a wall of foil.
+ *
+ * A share of the frame's width and height separately, because the plate is
+ * contained rather than covered — see `fitFocus`.
+ */
+const FOCUS_SPAN = 0.52
+const FOCUS_RISE = 0.82
+
+/**
+ * Where the plate's centre sits across the frame, 0.5 being the middle.
+ *
+ * Left of centre by enough to open a column for the spec sheet, and no further:
+ * the plate is the thing that was asked for and it keeps the larger half of the
+ * screen. `fitFocus` spends this as a slide of the aim point along the camera's
+ * own right axis, so it stays correct at any focal length.
+ */
+const FOCUS_CENTRE = 0.31
+
+/**
+ * Narrowest frame that can hold a plate and its spec sheet side by side.
+ *
+ * Below this the split is not a layout, it is two things that fit neither. A
+ * phone keeps what the piece always did — the plate across the whole frame with
+ * its words on a scrim along the bottom — and `SpecsOverlay` answers the same
+ * breakpoint from the other side. The two have to agree, so the number appears
+ * once here and once in the stylesheet, and neither may move alone.
+ */
+const FOCUS_SPLIT_ASPECT = 1.1
+
+/**
+ * How far past the edge a plate reaches when it DOES take the whole frame,
+ * which is now the narrow-screen case alone.
+ *
+ * The original reasoning stands wherever it still applies: a plate that merely
+ * fits leaves a hairline of backdrop down one side that the float breathes in
+ * and out of, and that reads as the card not quite having arrived.
  */
 const FOCUS_BLEED = 1.04
 
@@ -202,6 +253,8 @@ const CLOSED_MAX_WIDTH = 640
 
 /** Scratch for the framing measurement. Reused, never handed out. */
 const FOCUS_TRAVEL = new Vector3()
+/** The camera's own right axis, for sliding the aim point across the frame. */
+const FOCUS_RIGHT = new Vector3()
 
 /** Scratch for the layout turn. Reused, never handed out. */
 const LAYOUT_AXIS = new Vector3()
@@ -688,8 +741,32 @@ export class SceneOrchestrator {
     const height = 2 * distance * Math.tan((camera.fov * Math.PI) / 360)
     const width = height * camera.aspect
 
-    this.timeline.focusZoom =
-      Math.min(width / this.cardSpan, height / this.cardRise) * FOCUS_BLEED
+    // A phone cannot hold a plate and a spec sheet side by side, so it keeps
+    // what the piece always did: the plate across the whole frame with its
+    // words on a scrim along the floor. `SpecsOverlay` reads the same
+    // breakpoint off the stylesheet — see `FOCUS_SPLIT_ASPECT`.
+    if (camera.aspect < FOCUS_SPLIT_ASPECT) {
+      this.timeline.focusZoom =
+        Math.min(width / this.cardSpan, height / this.cardRise) * FOCUS_BLEED
+      return
+    }
+
+    // Contained rather than covered, which is the same rule the full-frame fit
+    // has always used and matters more here: the plate is fitting into a BOX
+    // now, not a screen, and the smaller ratio is what keeps the whole plate
+    // inside it instead of showing a band across its middle.
+    this.timeline.focusZoom = Math.min(
+      (width * FOCUS_SPAN) / this.cardSpan,
+      (height * FOCUS_RISE) / this.cardRise,
+    )
+
+    // And slide the aim point left, which is what actually puts the plate in
+    // the left of the frame. Along the camera's OWN right axis, read off its
+    // world matrix rather than assumed to be world +X: the camera sits above
+    // its target and looks down, so the two are not the same direction and the
+    // difference shows up as the plate drifting vertically as it arrives.
+    FOCUS_RIGHT.setFromMatrixColumn(camera.matrixWorld, 0)
+    this.timeline.framePoint.addScaledVector(FOCUS_RIGHT, (FOCUS_CENTRE - 0.5) * width)
   }
 
   private readonly loop = (): void => {

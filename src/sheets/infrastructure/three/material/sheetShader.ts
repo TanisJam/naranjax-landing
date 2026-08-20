@@ -749,6 +749,7 @@ uniform float uBevelGlow;
 uniform vec3 uCoreColor;
 uniform float uAbsorption;
 uniform float uImperfection;
+uniform float uQuiet;
 uniform float uFrost;
 uniform vec3 uFrostColor;
 uniform vec2 uViewTexel;
@@ -1229,6 +1230,16 @@ if (uFrost > 0.0) {
 // before it is simply undone at the edge -- which is the only place it exists.
 float gEdge = edgeCoverage();
 diffuseColor.a *= gEdge;
+
+// And the fade, after every other alpha term without exception.
+//
+// It has to be last for the same reason coverage is nearly last: the terms
+// above each answer how closed the sheet is, and two of them answer by driving
+// alpha UP to 1 -- the decal's ink and the frost. A fade applied before either
+// is simply undone by them, which is what makes this a uniform here rather
+// than the material's own opacity. Multiplying at the end is the only place
+// where "less present" means less present for every ply in the stack.
+diffuseColor.a *= uQuiet;
 
 float rimFresnel = pow(
   1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0),

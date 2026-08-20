@@ -130,6 +130,21 @@ export interface SheetUniforms extends StackOcclusionUniforms, FilmGrainUniforms
   uCoreColor: IUniform<Color>
   uAbsorption: IUniform<number>
   uImperfection: IUniform<number>
+  /**
+   * A final multiplier on the plate's alpha, 1 being untouched.
+   *
+   * The LAST word on how present a sheet is, and it has to be a uniform rather
+   * than `material.opacity` for a reason that is visible the moment you try the
+   * obvious thing. `material.opacity` is only where alpha STARTS here: the
+   * decal drives it back to 1 wherever there is ink, so the two printed covers
+   * ignore it completely, and the frost drives it towards 1 across the body of
+   * every ply that has any. Setting the material's opacity to fade the stack
+   * fades the layers that were already faint and leaves the two solid covers at
+   * full strength — which is exactly backwards.
+   *
+   * See the fade in `AnimationTimeline` for what spends it.
+   */
+  uQuiet: IUniform<number>
   uFrost: IUniform<number>
   uFrostColor: IUniform<Color>
   /** Blur radius, as a fraction of the drawing buffer HEIGHT so it is
@@ -360,6 +375,7 @@ export function createSheetMaterial(
     uCoreColor: { value: new Color(surface.coreColor) },
     uAbsorption: { value: surface.absorption },
     uImperfection: { value: surface.imperfection },
+    uQuiet: { value: 1 },
     uFrost: { value: surface.frost },
     uFrostColor: { value: new Color(surface.frostColor) },
     uDecalMap: { value: decalMap ?? BLANK_DECAL },

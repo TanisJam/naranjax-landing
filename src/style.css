@@ -247,6 +247,182 @@
   transition-delay: 380ms;
 }
 
+/* THE SPEC SHEET, AND WHERE IT SITS.
+
+   Two arrangements, and the breakpoint between them is an ASPECT rather than a
+   width, because the question is not how big the screen is but whether it is
+   the right shape to stand a card and a column of type side by side. A 1024px
+   window turned tall is a phone as far as this layout is concerned.
+
+   11/10 HAS TO MATCH `FOCUS_SPLIT_ASPECT` IN `SceneOrchestrator.ts`. The camera
+   frames the plate for one of these two arrangements and this lays out the
+   words for the other half of it; if the two ever disagree the result is not a
+   near miss, it is a plate across the whole screen with a column of text on top
+   of it, or a plate in the left half with its words along the floor. There is
+   no way to state the number once — a media query cannot read a custom
+   property, and the camera cannot read a media query. So it is written twice,
+   deliberately, with this note at both ends.
+
+   THE WIDE ARRANGEMENT is the plate in the left half and the sheet in the
+   right, centred against it. No scrim: nothing is lying on foil. */
+.layer-specs__frame {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-items: end;
+  padding: 0 1.5rem 3rem;
+  pointer-events: none;
+}
+
+.layer-specs__sheet {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 36rem;
+  margin-inline: auto;
+}
+
+/* The scrim is the NARROW arrangement's and only its. It is the gradient that
+   used to climb three fifths of the screen so type could be read over foil, and
+   on a phone the plate still takes the whole frame, so it is still needed and
+   still correct. Above the breakpoint it is not drawn at all. */
+.layer-specs__scrim {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 60%;
+  pointer-events: none;
+  background-image: linear-gradient(
+    to top,
+    var(--color-ink-950),
+    color-mix(in srgb, var(--color-ink-950) 85%, transparent),
+    transparent
+  );
+}
+
+@media (min-aspect-ratio: 11/10) {
+  .layer-specs__scrim {
+    display: none;
+  }
+
+  /* The sheet takes the column the plate was moved out of — see `FOCUS_CENTRE`,
+     which puts the plate's centre at 31% of the frame. This starts at 58% and
+     the gap between those two numbers is the air between a card and the words
+     about it. */
+  .layer-specs__frame {
+    align-items: center;
+    padding: 0 3rem;
+    grid-template-columns: 58% 1fr;
+  }
+
+  .layer-specs__sheet {
+    grid-column: 2;
+    margin-inline: 0;
+    max-width: 28rem;
+    gap: 1rem;
+  }
+}
+
+.layer-specs__eyebrow {
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-brand-accent);
+}
+
+.layer-specs__title {
+  font-size: 1.875rem;
+  line-height: 1.15;
+  font-weight: 600;
+  color: var(--color-on-strong);
+}
+
+@media (min-width: 640px) {
+  .layer-specs__title {
+    font-size: 2.25rem;
+  }
+}
+
+.layer-specs__summary {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  color: var(--color-on-strong-muted);
+}
+
+/* A rule above the figures rather than a box around them: the entries are the
+   part of this that is a SPEC SHEET, and a spec sheet is ruled. */
+.layer-specs__entries {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 2rem;
+  margin-top: 0.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-on-strong) 22%, transparent);
+}
+
+@media (min-width: 640px) {
+  .layer-specs__entries {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Back to two on the split, where the column is half the width it was. Three
+   figures across 28rem is three orphaned words. */
+@media (min-aspect-ratio: 11/10) {
+  .layer-specs__entries {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.layer-specs__entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.layer-specs__label {
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  letter-spacing: -0.01em;
+  color: var(--color-on-strong-muted);
+}
+
+.layer-specs__value {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  color: var(--color-on-strong);
+}
+
+.layer-specs__close {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background-color: color-mix(in srgb, var(--color-ink-950) 60%, transparent);
+  color: var(--color-on-strong-muted);
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.layer-specs__close:hover {
+  background-color: var(--color-ink-800);
+  color: var(--color-on-strong);
+}
+
+.layer-specs__close:focus-visible {
+  outline: 2px solid var(--color-ink-700);
+}
+
 /* Same criterion the timeline uses for the deploy: the transition is not
    removed, it becomes a cut. What the user asked for still happens — they
    clicked a layer and the layer's specifications are what they get — it simply
