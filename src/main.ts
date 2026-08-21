@@ -153,10 +153,25 @@ void sound.ready.then(() => {
 // filling the screen and being looked at, so it keeps every frame it asks for.
 // Fullscreen is about two and a half times the pixels of the column and the
 // resolution governor is what answers that — see `ResolutionGovernor`.
+//
+// FRAMED IS THE THIRD FLAG AND IT IS NOT AN OPTIMISATION, IT IS A CORRECTNESS
+// FIX. The observer watches the stage, and while the reader is down at the
+// feature list the stage is a screen and a half above them, so the loop is
+// stopped and the canvas is holding whatever it drew last — which, on every
+// open after the first, is the deployed stack. Opening a layer from that list
+// takes the canvas fullscreen instantly; the observer that would restart the
+// loop is delivered as a task and can land AFTER the paint. That paint is the
+// bug: one frame of a stale, fanned-out stack blown across the screen before
+// the real first frame replaces it. So the loop is started by the thing that
+// framed the canvas, synchronously, rather than by the observer noticing
+// afterwards. Same reason the flag cannot be dropped on the observer's word
+// either: releasing the frame hands the canvas back to a column that is still
+// off screen.
 let tabVisible = !document.hidden
 let panelVisible = true
+let framed = false
 const syncFrameLoop = (): void => {
-  if (tabVisible && panelVisible) orchestrator.start()
+  if (tabVisible && (panelVisible || framed)) orchestrator.start()
   else orchestrator.stop()
 }
 
@@ -166,7 +181,11 @@ document.addEventListener('visibilitychange', () => {
 })
 
 new IntersectionObserver(
-  ([entry]) => {
+  (entries) => {
+    // The LAST record, not the first. The callback is handed every observation
+    // queued since it last ran, oldest first, and reading the oldest is reading
+    // a state the page may have already left.
+    const entry = entries[entries.length - 1]
     panelVisible = entry?.isIntersecting ?? true
     syncFrameLoop()
   },
@@ -210,6 +229,11 @@ orchestrator.timeline.onFocusRelease = () => {
   // One call, and deliberately: re-measuring the canvas and dropping the
   // compensation have to happen together or not at all. See `clearReframe`.
   orchestrator.clearReframe()
+  // After both, so the frame this runs inside still draws the handover it was
+  // ordered to draw. `stop` only cancels the NEXT request; it does not abandon
+  // the frame already in flight.
+  framed = false
+  syncFrameLoop()
 }
 
 /**
@@ -234,6 +258,12 @@ const openSpecs = (sheet: SheetObject, spec: LayerSpec): void => {
   orchestrator.picker.enabled = false
   sound.play('specOpen')
   specs.show(spec)
+  // LAST, and synchronously: `start` draws a frame on the spot, so the first
+  // paint after this click is one this state produced rather than one the
+  // canvas was still holding from before the reader scrolled away. Everything
+  // above has to be set by the time it runs — that frame is a real frame.
+  framed = true
+  syncFrameLoop()
 }
 
 /** Puts the layer back in the stack and the canvas back in its column. */
