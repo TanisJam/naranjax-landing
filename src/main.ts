@@ -397,7 +397,19 @@ const SCRAPE_CEILING = 5
 // half a second stops sounding like an object and starts sounding like a
 // buffer, and no amount of level riding fixes that.
 orchestrator.picker.onChange = (layer, change) => {
-  if (!layer || !change.fromPointer) return
+  // AND ONLY WHILE THE STACK IS APART. Closed, the eleven sheets are stacked
+  // into one card and the picker still resolves a layer under the pointer for
+  // every one of them — so a mouse crossing the closed card rattled off ticks
+  // for boundaries that are not visible and cannot be aimed at. A tick is the
+  // sound of passing a sheet; with nothing to pass it is the page talking to
+  // itself.
+  //
+  // `deployed` is the TARGET rather than the animation, and that is the right
+  // side of the line on both halves of the gesture: opening, the ticks are
+  // wanted from the click, while the fan is still coming apart under the
+  // pointer; closing, they stop at the click rather than firing one last burst
+  // as eleven layers collapse through a pointer that never moved.
+  if (!layer || !change.fromPointer || !orchestrator.timeline.deployed) return
 
   const intensity = Math.min(
     Math.max((change.speed - SCRAPE_FLOOR) / (SCRAPE_CEILING - SCRAPE_FLOOR), 0),
