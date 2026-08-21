@@ -1721,6 +1721,36 @@
   translate: 3px 0;
 }
 
+/* THE PAGE DOES NOT SCROLL SIDEWAYS, AND THE REVEAL IS WHY THIS HAS TO BE SAID.
+
+   A transformed box contributes its TRANSFORMED border box to scrollable
+   overflow, so the resting pose below — which parks the figures 72px to the
+   right of where they land — is 72px of document width for as long as those
+   cards have not arrived. Nothing between them and the root clips, so it
+   reaches the root: measured at 442 on a 390 viewport and 1328 on a 1280 one,
+   dropping back to exactly the viewport once the last card reveals. Every
+   width under about 1424 had it. It is not a phone problem, it is a problem
+   phones make obvious.
+
+   What that costs is not merely a stray 48 pixels of sideways scroll. Mobile
+   engines widen the initial containing block to the content when content
+   overflows it, and `position: fixed; inset: 0` is measured against that — so
+   the header's pill hung off the right edge, and opening a layer laid the
+   stage and its panel out at 442x957 on a 390x844 screen, which is a card
+   drawn with its right edge off the screen and a summary line cut mid-word.
+
+   CLIP AND NOT HIDDEN. `hidden` on one axis forces the other from `visible` to
+   `auto`, which makes the root a scroll container and takes `position: sticky`
+   with it — and the column beside the feature list is sticky. `clip` is the
+   value that exists precisely so the other axis may stay `visible`.
+
+   And the reveal keeps its 72px, which is the reference's own figure. The pose
+   was never wrong; it was unclipped. */
+html,
+body {
+  overflow-x: clip;
+}
+
 /* THE REVEAL.
 
    Their directive is an IntersectionObserver at a tenth of visibility that
