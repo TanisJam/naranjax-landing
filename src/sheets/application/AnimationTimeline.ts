@@ -129,13 +129,23 @@ interface WindRestPose {
  * What the unfocused plates fade to while a layer is being read, as a share of
  * their own opacity.
  *
- * Not zero, and the number is the whole argument. At zero the plate hangs in a
- * void and the piece has thrown away the one thing it was built to say — that
- * this is one ply of eleven. At anything much above a quarter the fan is still
- * busy enough to compete with the type set over it. This is where the stack
- * reads as present and stops reading as content.
+ * Not zero: at zero the plate hangs in a void and the piece has thrown away the
+ * one thing it was built to say — that this is one ply of eleven.
+ *
+ * The number used to be 0.16, chosen by asking how faint ONE plate has to be
+ * before it stops competing with type. That was the wrong question, and it is
+ * worth writing down why, because the answer looks reasonable and is off by a
+ * factor of four. There are ten of these behind the words, not one, and ten
+ * transparencies do not read at their own alpha — they read at what they
+ * composite to, `1 - (1 - a)ⁿ`. Ten plates at 0.16 come to about four fifths
+ * OPAQUE. The fan was never faint; it was ten faint things making a solid one.
+ *
+ * So this is set on the composite instead. At 0.03 the ten reach roughly a
+ * fifth, which is a stack that is plainly still there and can be read straight
+ * through. Any per-plate number under discussion here should be checked the
+ * same way before it is believed.
  */
-const FOCUS_QUIET = 0.16
+const FOCUS_QUIET = 0.03
 
 export class AnimationTimeline {
   /**
