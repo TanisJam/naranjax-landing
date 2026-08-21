@@ -203,6 +203,10 @@ const baseSurface: SheetSurface = {
   ribContrast: 0,
   decalInk: 0,
   decalRelief: 0,
+  // The width the drawn motifs were authored against, and the reason it is
+  // stated here rather than in the shader: it stopped being one number the
+  // moment a second kind of artwork arrived. See `illustrated`.
+  decalReach: 0.006,
   // The interior of the stack is film and foil, and film gives way. This is the
   // reference the covers below are stiff RELATIVE to.
   flex: 1,
@@ -305,6 +309,43 @@ const printed = { decalInk: 0.55, decalRelief: 3 }
  * it. Ink and relief are not two dials pointing the same way here.
  */
 const faceted = { decalInk: 0.32, decalRelief: 8 }
+
+/**
+ * What a layer does with a drawing, as opposed to with a motif.
+ *
+ * Applied by `assemble` to whichever layers the brand ships artwork for, and
+ * it OVERRIDES the surface's own `decalInk` and `decalRelief` rather than
+ * sitting alongside them. That is not the field taking a liberty — the three
+ * presets above are each authored against one particular motif, and the
+ * argument for every one of their numbers is a claim about that drawing: how
+ * much alpha it carries, how soft its shoulder is, how much of the plate it
+ * covers. Hand the same layer a different image and the numbers stop meaning
+ * anything. So the artwork brings its own pair, and there is only one pair
+ * because the nine images are one set drawn to one specification.
+ *
+ * INK, NOT RELIEF, and that is the whole of this preset. Every other decal in
+ * the stack is a shape the material is asked to press for itself, so it takes
+ * almost no ink and all of its relief. This one arrives ALREADY PRESSED: the
+ * nine files are renders of an emboss, lit, with the edge every one of them was
+ * chosen for. Deriving a height field from that and re-lighting it throws the
+ * finished thing away and asks a flat plate to reproduce it — and a flat plate
+ * cannot, because a perturbed normal has no silhouette. However square the
+ * profile is made, the edge stays shading spread across a few pixels.
+ *
+ * So the drawing is printed instead of pressed, and the relief goes to ZERO
+ * rather than low. Not thrift: with the print carrying its own light, any
+ * relief here would light it a second time from a different direction, and two
+ * lightings of one drawing disagree. `decalReach` reverts to the shared default
+ * for the same reason — it measures a height field nothing reads any more.
+ *
+ * What this costs is real and was accepted with eyes open: a print does not
+ * answer the room. Turn the plate and the drawing keeps its own highlight
+ * instead of catching the sweep, which is exactly the objection `embossed`
+ * makes to painting a motif in. The plate's own material still answers — its
+ * weave, its rim, its bevel — so what the layer loses is the artwork moving
+ * with the light, and what it buys is the edge.
+ */
+const illustrated = { decalInk: 0.85, decalRelief: 0, decalReach: 0.006 }
 
 /**
  * Flat-plate defaults for the shape.
@@ -834,6 +875,27 @@ function assemble(drafts: readonly SheetDraft[]): SheetLayer[] {
   })
 }
 
+/**
+ * Hands each layer the drawing its brand ships for it, where there is one.
+ *
+ * Read from the brand and not authored above, because the list of layers is one
+ * card taken apart and the drawings are one company's artwork — those are two
+ * different things that happen to be indexed by the same id. Written this way,
+ * the second brand adds nine files and one map and changes not a line here,
+ * which is the test that says the seam is in the right place.
+ *
+ * A layer that gets a drawing also gets `illustrated`, and it is the same call
+ * either way: what the surface does with a decal is authored against the decal
+ * it was authored for, so the two travel together or neither is right.
+ */
+function illustrate(drafts: readonly SheetDraft[]): SheetDraft[] {
+  return drafts.map((draft) => {
+    const artwork = brand.layerArt?.[draft.id]
+    if (artwork === undefined) return draft
+    return { ...draft, artwork, surface: { ...draft.surface, ...illustrated } }
+  })
+}
+
 export const composition: Composition = {
   // The page's own `ink-900`, read from the brand rather than copied out of
   // it. The canvas is transparent here so nothing clears to this, but it is
@@ -841,5 +903,5 @@ export const composition: Composition = {
   // drifted from the page is worse than no value at all — which is exactly
   // what a second brand would have made of a literal.
   background: brand.palette.ink[900],
-  sheets: assemble(layers),
+  sheets: assemble(illustrate(layers)),
 }

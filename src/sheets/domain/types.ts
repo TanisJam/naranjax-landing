@@ -230,6 +230,27 @@ export interface SheetSurface {
    */
   decalRelief: number
   /**
+   * How far apart, in decal uv, the height field is measured to find its slope.
+   *
+   * The one number that decides whether an emboss reads as a line or as two
+   * lines. The normal is tilted by a central difference across this distance,
+   * so it has to be SMALLER than the marks it is measuring — set wider than a
+   * stroke, the two taps land on opposite shoulders and the stroke comes out as
+   * a bright rail, a flat valley and a dark rail, which is a diagram of an
+   * emboss rather than one.
+   *
+   * Which makes it a statement about the artwork's line weight and not about
+   * strength, and that is why it is a field rather than the constant it used to
+   * be in the shader. Every surface currently asks for the same 0.006, which is
+   * what the drawn motifs were authored against — soft die-pressed forms tens of
+   * pixels across. Fine line work needs a fraction of it, and if a layer ever
+   * carries some again this is where that is said. It travels with
+   * `decalRelief`: a central difference over a quarter of the distance reports a
+   * quarter of the rise, so shortening one without raising the other only makes
+   * the impression fainter.
+   */
+  decalReach: number
+  /**
    * How much the body scatters light instead of passing it through, 0..1.
    *
    * The difference between a tinted window and frosted acrylic, and it is not a
@@ -390,6 +411,21 @@ export interface SheetLayer {
   surface: SheetSurface
   placement: SheetPlacement
   decal: SheetDecal
+  /**
+   * A drawing shipped as a file, which takes the layer's decal slot when the
+   * brand has one for it.
+   *
+   * The same argument the build already makes about icons: A FILE ON DISK BEATS
+   * THE DRAWING OF ONE. `decal` above is a name for a motif this codebase
+   * draws, and it stays the answer for a brand that ships no artwork — so this
+   * is not a replacement for that field, it is the thing that outranks it where
+   * it exists. Absent is therefore a meaningful value and not a hole.
+   *
+   * The name of an asset the brand emits at the site root, because that is
+   * where `brand-assets/<id>/` lands, and the layer is not the place that
+   * decides which brand is being built.
+   */
+  artwork?: string
   /** Phase offset (0..1) so the layers do not animate in lockstep. */
   animationPhase: number
 }

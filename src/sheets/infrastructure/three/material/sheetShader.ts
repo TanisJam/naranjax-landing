@@ -757,6 +757,8 @@ uniform sampler2D uDecalMap;
 uniform sampler2D uDecalHeightMap;
 uniform float uDecalInk;
 uniform float uDecalRelief;
+uniform float uDecalReach;
+uniform float uPress;
 
 uniform float uStackShadow;
 uniform float uCastShare;
@@ -1062,6 +1064,65 @@ if (uWeave > 0) {
   weaveField(gWeaveMask, gWeaveSlope, gWeaveFade);
 }
 
+// The die that pressed the drawing also flattened the tooth around it.
+//
+// That is the whole idea, and it is a physical claim rather than a styling one:
+// a laminate takes its grain from the roll, and anywhere a press has closed on
+// it the grain is gone. So the tooth does not come down across the plate — it
+// comes down WHERE THE DRAWING IS, and the plate keeps its material everywhere
+// the die never reached.
+//
+// Read off the height field's own mip chain rather than by tapping a ring
+// around the fragment. One biased sample is isotropic, four are a plus sign,
+// and the chain is already resident. PRESS_REACH is therefore stated as a
+// mip bias: it is how coarse a version of the drawing this asks for, and coarse
+// is exactly what "the neighbourhood of" means here.
+//
+// The smoothstep is a dilation and its low ceiling is the point. A coarse mip
+// reports a thin stroke as a small fraction of a large texel, so mapping that
+// small fraction to 1 is what turns a faint blur into a cleared bed with a soft
+// edge, instead of a ghost of the drawing.
+//
+// Folded into the two FADE terms and not into the depths, which is what makes
+// it cost nothing else: those fades already gate the weave and the rib in
+// colour, in the normal AND in the roughness compensation below — the one that
+// exists so a half-faded field does not read as a channel pressed into the
+// plate. Which is the exact artifact a mask like this would otherwise produce.
+float gPress = 0.0;
+if (uPress > 0.0) {
+  // The reach is what decides whether the die is read as a set of strokes or
+  // as ONE tool. At 5.5 the cleared bed hugged each line, which left the weave
+  // standing in every gap between them — and on the plate that carries the QR
+  // those gaps are a grid at the same pitch as the weave itself, so the two
+  // patterns interleaved and neither read. A press does not work stroke by
+  // stroke: it closes over an area. So the mip is taken coarse enough that the
+  // whole drawing falls inside a handful of texels and the bed comes out as one
+  // pool the shape of the artwork.
+  //
+  // The floor comes down with it, and has to. A coarse texel holding line work
+  // reports the FRACTION of itself the lines cover — about a fifth — not the
+  // full value a fine texel sitting on a stroke would report, so a threshold
+  // set for the fine read finds nothing at all in the coarse one.
+  const float PRESS_REACH = 7.0;
+  const float PRESS_FLOOR = 0.004;
+  const float PRESS_SOLID = 0.045;
+  float around = texture2D(uDecalHeightMap, decalUv(), PRESS_REACH).a;
+  gPress = uPress * smoothstep(PRESS_FLOOR, PRESS_SOLID, around);
+}
+// Applied to the RELIEF alone, and never to the two colour terms below.
+//
+// It used to multiply the fades themselves, which reached the colour as well —
+// and the weave's colour term tints towards uWeaveTint, a DARKER ink than the
+// ply it sits on. So flattening the weave also removed the darkening it was
+// contributing, and the pressed area came out lighter than the plate around it:
+// a pale wash exactly the shape of the die, invisible on the ivory plies and
+// obvious on the violet and the orange ones.
+//
+// Kept off the colour, the mean is preserved BY CONSTRUCTION rather than by a
+// compensation term that would have to know the weave's average coverage. The
+// pigment stays where the press closed; only the texture goes, which is also
+// what a flattened weave actually looks like.
+
 float gradientT = clamp(
   uGradient.x
     + uGradient.y * vParam.x
@@ -1105,20 +1166,25 @@ if (uDecalInk > 0.0) {
  */
 export const FRAGMENT_NORMAL_CHUNK = /* glsl */ `
 if (uRibShading > 0.0) {
-  normal = normalize(normal + vTangentV * gRib * uRibShading * gRibFade);
+  normal = normalize(normal + vTangentV * gRib * uRibShading * gRibFade * (1.0 - gPress));
 }
 
 if (uWeave > 0) {
   normal = normalize(
-    normal + (vTangentU * gWeaveSlope.x + vTangentV * gWeaveSlope.y) * uWeaveDepth * gWeaveFade
+    normal
+      + (vTangentU * gWeaveSlope.x + vTangentV * gWeaveSlope.y)
+        * uWeaveDepth * gWeaveFade * (1.0 - gPress)
   );
 }
 
 // Emboss. The decal's coverage is a height field, and its gradient tilts the
 // normal — which is the whole of what a shape pressed into plastic does to the
-// light. Sampled at a deliberately wide offset: these are soft die-pressed
-// forms, and a texel-width difference would turn every one of them into a
-// wire outline instead of a swell.
+// light. The offset it is sampled at comes from the SURFACE, because it is a
+// claim about the artwork rather than about the shader: a soft die-pressed form
+// tens of pixels across needs a wide baseline or it resolves into a wire
+// outline instead of a swell, and nine-pixel line work needs a narrow one or
+// the two taps land on opposite shoulders of the same stroke and report a
+// bright rail beside a dark one. See SheetSurface.decalReach.
 //
 // Read from uDecalHeightMap, which is the decal itself on every layer that
 // can afford to share it — that is what the material binds when a layer offers
@@ -1129,7 +1195,7 @@ if (uWeave > 0) {
 // kind of layer it is running on.
 if (uDecalRelief > 0.0) {
   vec2 uv = decalUv();
-  const float reach = 0.006;
+  float reach = uDecalReach;
   float dx = texture2D(uDecalHeightMap, uv + vec2(reach, 0.0)).a
            - texture2D(uDecalHeightMap, uv - vec2(reach, 0.0)).a;
   float dy = texture2D(uDecalHeightMap, uv + vec2(0.0, reach)).a
@@ -1419,12 +1485,12 @@ if (uImperfection > 0.0) {
 // pressed into the plate. Feeding the lost normal variance back in as roughness
 // keeps the average constant and the transition stops being visible at all.
 if (uRibShading > 0.0) {
-  float lost = (1.0 - gRibFade) * uRibShading;
+  float lost = (1.0 - gRibFade * (1.0 - gPress)) * uRibShading;
   roughnessFactor = sqrt(min(roughnessFactor * roughnessFactor + lost * lost, 1.0));
 }
 
 if (uWeave > 0) {
-  float lost = (1.0 - gWeaveFade) * uWeaveDepth * 0.4;
+  float lost = (1.0 - gWeaveFade * (1.0 - gPress)) * uWeaveDepth * 0.4;
   roughnessFactor = sqrt(min(roughnessFactor * roughnessFactor + lost * lost, 1.0));
 }
 `

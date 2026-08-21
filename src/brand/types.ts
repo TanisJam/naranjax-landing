@@ -49,6 +49,23 @@ export type Brand = {
   readonly card: CardInks
 
   /**
+   * One illustration per layer of the exploded card, keyed by `SheetLayer.id`.
+   *
+   * Optional, and the two brands answer it differently on purpose. A layer of
+   * that card is one thing the account can do, so a drawing of that thing is
+   * the layer's own artwork — and artwork is a company's, not a component's.
+   * The brand that has commissioned drawings names them here; the brand that
+   * has not keeps the motifs this codebase draws for it, which is why the field
+   * is absent rather than empty on that side.
+   *
+   * Values are the file names as emitted, which is `brand-assets/<id>/` served
+   * at the site root. A key that names no layer is simply never read, and a
+   * layer that has no key keeps its motif — neither is a failure, because
+   * artwork is allowed to arrive one drawing at a time.
+   */
+  readonly layerArt?: Readonly<Record<string, string>>
+
+  /**
    * The header's logo, as markup.
    *
    * Markup rather than data because the two brands do not draw their marks the

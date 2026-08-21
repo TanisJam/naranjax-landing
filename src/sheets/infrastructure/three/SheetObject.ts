@@ -14,6 +14,7 @@ import { clamp, lerp } from '../../domain/easing'
 import type { SheetDecal, SheetLayer } from '../../domain/types'
 import { createShellGeometry } from './geometry/shellGeometry'
 import { createCardFaceTexture, createCardReliefTexture } from './material/cardFaceTexture'
+import { createLayerArtTexture } from './material/layerArtTexture'
 import { createLayerMotifTexture } from './material/layerMotifTexture'
 import {
   createSheetDepthMaterial,
@@ -28,8 +29,13 @@ import {
  * painter draws it. Keeping the mapping here is what lets `composition.ts`
  * stay free of Three.js entirely.
  */
-function paintDecalTexture(decal: SheetDecal): Texture | null {
-  switch (decal) {
+function paintDecalTexture(layer: SheetLayer): Texture | null {
+  // Artwork outranks the motif, and it is asked first for that reason: a layer
+  // that has both is a layer whose brand ships a drawing of the feature, and no
+  // motif this file can draw is a better answer than that drawing.
+  if (layer.artwork !== undefined) return createLayerArtTexture(layer.artwork)
+
+  switch (layer.decal) {
     case 'none':
       return null
     case 'card-front':
@@ -37,8 +43,20 @@ function paintDecalTexture(decal: SheetDecal): Texture | null {
     case 'card-back':
       return createCardFaceTexture('back')
     default:
-      return createLayerMotifTexture(decal)
+      return createLayerMotifTexture(layer.decal)
   }
+}
+
+/**
+ * What two layers have to agree on before they can share one texture.
+ *
+ * The artwork when there is one, the motif name otherwise — which is exactly
+ * the order `paintDecalTexture` decides in, and it has to be, because a key
+ * that ignored the artwork would hand the second layer of a shared motif the
+ * first one's drawing.
+ */
+function decalKey(layer: SheetLayer): string {
+  return layer.artwork ?? layer.decal
 }
 
 /**
@@ -59,31 +77,32 @@ interface SharedTexture {
   holders: number
 }
 
-const DECAL_CACHE = new Map<SheetDecal, SharedTexture>()
+const DECAL_CACHE = new Map<string, SharedTexture>()
 
-function acquireDecalTexture(decal: SheetDecal): Texture | null {
-  const cached = DECAL_CACHE.get(decal)
+function acquireDecalTexture(layer: SheetLayer): Texture | null {
+  const key = decalKey(layer)
+  const cached = DECAL_CACHE.get(key)
   if (cached !== undefined) {
     cached.holders += 1
     return cached.texture
   }
 
-  const texture = paintDecalTexture(decal)
+  const texture = paintDecalTexture(layer)
   if (texture === null) return null
 
-  DECAL_CACHE.set(decal, { texture, holders: 1 })
+  DECAL_CACHE.set(key, { texture, holders: 1 })
   return texture
 }
 
-function releaseDecalTexture(decal: SheetDecal): void {
-  const cached = DECAL_CACHE.get(decal)
+function releaseDecalTexture(key: string): void {
+  const cached = DECAL_CACHE.get(key)
   if (cached === undefined) return
 
   cached.holders -= 1
   if (cached.holders > 0) return
 
   cached.texture.dispose()
-  DECAL_CACHE.delete(decal)
+  DECAL_CACHE.delete(key)
 }
 
 /**
@@ -155,6 +174,30 @@ const DRAG_BEND_RATIO = 0.6
  * position just off the end of the sheet it stands for.
  */
 const HIT_AREA_MARGIN = 1.04
+
+/**
+ * The share of its own tooth a plate keeps while it is being read.
+ *
+ * See `setReadFocus`. This started at a quarter, which was the wrong instrument
+ * used at the wrong strength: taking the tooth off the WHOLE plate to let the
+ * drawing read is buying a clean engraving with the plate's material, and the
+ * material is half of what the piece is about. What actually clears the bed
+ * under the drawing is `READ_PRESS`, locally, so this only has to do the small
+ * part it was ever entitled to — a plate turned square to a reading light is
+ * calmer across its whole face than one raked at the fan's angle.
+ */
+const READ_TOOTH = 0.7
+
+/**
+ * How completely the die flattens the tooth where it pressed, while reading.
+ *
+ * Nearly all of it. The cleared bed is the reference the artwork was drawn
+ * against — line work standing off a smooth field — and a bed that keeps a
+ * tenth of its grain is what makes an engraving read as precise rather than as
+ * a shape fighting a grid. Short of 1 so the flattening is a press and not a
+ * hole cut in the material.
+ */
+const READ_PRESS = 0.92
 
 /**
  * Invisible material shared by every hit area. `visible: false` on the MATERIAL
@@ -289,7 +332,7 @@ export class SheetObject {
       boundingRadius: Math.max(shape.length, shape.width) * 1.2,
     })
 
-    this.decalMap = acquireDecalTexture(layer.decal)
+    this.decalMap = acquireDecalTexture(layer)
     this.reliefMap = createDecalRelief(layer.decal)
 
     const { material, uniforms } = createSheetMaterial(
@@ -509,6 +552,45 @@ export class SheetObject {
       .applyQuaternion(this.untwist)
   }
 
+  /**
+   * Quiets the plate's own tooth as it comes forward to be read.
+   *
+   * There are THREE height fields on this surface and they all write the same
+   * normal, in this order: the rib, the weave, and then the decal. Standing in
+   * the fan that is right — a laminate is a woven thing and the tooth is most
+   * of what says which laminate it is. Held up to be read it stops being right,
+   * because the drawing pressed into the plate is now the subject and it is
+   * competing for the same light against a grid it cannot win against. The
+   * coarsest weave in the stack is a waffle at scale 52, on the plate that
+   * carries the QR, which is exactly the one that reads worst.
+   *
+   * TWO different answers, because the problem is two problems. `READ_TOOTH`
+   * is a whole-plate settling and it is deliberately small: a plate turned
+   * square to a reading light shows less of its own grain than one raked at the
+   * fan's angle, and that is all it is entitled to claim. What actually clears
+   * the bed is `READ_PRESS`, and that one is LOCAL — the shader takes it as the
+   * die's own footprint and flattens the tooth only where the drawing is. The
+   * first attempt at this used the whole-plate term alone at a quarter, which
+   * bought a clean engraving by spending the plate's material everywhere,
+   * including the two thirds of the face the drawing never touches.
+   *
+   * The colour term comes down with the shading term, and it has to: the weave
+   * tint draws the same grid in albedo, so leaving it would take the ridges out
+   * of the light and leave their diagram printed underneath.
+   *
+   * Both are driven by focus rather than latched, so a plate on its way back to
+   * the fan gets its surface back on exactly the curve that took it away.
+   */
+  setReadFocus(focus: number): void {
+    const { surface } = this.layer
+    const tooth = lerp(1, READ_TOOTH, focus)
+    this.uniforms.uWeaveDepth.value = surface.weaveDepth * tooth
+    this.uniforms.uWeaveContrast.value = surface.weaveContrast * tooth
+    this.uniforms.uRibShading.value = surface.ribShading * tooth
+    this.uniforms.uRibContrast.value = surface.ribContrast * tooth
+    this.uniforms.uPress.value = READ_PRESS * focus
+  }
+
   /** 0 collapses the fan onto the back sheet, 1 is the composed layout. */
   setFanOpenness(openness: number): void {
     const [x, y, z] = this.layer.placement.fanRotation
@@ -520,7 +602,7 @@ export class SheetObject {
     this.hitArea.geometry.dispose()
     this.material.dispose()
     this.depthMaterial?.dispose()
-    releaseDecalTexture(this.layer.decal)
+    releaseDecalTexture(decalKey(this.layer))
     this.reliefMap?.dispose()
   }
 }

@@ -104,6 +104,7 @@ const CONTENT_TYPES: Record<string, string> = {
   webmanifest: 'application/manifest+json',
   ico: 'image/x-icon',
   png: 'image/png',
+  webp: 'image/webp',
   jpg: 'image/jpeg',
   woff2: 'font/woff2',
 }

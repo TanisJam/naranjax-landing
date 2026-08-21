@@ -814,6 +814,11 @@ export class AnimationTimeline {
       // deliberately: see `folded` below.
       const lift = sheet === this.focused ? focus : 0
 
+      // The tooth comes down with the lift and for the same reason the rim goes
+      // up with it: a plate held out to be read has a different job than a plate
+      // in a fan, and both of those write the surface rather than the pose.
+      sheet.setReadFocus(lift)
+
       sheet.setPose(
         local,
         flatten,

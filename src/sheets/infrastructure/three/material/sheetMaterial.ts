@@ -160,6 +160,10 @@ export interface SheetUniforms extends StackOcclusionUniforms, FilmGrainUniforms
   uDecalInk: IUniform<number>
   /** 0 is a flat print, higher values press the decal into the surface. */
   uDecalRelief: IUniform<number>
+  /** Central-difference baseline for the emboss. See `SheetSurface.decalReach`. */
+  uDecalReach: IUniform<number>
+  /** How far the die that pressed the drawing flattened the tooth around it. */
+  uPress: IUniform<number>
 }
 
 /**
@@ -385,6 +389,8 @@ export function createSheetMaterial(
     uDecalHeightMap: { value: reliefMap ?? decalMap ?? BLANK_DECAL },
     uDecalInk: { value: decalMap ? surface.decalInk : 0 },
     uDecalRelief: { value: decalMap ? surface.decalRelief : 0 },
+    uDecalReach: { value: surface.decalReach },
+    uPress: { value: 0 },
   }
 
   const material = new MeshPhysicalMaterial({

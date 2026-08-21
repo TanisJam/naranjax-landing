@@ -327,6 +327,30 @@ export const naranjax: Brand = {
     },
   },
 
+  // One drawing per feature, in the order the stack comes apart — an account
+  // opened from a selfie, money that earns overnight, jars, dollars, a loan, a
+  // QR, a transfer, the bills, the discounts. Keyed by layer rather than by
+  // position, so a layer that moves in the stack takes its drawing with it and
+  // nine images never silently shift by one.
+  //
+  // Each file is itself a rendered emboss — white line work standing off a
+  // white ground — and that is a coincidence worth not relying on. What the
+  // plate takes is the DRAWING, not the render: `layerArtTexture` keeps the
+  // strokes, drops the ground and the soft shadow they cast on it, and hands
+  // the material a coverage mask to press into its own plastic under its own
+  // light. Delivered flat and lit here, the two reliefs would disagree.
+  layerArt: {
+    'transparent-blue': 'layer-transparent-blue.webp',
+    'glossy-light': 'layer-glossy-light.webp',
+    mesh: 'layer-mesh.webp',
+    'holo-currency': 'layer-holo-currency.webp',
+    'border-light': 'layer-border-light.webp',
+    'embossed-wave': 'layer-embossed-wave.webp',
+    'holo-wave': 'layer-holo-wave.webp',
+    'translucent-emboss': 'layer-translucent-emboss.webp',
+    'solid-base': 'layer-solid-base.webp',
+  },
+
   // The published mark, at last, in its own two inks — and the reason it can be
   // is that the header moved. It used to float over the violet-black hero,
   // where the real lockup's violet arm is a hole in the X, so it was reversed:
