@@ -138,6 +138,7 @@ function fill(html: string, brand: Brand): string {
   const markup: Record<string, string> = {
     lockup: brand.lockup,
     fontLink: brand.font.link,
+    cardOnlyFlag: cardOnlyFlag(brand),
     ...renderBlocks(brand),
   }
   const filled = Object.entries(markup)
@@ -150,6 +151,47 @@ function fill(html: string, brand: Brand): string {
   const leftover = filled.match(/\{\{[^}]*\}\}/)
   if (leftover) throw new Error(`Unsubstituted token in index.html: ${leftover[0]}`)
   return filled
+}
+
+/**
+ * The brands that ship the card-only view — see the note in `index.html`.
+ *
+ * A LIST HERE RATHER THAN A FIELD ON `Brand`, and that is not where it was
+ * easiest to put it. `src/brand/types.ts` opens by saying what is deliberately
+ * NOT on a brand — no layout, no view, nothing a second site could be built out
+ * of — because a brand layer wide enough to carry those is two sites wearing a
+ * config file. `?card` is a view, so it does not go on the contract.
+ *
+ * Which leaves the question of why one build has it and the other does not, and
+ * the answer is not about the view at all. The Naranja X build prints a real
+ * company's traced isologo on the card, and that mark has no business being in
+ * a technical demo about a shader — so that build gets a way to show the piece
+ * with the mark taken off. The product landing is already its own brand and has
+ * nothing to take off, so it gets no parameter: an entrance nobody asked for is
+ * still an entrance, and the one that ships is the one that had a reason.
+ *
+ * Read as a build decision, which is what it is. Nothing in the bundle asks
+ * this question — `src/brand/index.ts` reads the flag the document was served
+ * with and cannot tell whether it was ever offered.
+ */
+const CARD_ONLY_VIEW: readonly string[] = ['naranjax']
+
+/**
+ * The one script that decides the view, or nothing at all.
+ *
+ * Nothing at all is the point of the empty string: a build without this token
+ * has no `?card` in it to find. Not a script that checks a constant and does
+ * nothing — no script.
+ */
+function cardOnlyFlag(brand: Brand): string {
+  if (!CARD_ONLY_VIEW.includes(brand.id)) return ''
+  return (
+    '<script>\n' +
+    "      if (new URLSearchParams(location.search).has('card')) {\n" +
+    "        document.documentElement.dataset.view = 'card'\n" +
+    '      }\n' +
+    '    </script>'
+  )
 }
 
 /** Every one of these lands inside an attribute at least once. */
