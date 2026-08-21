@@ -565,6 +565,38 @@
    second utility string somewhere else that has to be kept in step.
    --------------------------------------------------------------------------- */
 
+/* THE CARD ON ITS OWN, which is what `?card` asks for — see the head of
+   `index.html` for why the flag is written there and not from the bundle.
+
+   Stated as three rules against everything-but-the-hero rather than as a class
+   on each block, and that is the load-bearing part: `main > :not(#hero)` keeps
+   answering when a section is added, and a plancha that arrives next month
+   arrives already excluded. The opposite arrangement — a `demo-hidden` class
+   per block — is a list that only stays correct while somebody maintains it,
+   and the failure is silent and only visible on a URL nobody visits by default.
+
+   `display: none` and not `visibility` or a zero height: a hidden section that
+   still has boxes is still laid out, still observed by the reveal machinery,
+   and its images are still decoded. The hero is `100svh` and is now the whole
+   document, so the scroll goes with it — locked rather than merely unused,
+   because a 560px floor on a shorter viewport would otherwise leave the piece
+   able to drift a few pixels under a finger.
+
+   The panel a layer opens into is NOT here, and cannot be: `SpecsOverlay`
+   mounts on `<body>` rather than inside `main`, so the details survive the
+   strip by construction rather than by an exception written for them. */
+[data-view='card'] .site-header,
+[data-view='card'] main > :not(#hero),
+[data-view='card'] body > footer {
+  display: none;
+}
+
+[data-view='card'],
+[data-view='card'] body {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* The bar. Fixed rather than sticky: sticky inside a flow that starts with a
    full-viewport hero has nothing to stick to until the hero has already gone
    past, which is the one moment the bar has to be there. */

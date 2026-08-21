@@ -1,17 +1,9 @@
 import { CARD, PHONE, SPARK, STORE, TAP } from './glyphs'
+import { MANDARINA_NAME, mandarinaTile } from './mandarinaMark'
 import type { Brand } from './types'
 
 const ACCENT = '#f37d06'
 const INK_950 = '#220b0a'
-
-/**
- * The X the header draws, as a path.
- *
- * Drawn rather than set, because a square icon has to hold its shape at sixteen
- * pixels and a glyph handed to whatever font the host resolves will not. Its
- * proportions were taken off the header's own tile.
- */
-const X = 'M17.5 15h9.9l5.1 8.4L37.6 15h9.9L37.2 31.7 48 49h-9.9l-5.6-9L26.9 49H17l10.9-17.3z'
 
 /**
  * MandarinaX, the brand this landing was designed against.
@@ -24,7 +16,7 @@ const X = 'M17.5 15h9.9l5.1 8.4L37.6 15h9.9L37.2 31.7 48 49h-9.9l-5.6-9L26.9 49H
  */
 export const mandarinax: Brand = {
   id: 'mandarinax',
-  name: 'MandarinaX',
+  name: MANDARINA_NAME,
   origin: 'https://mandarina-x.vercel.app',
 
   title: 'MandarinaX — Exprimí cada peso',
@@ -191,7 +183,7 @@ export const mandarinax: Brand = {
     back: '#d76302',
     wordmark: {
       kind: 'type',
-      text: 'MandarinaX',
+      text: MANDARINA_NAME,
       font: '600 76px sans-serif',
       tracking: -1,
       subBrand: 'Crédito',
@@ -211,10 +203,11 @@ export const mandarinax: Brand = {
               <span class="text-neutral-50">mandarina</span><span class="text-brand-accent">X</span>
             </span>`,
 
-  icon: (ground) =>
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MandarinaX">` +
-    `<rect width="64" height="64" rx="14" fill="${ACCENT}"/>` +
-    `<path d="${X}" fill="${ground}"/></svg>`,
+  // The tile lives in its own module rather than here, and the reason is the
+  // card-only view: `?card` prints this name on the artwork in EITHER build,
+  // so the mark has to be reachable without importing this brand's palette and
+  // copy along with it. See `src/brand/mandarinaMark.ts`.
+  icon: (ground) => mandarinaTile(ACCENT, ground),
 
   disclaimer:
     'Pieza de demostración. Los datos y las cifras son ilustrativos y no constituyen una oferta comercial.',

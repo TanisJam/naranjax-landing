@@ -71,6 +71,35 @@
          `src/brand/naranjax.ts` for why it is served off this origin and why it
          has three weights rather than four, and the footer for the credit. -->
     {{fontLink}}
+
+    <!-- CARD-ONLY VIEW: `?card` strips the page down to the hero.
+         `naranjax-landing.vercel.app/?card` is the piece and nothing else — the
+         stack, the rail beside it and the panel a layer opens into — with the
+         bar, the planchas below and the footer gone. It is for showing the
+         thing being built, in a call, without a landing page around it.
+
+         A URL parameter rather than a second build, and the reason is that this
+         is not a brand. The brand HAS to be baked — a scraper never runs the
+         bundle, and a page that repaints itself has already shown the wrong
+         colours — while a view is asked for by whoever is looking, one link at
+         a time. `?fps` is the same argument and set the precedent.
+
+         BLOCKING, IN THE HEAD, AND NOT IN `main.ts`, which is the whole point
+         of putting a script tag here. The module below is deferred: it runs
+         after the document is parsed, and hiding four sections from it is a
+         page that lays out the full landing, paints it, and then collapses to
+         the hero — a flash of exactly the thing that was asked to be removed.
+         Written on `<html>` before the body exists, the stylesheet resolves it
+         on the first pass and nothing else ever gets composed.
+
+         Cheap enough to be inline, and deliberately not a build token: leaving
+         it in the markup means the same deploy answers both URLs. -->
+    <script>
+      if (new URLSearchParams(location.search).has('card')) {
+        document.documentElement.dataset.view = 'card'
+      }
+    </script>
+
     <script type="module" src="/src/main.ts"></script>
   </head>
   <body class="bg-surface font-sans text-on-surface antialiased">

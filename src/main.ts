@@ -22,11 +22,61 @@ if (!stage) throw new Error('#sheets-stage container is missing')
 const orchestrator = new SceneOrchestrator(stage, composition)
 orchestrator.start()
 
+/**
+ * Whether the page was asked for as the card alone — `?card`.
+ *
+ * READ OFF THE DOCUMENT rather than off the query string a second time, and
+ * that is the point of it. The flag is decided in the head, before the body
+ * exists, because the stylesheet has to resolve it on the first pass; parsing
+ * `location.search` again here would be a second place that can disagree with
+ * what the page is actually showing. See the note in `index.html`.
+ */
+const cardOnly = document.documentElement.dataset.view === 'card'
+
+// THE TAB, which is the last place the stripped-down view would still be
+// carrying the name it just took off the artwork.
+//
+// Patched from here rather than written into the markup, because the markup is
+// where the BUILD's brand lives and it has to stay that way: a scraper reads
+// the document and leaves, so the title, the canonical URL and the share card
+// belong to the deploy, not to whichever URL somebody opened. `?card` is a
+// request from a person with the page already open, and a person is the only
+// audience for it. See `unbranded` in `src/brand/index.ts`.
+//
+// The favicon goes inline as a data URI instead of pointing at `/favicon.svg`,
+// which the build emitted from the brand and which is, in the Naranja X deploy,
+// that company's own published icon. There is no second file to point at and
+// there should not be one — an asset emitted for a query parameter is an asset
+// that outlives the reason for it.
+if (cardOnly) {
+  document.title = brand.title
+
+  const hero = document.querySelector<HTMLElement>('#hero')
+  hero?.setAttribute('aria-label', `Ilustración de la tarjeta ${brand.name}`)
+
+  // Every icon link, not just the SVG one: the `.ico` and the apple-touch file
+  // are the brand's too, and a browser that prefers either would go on showing
+  // the mark this view exists to remove.
+  for (const link of document.querySelectorAll('link[rel~="icon"], link[rel="apple-touch-icon"]')) {
+    link.remove()
+  }
+  const icon = document.createElement('link')
+  icon.rel = 'icon'
+  icon.type = 'image/svg+xml'
+  icon.href = `data:image/svg+xml,${encodeURIComponent(brand.icon(brand.palette.ink[950]))}`
+  document.head.appendChild(icon)
+}
+
 // The page around the card: the bar that steps aside going down, and the blocks
 // that rise into place as they are reached. Started here rather than on
 // `DOMContentLoaded` because this module is a deferred ES module — the document
 // is already parsed by the time any of it runs.
-startPageMotion()
+//
+// Skipped outright under `?card`, rather than left to find nothing. All of it
+// is machinery hung off a scroll that no longer exists — two observers, a
+// resize watcher and a listener per frame — and the one thing on that page is a
+// WebGL card being drawn at sixty frames. Silent inertia still costs a budget.
+if (!cardOnly) startPageMotion()
 
 // The pointer cue is the one that fires most, so it sits well under the two
 // transitions — it is punctuation, not an announcement.
