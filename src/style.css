@@ -781,7 +781,10 @@
   flex-direction: column;
   align-items: center;
   gap: 0.06em;
-  padding: 48px 24px 56px;
+  /* The bottom step gives way on a short screen. 40px is the floor because the
+     hint below sits 20px off the bottom edge in a 16px line, and the claim has
+     no business landing on it. */
+  padding: 48px 24px clamp(40px, 5svh, 56px);
   pointer-events: none;
   text-align: center;
   /* Both written by `driveHeroWithScroll` and both zero at rest. The claim
@@ -822,7 +825,22 @@
 .hero-line {
   display: block;
   font-weight: 600;
-  font-size: clamp(24px, 4.4vw, 46px);
+  /* SIZED OFF THE SHORTER OF THE TWO AXES, and the second half of that `min`
+     is the whole fix.
+
+     It was `clamp(24px, 4.4vw, 46px)` — width only — and the air under the card
+     is measured in HEIGHT: the camera's vertical fov is fixed, so the card is
+     always the same fraction of the viewport's height whatever the width does.
+     On a wide, short laptop that pairing set three lines at the full 46px into
+     a viewport that had proportionally less room for them, and the claim came
+     up to meet the card. Measured at 1440x800 the type plus its step took 33%
+     of the height; on a tall external monitor the same type takes 20%, which is
+     exactly why this only ever showed up on the laptop.
+
+     5svh is the tie: at 800px of viewport it settles the type at 40px, at
+     1120px and above the 46px cap is reached again and nothing moves. A phone
+     is bound by 4.4vw long before either, so the narrow end is untouched. */
+  font-size: clamp(24px, min(4.4vw, 5svh), 46px);
   line-height: 1.14;
   opacity: 0;
   animation: hero-line-in 500ms ease-in-out forwards;
