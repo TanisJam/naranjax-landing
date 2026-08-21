@@ -57,8 +57,8 @@ const CLOSED_POSE: [number, number, number] = [1.489, -0.024, 0]
  * text along the floor, and a card that had stopped being a card and become a
  * background. Opening a layer emptied the page.
  *
- * So the plate keeps a little over half the width and the spec sheet takes the
- * rest, on its own ground, at a size type is meant to be read at. And the thing
+ * So the plate keeps a bit under half the width and the spec sheet takes its
+ * own column, on the page's ground, at a size type is meant to be read at. And the thing
  * that costs nothing and pays for the whole change: at this size the fan the
  * plate came OUT of is still on screen behind it. The reader can see the stack
  * it was drawn from, which is what taking one card out of a deck looks like and
@@ -66,8 +66,22 @@ const CLOSED_POSE: [number, number, number] = [1.489, -0.024, 0]
  *
  * A share of the frame's width and height separately, because the plate is
  * contained rather than covered — see `fitFocus`.
+ *
+ * IT WAS 0.52 AND 0.52 WAS TOUCHING THE TYPE. Worth writing the arithmetic
+ * down, because the two numbers that collided live in different files and
+ * neither of them looks wrong on its own. The plate is centred at
+ * `FOCUS_CENTRE` and spans this, so its right edge reaches 0.31 + 0.52/2 =
+ * 0.57 of the frame. The spec sheet's column opens at 58% of the frame inside a
+ * 3rem pad — 57.4% of a 1440-wide window. Six pixels. Nothing in either file
+ * was a mistake and the result was a card leaning on a headline.
+ *
+ * The plate is width-bound at every aspect this arrangement is used at — 0.44
+ * of the width against 0.82 of the height only ever picks the width below about
+ * 2.6:1 — so this share IS the silhouette, and the air is what is left of the
+ * frame after it. At 0.44 the plate stops at 0.49 and there is most of a tenth
+ * of the screen between the card and the words about it.
  */
-const FOCUS_SPAN = 0.52
+const FOCUS_SPAN = 0.44
 const FOCUS_RISE = 0.82
 
 /**
@@ -77,8 +91,15 @@ const FOCUS_RISE = 0.82
  * the plate is the thing that was asked for and it keeps the larger half of the
  * screen. `fitFocus` spends this as a slide of the aim point along the camera's
  * own right axis, so it stays correct at any focal length.
+ *
+ * MOVES WITH `FOCUS_SPAN`, and that is the whole reason it moved at all. A
+ * narrower plate left at 0.31 would have opened its gap on BOTH sides equally,
+ * half of it spent as a margin down the left of the screen where there is
+ * nothing to clear. The problem has one end: the words. So the plate keeps its
+ * left margin at about the frame's own 3rem pad — 0.27 - 0.44/2 = 0.05 — and
+ * every pixel the shrink freed goes into the air on the right.
  */
-const FOCUS_CENTRE = 0.31
+const FOCUS_CENTRE = 0.27
 
 /**
  * Narrowest frame that can hold a plate and its spec sheet side by side.

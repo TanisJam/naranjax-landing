@@ -307,10 +307,16 @@
     display: none;
   }
 
-  /* The sheet takes the column the plate was moved out of — see `FOCUS_CENTRE`,
-     which puts the plate's centre at 31% of the frame. This starts at 58% and
-     the gap between those two numbers is the air between a card and the words
-     about it. */
+  /* The sheet takes the column the plate was moved out of. The plate's centre
+     sits at 27% of the frame and it spans 44% of it — see `FOCUS_CENTRE` and
+     `FOCUS_SPAN` — so its right edge stops just under halfway. This starts at
+     58%, and the gap between those two numbers is the air between a card and
+     the words about it.
+
+     That air used to be six pixels: the plate reached 57% and this column began
+     at 57.4% of a 1440-wide window. The plate gave the width back rather than
+     this column taking it, because the column is already at a comfortable
+     measure and a wider one would only set the same words in longer lines. */
   .layer-specs__frame {
     align-items: center;
     padding: 0 3rem;

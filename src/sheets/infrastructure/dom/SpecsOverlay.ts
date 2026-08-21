@@ -71,7 +71,7 @@ export class SpecsOverlay {
     // bought was two thirds of a screen of texture with a strip of text along
     // the floor.
     //
-    // The plate now takes a little over half the width — see `FOCUS_SPAN` — so
+    // The plate now takes a bit under half the width — see `FOCUS_SPAN` — so
     // the words go where they belong: on the page's own ground, at a measure,
     // beside the thing they describe. No scrim, because nothing is lying on
     // foil any more. That is the same reason the scrim existed and the same
